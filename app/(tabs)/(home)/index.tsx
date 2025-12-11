@@ -14,6 +14,18 @@ interface PrayerTime {
   completed: boolean;
 }
 
+interface QuranGoals {
+  versesToMemorize: number;
+  versesMemorized: number;
+  pagesToRead: number;
+  pagesRead: number;
+}
+
+interface DhikrGoals {
+  dailyTarget: number;
+  currentCount: number;
+}
+
 export default function HomeScreen() {
   const [prayers, setPrayers] = useState<PrayerTime[]>([
     { name: 'Fajr', time: '5:30 AM', arabicName: 'الفجر', completed: false },
@@ -23,9 +35,22 @@ export default function HomeScreen() {
     { name: 'Isha', time: '8:00 PM', arabicName: 'العشاء', completed: false },
   ]);
 
+  const [quranGoals, setQuranGoals] = useState<QuranGoals>({
+    versesToMemorize: 5,
+    versesMemorized: 0,
+    pagesToRead: 2,
+    pagesRead: 0,
+  });
+
+  const [dhikrGoals, setDhikrGoals] = useState<DhikrGoals>({
+    dailyTarget: 100,
+    currentCount: 0,
+  });
+
   // Load prayer data and check for daily reset
   useEffect(() => {
     loadPrayerData();
+    loadImanData();
   }, []);
 
   const loadPrayerData = async () => {
@@ -55,13 +80,39 @@ export default function HomeScreen() {
     }
   };
 
+  const loadImanData = async () => {
+    try {
+      const savedQuranProgress = await AsyncStorage.getItem('quranProgress');
+      const savedDhikrProgress = await AsyncStorage.getItem('dhikrProgress');
+      
+      if (savedQuranProgress) {
+        setQuranGoals(JSON.parse(savedQuranProgress));
+      }
+      if (savedDhikrProgress) {
+        setDhikrGoals(JSON.parse(savedDhikrProgress));
+      }
+    } catch (error) {
+      console.log('Error loading iman data:', error);
+    }
+  };
+
   const togglePrayer = async (index: number) => {
     const newPrayers = [...prayers];
     newPrayers[index].completed = !newPrayers[index].completed;
     setPrayers(newPrayers);
     
     try {
+      // Save prayer data
       await AsyncStorage.setItem('prayerData', JSON.stringify(newPrayers));
+      
+      // Update prayer progress for Iman Tracker
+      const completedCount = newPrayers.filter(p => p.completed).length;
+      await AsyncStorage.setItem('prayerProgress', JSON.stringify({
+        completed: completedCount,
+        total: 5,
+      }));
+      
+      console.log('Prayer progress updated:', completedCount, '/ 5');
     } catch (error) {
       console.log('Error saving prayer data:', error);
     }
@@ -127,6 +178,141 @@ export default function HomeScreen() {
     );
   };
 
+  const renderImanRings = () => {
+    const centerX = 120;
+    const centerY = 120;
+    
+    // Prayer ring (outer) - Green
+    const prayerRadius = 100;
+    const prayerStroke = 14;
+    const prayerProgressValue = completedCount / prayers.length;
+    const prayerCircumference = 2 * Math.PI * prayerRadius;
+    const prayerOffset = prayerCircumference * (1 - prayerProgressValue);
+    
+    // Quran ring (middle) - Amber
+    const quranRadius = 72;
+    const quranStroke = 12;
+    const quranProgressValue = ((quranGoals.versesMemorized / quranGoals.versesToMemorize) + 
+                          (quranGoals.pagesRead / quranGoals.pagesToRead)) / 2;
+    const quranCircumference = 2 * Math.PI * quranRadius;
+    const quranOffset = quranCircumference * (1 - quranProgressValue);
+    
+    // Dhikr ring (inner) - Blue
+    const dhikrRadius = 44;
+    const dhikrStroke = 10;
+    const dhikrProgressValue = dhikrGoals.currentCount / dhikrGoals.dailyTarget;
+    const dhikrCircumference = 2 * Math.PI * dhikrRadius;
+    const dhikrOffset = dhikrCircumference * (1 - dhikrProgressValue);
+
+    const totalProgress = (prayerProgressValue + quranProgressValue + dhikrProgressValue) / 3;
+    const totalPercentage = Math.round(totalProgress * 100);
+
+    return (
+      <View style={styles.imanRingsContainer}>
+        <View style={styles.ringsWrapper}>
+          <Svg width={240} height={240}>
+            {/* Prayer Ring (Outer) */}
+            <Circle
+              cx={centerX}
+              cy={centerY}
+              r={prayerRadius}
+              stroke="#808080"
+              strokeWidth={prayerStroke}
+              fill="none"
+              opacity={0.6}
+            />
+            <Circle
+              cx={centerX}
+              cy={centerY}
+              r={prayerRadius}
+              stroke={colors.primary}
+              strokeWidth={prayerStroke}
+              fill="none"
+              strokeDasharray={prayerCircumference}
+              strokeDashoffset={prayerOffset}
+              strokeLinecap="round"
+              rotation="-90"
+              origin={`${centerX}, ${centerY}`}
+            />
+            
+            {/* Quran Ring (Middle) */}
+            <Circle
+              cx={centerX}
+              cy={centerY}
+              r={quranRadius}
+              stroke="#808080"
+              strokeWidth={quranStroke}
+              fill="none"
+              opacity={0.6}
+            />
+            <Circle
+              cx={centerX}
+              cy={centerY}
+              r={quranRadius}
+              stroke={colors.accent}
+              strokeWidth={quranStroke}
+              fill="none"
+              strokeDasharray={quranCircumference}
+              strokeDashoffset={quranOffset}
+              strokeLinecap="round"
+              rotation="-90"
+              origin={`${centerX}, ${centerY}`}
+            />
+            
+            {/* Dhikr Ring (Inner) */}
+            <Circle
+              cx={centerX}
+              cy={centerY}
+              r={dhikrRadius}
+              stroke="#808080"
+              strokeWidth={dhikrStroke}
+              fill="none"
+              opacity={0.6}
+            />
+            <Circle
+              cx={centerX}
+              cy={centerY}
+              r={dhikrRadius}
+              stroke={colors.info}
+              strokeWidth={dhikrStroke}
+              fill="none"
+              strokeDasharray={dhikrCircumference}
+              strokeDashoffset={dhikrOffset}
+              strokeLinecap="round"
+              rotation="-90"
+              origin={`${centerX}, ${centerY}`}
+            />
+          </Svg>
+          
+          {/* Center Content */}
+          <View style={styles.ringsCenterContent}>
+            <Text style={styles.ringsCenterTitle}>Iman</Text>
+            <Text style={styles.ringsCenterPercentage}>{totalPercentage}%</Text>
+          </View>
+        </View>
+        
+        {/* Ring Labels */}
+        <View style={styles.ringsLabels}>
+          <View style={styles.ringLabelItem}>
+            <View style={[styles.ringLabelDot, { backgroundColor: colors.primary }]} />
+            <Text style={styles.ringLabelText}>Prayer</Text>
+            <Text style={styles.ringLabelValue}>{Math.round(prayerProgressValue * 100)}%</Text>
+          </View>
+          <View style={styles.ringLabelItem}>
+            <View style={[styles.ringLabelDot, { backgroundColor: colors.accent }]} />
+            <Text style={styles.ringLabelText}>Quran</Text>
+            <Text style={styles.ringLabelValue}>{Math.round(quranProgressValue * 100)}%</Text>
+          </View>
+          <View style={styles.ringLabelItem}>
+            <View style={[styles.ringLabelDot, { backgroundColor: colors.info }]} />
+            <Text style={styles.ringLabelText}>Dhikr</Text>
+            <Text style={styles.ringLabelValue}>{Math.round(dhikrProgressValue * 100)}%</Text>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -152,6 +338,24 @@ export default function HomeScreen() {
           <Text style={styles.greeting}>As-Salamu Alaykum</Text>
           <Text style={styles.date}>{currentDate}</Text>
         </LinearGradient>
+
+        {/* Iman Score Rings */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionIconContainer}>
+              <IconSymbol
+                ios_icon_name="chart.pie.fill"
+                android_material_icon_name="pie-chart"
+                size={20}
+                color={colors.primary}
+              />
+            </View>
+            <Text style={styles.sectionTitle}>Iman Score</Text>
+          </View>
+          <View style={styles.imanScoreCard}>
+            {renderImanRings()}
+          </View>
+        </View>
         
         {/* Prayer Tracker Section with Progress Circle */}
         <View style={styles.section}>
@@ -366,6 +570,65 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...typography.h4,
+    color: colors.text,
+  },
+  imanScoreCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    ...shadows.medium,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  imanRingsContainer: {
+    alignItems: 'center',
+  },
+  ringsWrapper: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 240,
+    height: 240,
+    marginBottom: spacing.lg,
+  },
+  ringsCenterContent: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringsCenterTitle: {
+    ...typography.caption,
+    color: colors.text,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  ringsCenterPercentage: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: colors.primary,
+  },
+  ringsLabels: {
+    width: '100%',
+    gap: spacing.sm,
+  },
+  ringLabelItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  ringLabelDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  ringLabelText: {
+    ...typography.caption,
+    color: colors.text,
+    flex: 1,
+  },
+  ringLabelValue: {
+    ...typography.captionBold,
     color: colors.text,
   },
   summaryCard: {

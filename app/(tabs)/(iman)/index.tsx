@@ -32,6 +32,52 @@ interface StreakData {
   lastCompletedDate: string;
 }
 
+interface DhikrPhrase {
+  id: string;
+  arabic: string;
+  transliteration: string;
+  translation: string;
+  count: number;
+}
+
+const DHIKR_PHRASES: DhikrPhrase[] = [
+  {
+    id: 'subhanallah',
+    arabic: 'سُبْحَانَ اللّٰهِ',
+    transliteration: 'SubhanAllah',
+    translation: 'Glory be to Allah',
+    count: 33,
+  },
+  {
+    id: 'alhamdulillah',
+    arabic: 'الْحَمْدُ لِلّٰهِ',
+    transliteration: 'Alhamdulillah',
+    translation: 'All praise is due to Allah',
+    count: 33,
+  },
+  {
+    id: 'allahuakbar',
+    arabic: 'اللّٰهُ أَكْبَرُ',
+    transliteration: 'Allahu Akbar',
+    translation: 'Allah is the Greatest',
+    count: 34,
+  },
+  {
+    id: 'lailahaillallah',
+    arabic: 'لَا إِلٰهَ إِلَّا اللّٰهُ',
+    transliteration: 'La ilaha illallah',
+    translation: 'There is no god but Allah',
+    count: 100,
+  },
+  {
+    id: 'astaghfirullah',
+    arabic: 'أَسْتَغْفِرُ اللّٰهَ',
+    transliteration: 'Astaghfirullah',
+    translation: 'I seek forgiveness from Allah',
+    count: 100,
+  },
+];
+
 export default function ImanTrackerScreen() {
   const [quranGoals, setQuranGoals] = useState<QuranGoals>({
     versesToMemorize: 5,
@@ -56,8 +102,9 @@ export default function ImanTrackerScreen() {
     lastCompletedDate: '',
   });
 
+  const [selectedPhrase, setSelectedPhrase] = useState<DhikrPhrase>(DHIKR_PHRASES[0]);
   const [modalVisible, setModalVisible] = useState(false);
-  const [modalType, setModalType] = useState<'quran' | 'dhikr' | 'goals' | null>(null);
+  const [modalType, setModalType] = useState<'quran' | 'dhikr' | 'goals' | 'phrase' | null>(null);
   const [tempQuranGoals, setTempQuranGoals] = useState<QuranGoals>(quranGoals);
   const [tempDhikrTarget, setTempDhikrTarget] = useState(dhikrGoals.dailyTarget.toString());
   
@@ -72,7 +119,16 @@ export default function ImanTrackerScreen() {
     loadData();
     loadPrayerProgress();
     loadStreakData();
+    loadSelectedPhrase();
     startAnimations();
+  }, []);
+
+  // Reload prayer progress when screen is focused
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadPrayerProgress();
+    }, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   const startAnimations = () => {
@@ -184,11 +240,17 @@ export default function ImanTrackerScreen() {
 
   const loadPrayerProgress = async () => {
     try {
-      const savedPrayerData = await AsyncStorage.getItem('prayerData');
-      if (savedPrayerData) {
-        const prayers = JSON.parse(savedPrayerData);
-        const completed = prayers.filter((p: any) => p.completed).length;
-        setPrayerProgress({ completed, total: 5 });
+      const savedPrayerProgress = await AsyncStorage.getItem('prayerProgress');
+      if (savedPrayerProgress) {
+        setPrayerProgress(JSON.parse(savedPrayerProgress));
+      } else {
+        // Fallback to prayerData if prayerProgress doesn't exist
+        const savedPrayerData = await AsyncStorage.getItem('prayerData');
+        if (savedPrayerData) {
+          const prayers = JSON.parse(savedPrayerData);
+          const completed = prayers.filter((p: any) => p.completed).length;
+          setPrayerProgress({ completed, total: 5 });
+        }
       }
     } catch (error) {
       console.log('Error loading prayer progress:', error);
@@ -206,12 +268,26 @@ export default function ImanTrackerScreen() {
     }
   };
 
+  const loadSelectedPhrase = async () => {
+    try {
+      const savedPhrase = await AsyncStorage.getItem('selectedDhikrPhrase');
+      if (savedPhrase) {
+        const phrase = DHIKR_PHRASES.find(p => p.id === savedPhrase);
+        if (phrase) {
+          setSelectedPhrase(phrase);
+        }
+      }
+    } catch (error) {
+      console.log('Error loading selected phrase:', error);
+    }
+  };
+
   const updateStreakData = async (totalProgress: number) => {
     try {
       const today = new Date().toDateString();
       const yesterday = new Date(Date.now() - 86400000).toDateString();
       
-      if (totalProgress >= 0.8) { // 80% completion threshold
+      if (totalProgress >= 0.8) {
         let newStreak = { ...streakData };
         
         if (streakData.lastCompletedDate === yesterday) {
@@ -246,7 +322,6 @@ export default function ImanTrackerScreen() {
     setQuranGoals(newGoals);
     await AsyncStorage.setItem('quranProgress', JSON.stringify(newGoals));
     
-    // Check if goal completed
     if ((field === 'versesMemorized' && newGoals.versesMemorized === newGoals.versesToMemorize) ||
         (field === 'pagesRead' && newGoals.pagesRead === newGoals.pagesToRead)) {
       celebrateCompletion();
@@ -261,7 +336,6 @@ export default function ImanTrackerScreen() {
     setDhikrGoals(newDhikrGoals);
     await AsyncStorage.setItem('dhikrProgress', JSON.stringify(newDhikrGoals));
     
-    // Celebrate milestones
     if (newCount === dhikrGoals.dailyTarget) {
       celebrateCompletion();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -283,6 +357,19 @@ export default function ImanTrackerScreen() {
     setTempDhikrTarget(dhikrGoals.dailyTarget.toString());
     setModalType('goals');
     setModalVisible(true);
+  };
+
+  const openPhraseModal = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setModalType('phrase');
+    setModalVisible(true);
+  };
+
+  const selectPhrase = async (phrase: DhikrPhrase) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedPhrase(phrase);
+    await AsyncStorage.setItem('selectedDhikrPhrase', phrase.id);
+    setModalVisible(false);
   };
 
   const saveGoals = async () => {
@@ -351,14 +438,12 @@ export default function ImanTrackerScreen() {
     const centerX = 170;
     const centerY = 170;
     
-    // Prayer ring (outer) - Green
     const prayerRadius = 140;
     const prayerStroke = 20;
     const prayerProgressValue = prayerProgress.completed / prayerProgress.total;
     const prayerCircumference = 2 * Math.PI * prayerRadius;
     const prayerOffset = prayerCircumference * (1 - prayerProgressValue);
     
-    // Quran ring (middle) - Amber
     const quranRadius = 100;
     const quranStroke = 18;
     const quranProgressValue = ((quranGoals.versesMemorized / quranGoals.versesToMemorize) + 
@@ -366,7 +451,6 @@ export default function ImanTrackerScreen() {
     const quranCircumference = 2 * Math.PI * quranRadius;
     const quranOffset = quranCircumference * (1 - quranProgressValue);
     
-    // Dhikr ring (inner) - Blue
     const dhikrRadius = 60;
     const dhikrStroke = 16;
     const dhikrProgressValue = dhikrGoals.currentCount / dhikrGoals.dailyTarget;
@@ -378,7 +462,6 @@ export default function ImanTrackerScreen() {
     const badge = getAchievementBadge(totalPercentage);
     const insight = getDailyInsight(prayerProgressValue, quranProgressValue, dhikrProgressValue);
 
-    // Update streak when progress changes
     useEffect(() => {
       updateStreakData(totalProgress);
     }, [totalProgress]);
@@ -410,7 +493,6 @@ export default function ImanTrackerScreen() {
                 </RadialGradient>
               </Defs>
               
-              {/* Animated glow effect */}
               <Animated.View style={{ opacity: glowOpacity }}>
                 <Circle
                   cx={centerX}
@@ -420,7 +502,6 @@ export default function ImanTrackerScreen() {
                 />
               </Animated.View>
               
-              {/* Prayer Ring (Outer) - Darker empty ring */}
               <Circle
                 cx={centerX}
                 cy={centerY}
@@ -444,7 +525,6 @@ export default function ImanTrackerScreen() {
                 origin={`${centerX}, ${centerY}`}
               />
               
-              {/* Quran Ring (Middle) - Darker empty ring */}
               <Circle
                 cx={centerX}
                 cy={centerY}
@@ -468,7 +548,6 @@ export default function ImanTrackerScreen() {
                 origin={`${centerX}, ${centerY}`}
               />
               
-              {/* Dhikr Ring (Inner) - Darker empty ring */}
               <Circle
                 cx={centerX}
                 cy={centerY}
@@ -494,7 +573,6 @@ export default function ImanTrackerScreen() {
             </Svg>
           </Animated.View>
           
-          {/* Center Content - Perfectly Centered with only Iman Score and Percentage */}
           <View style={styles.centerContentWrapper}>
             <Animated.View 
               style={[
@@ -510,7 +588,6 @@ export default function ImanTrackerScreen() {
           </View>
         </View>
         
-        {/* Daily Insight */}
         <LinearGradient
           colors={[insight.color + '20', insight.color + '10']}
           start={{ x: 0, y: 0 }}
@@ -528,14 +605,12 @@ export default function ImanTrackerScreen() {
           </Text>
         </LinearGradient>
         
-        {/* Motivational Message */}
         <View style={styles.motivationalContainer}>
           <Text style={styles.motivationalText}>
             {getMotivationalMessage(totalPercentage)}
           </Text>
         </View>
         
-        {/* Ring Labels with Progress */}
         <View style={styles.ringLabelsContainer}>
           <TouchableOpacity 
             style={styles.ringLabel}
@@ -606,7 +681,6 @@ export default function ImanTrackerScreen() {
           </TouchableOpacity>
         </View>
         
-        {/* Streak Display */}
         {streakData.currentStreak > 0 && (
           <View style={styles.streakContainer}>
             <LinearGradient
@@ -662,10 +736,8 @@ export default function ImanTrackerScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Nested Rings Display */}
         {renderNestedRings()}
 
-        {/* Quick Stats */}
         <View style={styles.statsContainer}>
           <LinearGradient
             colors={[colors.success + '20', colors.success + '10']}
@@ -723,7 +795,6 @@ export default function ImanTrackerScreen() {
           </LinearGradient>
         </View>
 
-        {/* Quran Goals Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <LinearGradient
@@ -742,7 +813,6 @@ export default function ImanTrackerScreen() {
             <Text style={styles.sectionTitle}>Quran Goals</Text>
           </View>
           
-          {/* Verses to Memorize */}
           <View style={styles.goalCard}>
             <View style={styles.goalHeader}>
               <View style={styles.goalTitleContainer}>
@@ -799,7 +869,6 @@ export default function ImanTrackerScreen() {
             </View>
           </View>
 
-          {/* Pages to Read */}
           <View style={styles.goalCard}>
             <View style={styles.goalHeader}>
               <View style={styles.goalTitleContainer}>
@@ -857,7 +926,6 @@ export default function ImanTrackerScreen() {
           </View>
         </View>
 
-        {/* Tasbih Counter Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <LinearGradient
@@ -882,15 +950,24 @@ export default function ImanTrackerScreen() {
             end={{ x: 1, y: 1 }}
             style={styles.tasbihCard}
           >
-            <View style={styles.tasbihHeader}>
+            <TouchableOpacity 
+              style={styles.phraseSelector}
+              onPress={openPhraseModal}
+              activeOpacity={0.7}
+            >
+              <View style={styles.phraseSelectorContent}>
+                <Text style={styles.phraseArabic}>{selectedPhrase.arabic}</Text>
+                <Text style={styles.phraseTransliteration}>{selectedPhrase.transliteration}</Text>
+                <Text style={styles.phraseTranslation}>{selectedPhrase.translation}</Text>
+              </View>
               <IconSymbol
-                ios_icon_name="sparkles"
-                android_material_icon_name="auto-awesome"
+                ios_icon_name="chevron.down"
+                android_material_icon_name="expand-more"
                 size={24}
                 color={colors.card}
               />
-              <Text style={styles.tasbihTitle}>Daily Dhikr</Text>
-            </View>
+            </TouchableOpacity>
+
             <Text style={styles.tasbihCount}>{dhikrGoals.currentCount}</Text>
             <Text style={styles.tasbihTarget}>Goal: {dhikrGoals.dailyTarget}</Text>
             
@@ -955,7 +1032,6 @@ export default function ImanTrackerScreen() {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* Goals Settings Modal */}
       <Modal
         visible={modalVisible}
         transparent={true}
@@ -964,105 +1040,154 @@ export default function ImanTrackerScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Set Daily Goals</Text>
-              <TouchableOpacity
-                onPress={() => setModalVisible(false)}
-                style={styles.modalCloseButton}
-              >
-                <IconSymbol
-                  ios_icon_name="xmark"
-                  android_material_icon_name="close"
-                  size={24}
-                  color={colors.text}
-                />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalScroll}>
-              {/* Quran Goals */}
-              <View style={styles.modalSection}>
-                <View style={styles.modalSectionHeader}>
-                  <IconSymbol
-                    ios_icon_name="book.fill"
-                    android_material_icon_name="book"
-                    size={20}
-                    color={colors.accent}
-                  />
-                  <Text style={styles.modalSectionTitle}>Quran Goals</Text>
-                </View>
-                
-                <View style={styles.modalInputGroup}>
-                  <Text style={styles.modalLabel}>Verses to Memorize</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    value={tempQuranGoals.versesToMemorize.toString()}
-                    onChangeText={(text) => setTempQuranGoals({
-                      ...tempQuranGoals,
-                      versesToMemorize: parseInt(text) || 0,
-                    })}
-                    keyboardType="numeric"
-                    placeholder="5"
-                    placeholderTextColor={colors.textSecondary}
-                  />
+            {modalType === 'goals' ? (
+              <React.Fragment>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Set Daily Goals</Text>
+                  <TouchableOpacity
+                    onPress={() => setModalVisible(false)}
+                    style={styles.modalCloseButton}
+                  >
+                    <IconSymbol
+                      ios_icon_name="xmark"
+                      android_material_icon_name="close"
+                      size={24}
+                      color={colors.text}
+                    />
+                  </TouchableOpacity>
                 </View>
 
-                <View style={styles.modalInputGroup}>
-                  <Text style={styles.modalLabel}>Pages to Read</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    value={tempQuranGoals.pagesToRead.toString()}
-                    onChangeText={(text) => setTempQuranGoals({
-                      ...tempQuranGoals,
-                      pagesToRead: parseInt(text) || 0,
-                    })}
-                    keyboardType="numeric"
-                    placeholder="2"
-                    placeholderTextColor={colors.textSecondary}
-                  />
-                </View>
-              </View>
+                <ScrollView style={styles.modalScroll}>
+                  <View style={styles.modalSection}>
+                    <View style={styles.modalSectionHeader}>
+                      <IconSymbol
+                        ios_icon_name="book.fill"
+                        android_material_icon_name="book"
+                        size={20}
+                        color={colors.accent}
+                      />
+                      <Text style={styles.modalSectionTitle}>Quran Goals</Text>
+                    </View>
+                    
+                    <View style={styles.modalInputGroup}>
+                      <Text style={styles.modalLabel}>Verses to Memorize</Text>
+                      <TextInput
+                        style={styles.modalInput}
+                        value={tempQuranGoals.versesToMemorize.toString()}
+                        onChangeText={(text) => setTempQuranGoals({
+                          ...tempQuranGoals,
+                          versesToMemorize: parseInt(text) || 0,
+                        })}
+                        keyboardType="numeric"
+                        placeholder="5"
+                        placeholderTextColor={colors.textSecondary}
+                      />
+                    </View>
 
-              {/* Dhikr Goal */}
-              <View style={styles.modalSection}>
-                <View style={styles.modalSectionHeader}>
-                  <IconSymbol
-                    ios_icon_name="hand.raised.fill"
-                    android_material_icon_name="back-hand"
-                    size={20}
-                    color={colors.info}
-                  />
-                  <Text style={styles.modalSectionTitle}>Dhikr Goal</Text>
-                </View>
-                
-                <View style={styles.modalInputGroup}>
-                  <Text style={styles.modalLabel}>Daily Target</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    value={tempDhikrTarget}
-                    onChangeText={setTempDhikrTarget}
-                    keyboardType="numeric"
-                    placeholder="100"
-                    placeholderTextColor={colors.textSecondary}
-                  />
-                </View>
-              </View>
-            </ScrollView>
+                    <View style={styles.modalInputGroup}>
+                      <Text style={styles.modalLabel}>Pages to Read</Text>
+                      <TextInput
+                        style={styles.modalInput}
+                        value={tempQuranGoals.pagesToRead.toString()}
+                        onChangeText={(text) => setTempQuranGoals({
+                          ...tempQuranGoals,
+                          pagesToRead: parseInt(text) || 0,
+                        })}
+                        keyboardType="numeric"
+                        placeholder="2"
+                        placeholderTextColor={colors.textSecondary}
+                      />
+                    </View>
+                  </View>
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonConfirm]}
-                onPress={saveGoals}
-              >
-                <Text style={[styles.modalButtonText, styles.modalButtonTextConfirm]}>Save</Text>
-              </TouchableOpacity>
-            </View>
+                  <View style={styles.modalSection}>
+                    <View style={styles.modalSectionHeader}>
+                      <IconSymbol
+                        ios_icon_name="hand.raised.fill"
+                        android_material_icon_name="back-hand"
+                        size={20}
+                        color={colors.info}
+                      />
+                      <Text style={styles.modalSectionTitle}>Dhikr Goal</Text>
+                    </View>
+                    
+                    <View style={styles.modalInputGroup}>
+                      <Text style={styles.modalLabel}>Daily Target</Text>
+                      <TextInput
+                        style={styles.modalInput}
+                        value={tempDhikrTarget}
+                        onChangeText={setTempDhikrTarget}
+                        keyboardType="numeric"
+                        placeholder="100"
+                        placeholderTextColor={colors.textSecondary}
+                      />
+                    </View>
+                  </View>
+                </ScrollView>
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalButtonCancel]}
+                    onPress={() => setModalVisible(false)}
+                  >
+                    <Text style={styles.modalButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalButtonConfirm]}
+                    onPress={saveGoals}
+                  >
+                    <Text style={[styles.modalButtonText, styles.modalButtonTextConfirm]}>Save</Text>
+                  </TouchableOpacity>
+                </View>
+              </React.Fragment>
+            ) : (
+              <React.Fragment>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Select Dhikr Phrase</Text>
+                  <TouchableOpacity
+                    onPress={() => setModalVisible(false)}
+                    style={styles.modalCloseButton}
+                  >
+                    <IconSymbol
+                      ios_icon_name="xmark"
+                      android_material_icon_name="close"
+                      size={24}
+                      color={colors.text}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView style={styles.modalScroll}>
+                  {DHIKR_PHRASES.map((phrase, index) => (
+                    <React.Fragment key={index}>
+                      <TouchableOpacity
+                        style={[
+                          styles.phraseOption,
+                          selectedPhrase.id === phrase.id && styles.phraseOptionSelected
+                        ]}
+                        onPress={() => selectPhrase(phrase)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.phraseOptionContent}>
+                          <Text style={styles.phraseOptionArabic}>{phrase.arabic}</Text>
+                          <Text style={styles.phraseOptionTransliteration}>{phrase.transliteration}</Text>
+                          <Text style={styles.phraseOptionTranslation}>{phrase.translation}</Text>
+                          <Text style={styles.phraseOptionCount}>Recommended: {phrase.count}x</Text>
+                        </View>
+                        {selectedPhrase.id === phrase.id && (
+                          <IconSymbol
+                            ios_icon_name="checkmark.circle.fill"
+                            android_material_icon_name="check-circle"
+                            size={24}
+                            color={colors.primary}
+                          />
+                        )}
+                      </TouchableOpacity>
+                    </React.Fragment>
+                  ))}
+                </ScrollView>
+              </React.Fragment>
+            )}
           </View>
         </View>
       </Modal>
@@ -1344,15 +1469,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...shadows.colored,
   },
-  tasbihHeader: {
+  phraseSelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+    gap: spacing.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.lg,
+    width: '100%',
   },
-  tasbihTitle: {
-    ...typography.h4,
+  phraseSelectorContent: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  phraseArabic: {
+    fontSize: 24,
+    fontWeight: '700',
     color: colors.card,
+    marginBottom: spacing.xs,
+  },
+  phraseTransliteration: {
+    ...typography.body,
+    color: colors.card,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  phraseTranslation: {
+    ...typography.small,
+    color: colors.card,
+    opacity: 0.9,
   },
   tasbihCount: {
     fontSize: 72,
@@ -1525,5 +1672,45 @@ const styles = StyleSheet.create({
   },
   modalButtonTextConfirm: {
     color: colors.card,
+  },
+  phraseOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.background,
+    padding: spacing.lg,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  phraseOptionSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.highlight,
+  },
+  phraseOptionContent: {
+    flex: 1,
+  },
+  phraseOptionArabic: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  phraseOptionTransliteration: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  phraseOptionTranslation: {
+    ...typography.small,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  phraseOptionCount: {
+    ...typography.small,
+    color: colors.primary,
+    fontWeight: '600',
   },
 });
