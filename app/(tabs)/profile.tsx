@@ -1,8 +1,9 @@
 
 import React from "react";
 import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity } from "react-native";
-import { colors } from "@/styles/commonStyles";
+import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
+import { LinearGradient } from "expo-linear-gradient";
 
 interface ProfileOption {
   title: string;
@@ -10,11 +11,24 @@ interface ProfileOption {
   color: string;
 }
 
+interface StatItem {
+  value: string;
+  label: string;
+  icon: string;
+  color: string;
+}
+
 export default function ProfileScreen() {
+  const stats: StatItem[] = [
+    { value: '15', label: 'Days Active', icon: 'calendar', color: colors.primary },
+    { value: '42', label: 'Prayers', icon: 'schedule', color: colors.accent },
+    { value: '8', label: 'Day Streak', icon: 'local-fire-department', color: colors.error },
+  ];
+
   const profileOptions: ProfileOption[] = [
     { title: 'Edit Profile', icon: 'edit', color: colors.primary },
     { title: 'Notifications', icon: 'notifications', color: colors.accent },
-    { title: 'Prayer Settings', icon: 'settings', color: colors.primary },
+    { title: 'Prayer Settings', icon: 'settings', color: colors.info },
     { title: 'About', icon: 'info', color: colors.secondary },
   ];
 
@@ -26,37 +40,66 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Profile Header */}
-        <View style={styles.profileHeader}>
+        <LinearGradient
+          colors={colors.gradientPrimary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.profileHeader}
+        >
           <View style={styles.avatarContainer}>
             <IconSymbol
               ios_icon_name="person-circle"
               android_material_icon_name="account-circle"
-              size={80}
-              color={colors.primary}
+              size={88}
+              color={colors.card}
             />
           </View>
           <Text style={styles.name}>User Name</Text>
           <Text style={styles.email}>user@example.com</Text>
-        </View>
+          <TouchableOpacity style={styles.editButton} activeOpacity={0.7}>
+            <IconSymbol
+              ios_icon_name="pencil"
+              android_material_icon_name="edit"
+              size={16}
+              color={colors.primary}
+            />
+            <Text style={styles.editButtonText}>Edit Profile</Text>
+          </TouchableOpacity>
+        </LinearGradient>
 
         {/* Stats Cards */}
         <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>15</Text>
-            <Text style={styles.statLabel}>Days Active</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>42</Text>
-            <Text style={styles.statLabel}>Prayers</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>8</Text>
-            <Text style={styles.statLabel}>Streak</Text>
-          </View>
+          {stats.map((stat, index) => (
+            <React.Fragment key={index}>
+              <View style={styles.statCard}>
+                <View style={[styles.statIconContainer, { backgroundColor: stat.color }]}>
+                  <IconSymbol
+                    ios_icon_name={stat.icon}
+                    android_material_icon_name={stat.icon}
+                    size={26}
+                    color={colors.card}
+                  />
+                </View>
+                <Text style={styles.statValue}>{stat.value}</Text>
+                <Text style={styles.statLabel}>{stat.label}</Text>
+              </View>
+            </React.Fragment>
+          ))}
         </View>
 
         {/* Options List */}
         <View style={styles.optionsContainer}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionIconContainer}>
+              <IconSymbol
+                ios_icon_name="settings"
+                android_material_icon_name="settings"
+                size={22}
+                color={colors.primary}
+              />
+            </View>
+            <Text style={styles.sectionTitle}>Settings</Text>
+          </View>
           {profileOptions.map((option, index) => (
             <React.Fragment key={index}>
               <TouchableOpacity
@@ -64,15 +107,17 @@ export default function ProfileScreen() {
                 activeOpacity={0.7}
                 onPress={() => console.log(`Pressed ${option.title}`)}
               >
-                <View style={[styles.optionIconContainer, { backgroundColor: option.color }]}>
-                  <IconSymbol
-                    ios_icon_name={option.icon}
-                    android_material_icon_name={option.icon}
-                    size={24}
-                    color={colors.card}
-                  />
+                <View style={styles.optionLeft}>
+                  <View style={[styles.optionIconContainer, { backgroundColor: option.color }]}>
+                    <IconSymbol
+                      ios_icon_name={option.icon}
+                      android_material_icon_name={option.icon}
+                      size={24}
+                      color={colors.card}
+                    />
+                  </View>
+                  <Text style={styles.optionTitle}>{option.title}</Text>
                 </View>
-                <Text style={styles.optionTitle}>{option.title}</Text>
                 <IconSymbol
                   ios_icon_name="chevron-right"
                   android_material_icon_name="chevron-right"
@@ -83,6 +128,17 @@ export default function ProfileScreen() {
             </React.Fragment>
           ))}
         </View>
+
+        {/* Logout Button */}
+        <TouchableOpacity style={styles.logoutButton} activeOpacity={0.7}>
+          <IconSymbol
+            ios_icon_name="logout"
+            android_material_icon_name="logout"
+            size={22}
+            color={colors.error}
+          />
+          <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
 
         <View style={styles.bottomPadding} />
       </ScrollView>
@@ -99,77 +155,143 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingTop: Platform.OS === 'android' ? 48 : 16,
-    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 56 : 20,
+    paddingHorizontal: spacing.xl,
   },
   profileHeader: {
+    borderRadius: borderRadius.xl,
+    padding: spacing.xxxl,
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: spacing.xxl,
+    ...shadows.colored,
   },
   avatarContainer: {
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   name: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 4,
+    ...typography.h2,
+    color: colors.card,
+    marginBottom: spacing.xs,
   },
   email: {
-    fontSize: 16,
-    color: colors.textSecondary,
+    ...typography.body,
+    color: colors.card,
+    opacity: 0.95,
+    marginBottom: spacing.lg,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.xl,
+    gap: spacing.sm,
+  },
+  editButtonText: {
+    ...typography.captionBold,
+    color: colors.primary,
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 32,
+    marginBottom: spacing.xxxl,
+    gap: spacing.md,
   },
   statCard: {
     flex: 1,
     backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     alignItems: 'center',
-    marginHorizontal: 4,
-    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
-    elevation: 2,
+    ...shadows.medium,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  statIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
   },
   statValue: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: 'bold',
-    color: colors.primary,
-    marginBottom: 4,
+    color: colors.text,
+    marginBottom: spacing.xs,
   },
   statLabel: {
-    fontSize: 12,
+    ...typography.small,
     color: colors.textSecondary,
+    textAlign: 'center',
   },
   optionsContainer: {
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    gap: spacing.md,
+  },
+  sectionIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.highlight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionTitle: {
+    ...typography.h4,
+    color: colors.text,
   },
   optionCard: {
     backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
-    elevation: 2,
+    justifyContent: 'space-between',
+    ...shadows.medium,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  optionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   optionIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.round,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
+    marginRight: spacing.lg,
   },
   optionTitle: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '600',
+    ...typography.h4,
     color: colors.text,
+  },
+  logoutButton: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderWidth: 2,
+    borderColor: colors.error,
+    ...shadows.medium,
+  },
+  logoutText: {
+    ...typography.h4,
+    color: colors.error,
   },
   bottomPadding: {
     height: 120,

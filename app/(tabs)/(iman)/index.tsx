@@ -1,8 +1,9 @@
 
 import React, { useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity, TextInput, Modal } from "react-native";
-import { colors } from "@/styles/commonStyles";
+import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
+import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle } from 'react-native-svg';
 
 interface Goal {
@@ -11,14 +12,39 @@ interface Goal {
   current: number;
   unit: string;
   color: string;
+  gradientColors: string[];
   icon: string;
 }
 
 export default function ImanTrackerScreen() {
   const [goals, setGoals] = useState<Goal[]>([
-    { name: 'Prayers', target: 5, current: 3, unit: 'prayers', color: colors.primary, icon: 'schedule' },
-    { name: 'Quran', target: 30, current: 15, unit: 'minutes', color: colors.accent, icon: 'book' },
-    { name: 'Dhikr', target: 100, current: 50, unit: 'times', color: colors.secondary, icon: 'favorite' },
+    { 
+      name: 'Prayers', 
+      target: 5, 
+      current: 3, 
+      unit: 'prayers', 
+      color: colors.primary,
+      gradientColors: colors.gradientPrimary,
+      icon: 'schedule' 
+    },
+    { 
+      name: 'Quran', 
+      target: 30, 
+      current: 15, 
+      unit: 'minutes', 
+      color: colors.accent,
+      gradientColors: colors.gradientAccent,
+      icon: 'book' 
+    },
+    { 
+      name: 'Dhikr', 
+      target: 100, 
+      current: 50, 
+      unit: 'times', 
+      color: colors.info,
+      gradientColors: colors.gradientInfo,
+      icon: 'favorite' 
+    },
   ]);
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -52,7 +78,6 @@ export default function ImanTrackerScreen() {
     return (
       <View style={styles.ringContainer}>
         <Svg width={size} height={size}>
-          {/* Background Circle */}
           <Circle
             cx={size / 2}
             cy={size / 2}
@@ -61,7 +86,6 @@ export default function ImanTrackerScreen() {
             strokeWidth={strokeWidth}
             fill="none"
           />
-          {/* Progress Circle */}
           <Circle
             cx={size / 2}
             cy={size / 2}
@@ -77,18 +101,22 @@ export default function ImanTrackerScreen() {
           />
         </Svg>
         <View style={styles.ringContent}>
-          <IconSymbol
-            ios_icon_name={goal.icon}
-            android_material_icon_name={goal.icon}
-            size={32}
-            color={goal.color}
-          />
+          <View style={[styles.ringIconContainer, { backgroundColor: goal.color }]}>
+            <IconSymbol
+              ios_icon_name={goal.icon}
+              android_material_icon_name={goal.icon}
+              size={26}
+              color={colors.card}
+            />
+          </View>
           <Text style={styles.ringText}>{goal.current}/{goal.target}</Text>
-          <Text style={styles.ringLabel}>{goal.name}</Text>
+          <Text style={styles.ringPercentage}>{Math.round(progress * 100)}%</Text>
         </View>
       </View>
     );
   };
+
+  const totalProgress = goals.reduce((sum, goal) => sum + (goal.current / goal.target), 0) / goals.length;
 
   return (
     <View style={styles.container}>
@@ -100,6 +128,28 @@ export default function ImanTrackerScreen() {
         <Text style={styles.header}>Iman Tracker</Text>
         <Text style={styles.subtitle}>Track your daily spiritual goals</Text>
 
+        {/* Overall Progress Card */}
+        <LinearGradient
+          colors={colors.gradientPrimary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.overallCard}
+        >
+          <View style={styles.overallIconContainer}>
+            <IconSymbol
+              ios_icon_name="chart"
+              android_material_icon_name="trending-up"
+              size={36}
+              color={colors.card}
+            />
+          </View>
+          <Text style={styles.overallTitle}>Overall Progress</Text>
+          <Text style={styles.overallPercentage}>{Math.round(totalProgress * 100)}%</Text>
+          <Text style={styles.overallSubtext}>
+            {totalProgress === 1 ? 'Perfect! All goals achieved! 🎉' : 'Keep up the great work!'}
+          </Text>
+        </LinearGradient>
+
         {/* Progress Rings */}
         <View style={styles.ringsContainer}>
           {goals.map((goal, index) => (
@@ -109,7 +159,10 @@ export default function ImanTrackerScreen() {
                 onPress={() => openModal(index)}
                 activeOpacity={0.7}
               >
-                {renderProgressRing(goal, 120, 12)}
+                <View style={styles.ringCard}>
+                  {renderProgressRing(goal, 140, 16)}
+                  <Text style={styles.ringLabel}>{goal.name}</Text>
+                </View>
               </TouchableOpacity>
             </React.Fragment>
           ))}
@@ -117,7 +170,17 @@ export default function ImanTrackerScreen() {
 
         {/* Goal Details */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Today&apos;s Progress</Text>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionIconContainer}>
+              <IconSymbol
+                ios_icon_name="list"
+                android_material_icon_name="list"
+                size={22}
+                color={colors.primary}
+              />
+            </View>
+            <Text style={styles.sectionTitle}>Today&apos;s Goals</Text>
+          </View>
           {goals.map((goal, index) => (
             <React.Fragment key={index}>
               <TouchableOpacity
@@ -125,38 +188,44 @@ export default function ImanTrackerScreen() {
                 onPress={() => openModal(index)}
                 activeOpacity={0.7}
               >
-                <View style={styles.goalInfo}>
-                  <View style={[styles.goalIconContainer, { backgroundColor: goal.color }]}>
-                    <IconSymbol
-                      ios_icon_name={goal.icon}
-                      android_material_icon_name={goal.icon}
-                      size={24}
-                      color={colors.card}
-                    />
-                  </View>
-                  <View style={styles.goalTextContainer}>
-                    <Text style={styles.goalName}>{goal.name}</Text>
-                    <Text style={styles.goalProgress}>
-                      {goal.current} / {goal.target} {goal.unit}
+                <LinearGradient
+                  colors={goal.gradientColors}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.goalGradient}
+                >
+                  <View style={styles.goalHeader}>
+                    <View style={styles.goalIconContainer}>
+                      <IconSymbol
+                        ios_icon_name={goal.icon}
+                        android_material_icon_name={goal.icon}
+                        size={26}
+                        color={colors.card}
+                      />
+                    </View>
+                    <View style={styles.goalTextContainer}>
+                      <Text style={styles.goalName}>{goal.name}</Text>
+                      <Text style={styles.goalProgress}>
+                        {goal.current} / {goal.target} {goal.unit}
+                      </Text>
+                    </View>
+                    <Text style={styles.goalPercentage}>
+                      {Math.round((goal.current / goal.target) * 100)}%
                     </Text>
                   </View>
-                </View>
-                <View style={styles.progressBarContainer}>
-                  <View style={styles.progressBarBackground}>
-                    <View
-                      style={[
-                        styles.progressBarFill,
-                        {
-                          width: `${(goal.current / goal.target) * 100}%`,
-                          backgroundColor: goal.color,
-                        },
-                      ]}
-                    />
+                  <View style={styles.progressBarContainer}>
+                    <View style={styles.progressBarBackground}>
+                      <View
+                        style={[
+                          styles.progressBarFill,
+                          {
+                            width: `${(goal.current / goal.target) * 100}%`,
+                          },
+                        ]}
+                      />
+                    </View>
                   </View>
-                  <Text style={styles.progressPercentage}>
-                    {Math.round((goal.current / goal.target) * 100)}%
-                  </Text>
-                </View>
+                </LinearGradient>
               </TouchableOpacity>
             </React.Fragment>
           ))}
@@ -174,9 +243,19 @@ export default function ImanTrackerScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              Update {selectedGoalIndex !== null ? goals[selectedGoalIndex].name : ''}
-            </Text>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalIconContainer}>
+                <IconSymbol
+                  ios_icon_name="pencil"
+                  android_material_icon_name="edit"
+                  size={28}
+                  color={colors.primary}
+                />
+              </View>
+              <Text style={styles.modalTitle}>
+                Update {selectedGoalIndex !== null ? goals[selectedGoalIndex].name : ''}
+              </Text>
+            </View>
             <TextInput
               style={styles.modalInput}
               value={inputValue}
@@ -215,160 +294,237 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingTop: Platform.OS === 'android' ? 48 : 16,
-    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 56 : 20,
+    paddingHorizontal: spacing.xl,
   },
   header: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    ...typography.h1,
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: spacing.xs,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
+    ...typography.body,
     color: colors.textSecondary,
-    marginBottom: 32,
+    marginBottom: spacing.xxl,
     textAlign: 'center',
+  },
+  overallCard: {
+    borderRadius: borderRadius.xl,
+    padding: spacing.xxxl,
+    alignItems: 'center',
+    marginBottom: spacing.xxxl,
+    ...shadows.colored,
+  },
+  overallIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: borderRadius.round,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  overallTitle: {
+    ...typography.h4,
+    color: colors.card,
+    marginBottom: spacing.md,
+  },
+  overallPercentage: {
+    fontSize: 52,
+    fontWeight: 'bold',
+    color: colors.card,
+    marginBottom: spacing.sm,
+  },
+  overallSubtext: {
+    ...typography.caption,
+    color: colors.card,
+    opacity: 0.95,
   },
   ringsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 32,
+    marginBottom: spacing.xxxl,
     flexWrap: 'wrap',
+    gap: spacing.lg,
   },
   ringWrapper: {
-    marginBottom: 16,
+    marginBottom: spacing.sm,
+  },
+  ringCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    alignItems: 'center',
+    ...shadows.medium,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   ringContainer: {
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: spacing.md,
   },
   ringContent: {
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ringText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginTop: 4,
-  },
-  ringLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.primary,
-    marginBottom: 16,
-  },
-  goalCard: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
-    elevation: 2,
-  },
-  goalInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  goalIconContainer: {
+  ringIconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: borderRadius.round,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginBottom: spacing.sm,
+  },
+  ringText: {
+    ...typography.h4,
+    color: colors.text,
+    marginTop: spacing.xs,
+  },
+  ringPercentage: {
+    ...typography.captionBold,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  ringLabel: {
+    ...typography.bodyBold,
+    color: colors.text,
+  },
+  section: {
+    marginBottom: spacing.xxl,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    gap: spacing.md,
+  },
+  sectionIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.highlight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionTitle: {
+    ...typography.h4,
+    color: colors.text,
+  },
+  goalCard: {
+    marginBottom: spacing.lg,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    ...shadows.medium,
+  },
+  goalGradient: {
+    padding: spacing.xl,
+  },
+  goalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  goalIconContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: borderRadius.round,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
   },
   goalTextContainer: {
     flex: 1,
   },
   goalName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 4,
+    ...typography.h4,
+    color: colors.card,
+    marginBottom: spacing.xs,
   },
   goalProgress: {
-    fontSize: 14,
-    color: colors.textSecondary,
+    ...typography.caption,
+    color: colors.card,
+    opacity: 0.95,
+  },
+  goalPercentage: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: colors.card,
   },
   progressBarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    marginTop: spacing.xs,
   },
   progressBarBackground: {
-    flex: 1,
-    height: 8,
-    backgroundColor: colors.highlight,
-    borderRadius: 4,
+    height: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: borderRadius.sm,
     overflow: 'hidden',
-    marginRight: 12,
   },
   progressBarFill: {
     height: '100%',
-    borderRadius: 4,
-  },
-  progressPercentage: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
-    minWidth: 40,
-    textAlign: 'right',
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.sm,
   },
   bottomPadding: {
     height: 120,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
     backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 24,
-    width: '80%',
+    borderRadius: borderRadius.xl,
+    padding: spacing.xxxl,
+    width: '85%',
     maxWidth: 400,
+    ...shadows.large,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xl,
+    gap: spacing.md,
+  },
+  modalIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.round,
+    backgroundColor: colors.highlight,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+    ...typography.h4,
     color: colors.text,
-    marginBottom: 16,
-    textAlign: 'center',
   },
   modalInput: {
-    borderWidth: 1,
-    borderColor: colors.secondary,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    ...typography.body,
     color: colors.text,
-    marginBottom: 20,
+    marginBottom: spacing.xxl,
+    backgroundColor: colors.background,
   },
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: spacing.md,
   },
   modalButton: {
     flex: 1,
-    padding: 12,
-    borderRadius: 8,
+    padding: spacing.lg,
+    borderRadius: borderRadius.md,
     alignItems: 'center',
-    marginHorizontal: 4,
   },
   modalButtonCancel: {
     backgroundColor: colors.highlight,
@@ -377,8 +533,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   modalButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+    ...typography.bodyBold,
     color: colors.text,
   },
   modalButtonTextConfirm: {

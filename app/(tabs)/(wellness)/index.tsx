@@ -1,8 +1,9 @@
 
 import React, { useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity } from "react-native";
-import { colors } from "@/styles/commonStyles";
+import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
+import { LinearGradient } from "expo-linear-gradient";
 
 type WellnessTab = 'mental' | 'physical';
 
@@ -10,6 +11,7 @@ interface WellnessActivity {
   title: string;
   description: string;
   icon: string;
+  duration: string;
 }
 
 export default function WellnessScreen() {
@@ -20,21 +22,25 @@ export default function WellnessScreen() {
       title: 'Meditation & Reflection',
       description: 'Practice mindfulness and spiritual reflection',
       icon: 'self-improvement',
+      duration: '10 min',
     },
     {
       title: 'Gratitude Journal',
       description: 'Write down things you are grateful for',
       icon: 'edit-note',
+      duration: '5 min',
     },
     {
       title: 'Stress Management',
       description: 'Learn techniques to manage daily stress',
       icon: 'spa',
+      duration: '15 min',
     },
     {
       title: 'Positive Affirmations',
       description: 'Start your day with positive thoughts',
       icon: 'sentiment-satisfied',
+      duration: '5 min',
     },
   ];
 
@@ -43,21 +49,25 @@ export default function WellnessScreen() {
       title: 'Exercise Routine',
       description: 'Stay active with daily physical activities',
       icon: 'fitness-center',
+      duration: '30 min',
     },
     {
       title: 'Healthy Eating',
       description: 'Follow a balanced and nutritious diet',
       icon: 'restaurant',
+      duration: 'Daily',
     },
     {
       title: 'Sleep Tracking',
       description: 'Monitor and improve your sleep quality',
       icon: 'bedtime',
+      duration: '8 hours',
     },
     {
       title: 'Hydration',
       description: 'Track your daily water intake',
       icon: 'water-drop',
+      duration: '8 glasses',
     },
   ];
 
@@ -83,20 +93,32 @@ export default function WellnessScreen() {
             onPress={() => setActiveTab('mental')}
             activeOpacity={0.7}
           >
-            <IconSymbol
-              ios_icon_name="brain"
-              android_material_icon_name="psychology"
-              size={24}
-              color={activeTab === 'mental' ? colors.card : colors.textSecondary}
-            />
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === 'mental' && styles.tabTextActive,
-              ]}
-            >
-              Mental
-            </Text>
+            {activeTab === 'mental' ? (
+              <LinearGradient
+                colors={colors.gradientPrimary}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.tabGradient}
+              >
+                <IconSymbol
+                  ios_icon_name="brain"
+                  android_material_icon_name="psychology"
+                  size={24}
+                  color={colors.card}
+                />
+                <Text style={styles.tabTextActive}>Mental</Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.tabInactive}>
+                <IconSymbol
+                  ios_icon_name="brain"
+                  android_material_icon_name="psychology"
+                  size={24}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.tabText}>Mental</Text>
+              </View>
+            )}
           </TouchableOpacity>
           <TouchableOpacity
             style={[
@@ -106,25 +128,50 @@ export default function WellnessScreen() {
             onPress={() => setActiveTab('physical')}
             activeOpacity={0.7}
           >
-            <IconSymbol
-              ios_icon_name="heart"
-              android_material_icon_name="favorite"
-              size={24}
-              color={activeTab === 'physical' ? colors.card : colors.textSecondary}
-            />
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === 'physical' && styles.tabTextActive,
-              ]}
-            >
-              Physical
-            </Text>
+            {activeTab === 'physical' ? (
+              <LinearGradient
+                colors={colors.gradientPrimary}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.tabGradient}
+              >
+                <IconSymbol
+                  ios_icon_name="heart"
+                  android_material_icon_name="favorite"
+                  size={24}
+                  color={colors.card}
+                />
+                <Text style={styles.tabTextActive}>Physical</Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.tabInactive}>
+                <IconSymbol
+                  ios_icon_name="heart"
+                  android_material_icon_name="favorite"
+                  size={24}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.tabText}>Physical</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
         {/* Activities List */}
         <View style={styles.activitiesContainer}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionIconContainer}>
+              <IconSymbol
+                ios_icon_name="list"
+                android_material_icon_name="list"
+                size={22}
+                color={colors.primary}
+              />
+            </View>
+            <Text style={styles.sectionTitle}>
+              {activeTab === 'mental' ? 'Mental Wellness' : 'Physical Wellness'}
+            </Text>
+          </View>
           {activities.map((activity, index) => (
             <React.Fragment key={index}>
               <TouchableOpacity
@@ -132,17 +179,28 @@ export default function WellnessScreen() {
                 activeOpacity={0.7}
                 onPress={() => console.log(`Pressed ${activity.title}`)}
               >
-                <View style={[styles.activityIconContainer, { backgroundColor: colors.primary }]}>
-                  <IconSymbol
-                    ios_icon_name={activity.icon}
-                    android_material_icon_name={activity.icon}
-                    size={28}
-                    color={colors.card}
-                  />
-                </View>
-                <View style={styles.activityContent}>
-                  <Text style={styles.activityTitle}>{activity.title}</Text>
-                  <Text style={styles.activityDescription}>{activity.description}</Text>
+                <View style={styles.activityLeft}>
+                  <View style={styles.activityIconContainer}>
+                    <IconSymbol
+                      ios_icon_name={activity.icon}
+                      android_material_icon_name={activity.icon}
+                      size={30}
+                      color={colors.primary}
+                    />
+                  </View>
+                  <View style={styles.activityContent}>
+                    <Text style={styles.activityTitle}>{activity.title}</Text>
+                    <Text style={styles.activityDescription}>{activity.description}</Text>
+                    <View style={styles.durationBadge}>
+                      <IconSymbol
+                        ios_icon_name="clock"
+                        android_material_icon_name="schedule"
+                        size={14}
+                        color={colors.primary}
+                      />
+                      <Text style={styles.durationText}>{activity.duration}</Text>
+                    </View>
+                  </View>
                 </View>
                 <IconSymbol
                   ios_icon_name="chevron-right"
@@ -170,84 +228,134 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingTop: Platform.OS === 'android' ? 48 : 16,
-    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 56 : 20,
+    paddingHorizontal: spacing.xl,
   },
   header: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    ...typography.h1,
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: spacing.xs,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
+    ...typography.body,
     color: colors.textSecondary,
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
     textAlign: 'center',
   },
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 24,
-    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
-    elevation: 2,
+    borderRadius: borderRadius.lg,
+    padding: spacing.sm,
+    marginBottom: spacing.xxxl,
+    ...shadows.medium,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   tab: {
     flex: 1,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+  },
+  tabActive: {
+    // Active tab styling handled by gradient
+  },
+  tabGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
   },
-  tabActive: {
-    backgroundColor: colors.primary,
+  tabInactive: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
   },
   tabText: {
-    fontSize: 16,
-    fontWeight: '600',
+    ...typography.bodyBold,
     color: colors.textSecondary,
   },
   tabTextActive: {
+    ...typography.bodyBold,
     color: colors.card,
   },
   activitiesContainer: {
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    gap: spacing.md,
+  },
+  sectionIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.highlight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionTitle: {
+    ...typography.h4,
+    color: colors.text,
   },
   activityCard: {
     backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
-    elevation: 2,
+    ...shadows.medium,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  activityLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   activityIconContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.highlight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
+    marginRight: spacing.lg,
   },
   activityContent: {
     flex: 1,
   },
   activityTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    ...typography.h4,
     color: colors.text,
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   activityDescription: {
-    fontSize: 14,
+    ...typography.caption,
     color: colors.textSecondary,
+    marginBottom: spacing.sm,
+    lineHeight: 20,
+  },
+  durationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.highlight,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+  },
+  durationText: {
+    ...typography.smallBold,
+    color: colors.primary,
   },
   bottomPadding: {
     height: 120,
