@@ -121,7 +121,7 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
                     <IconSymbol
                       android_material_icon_name={tab.icon}
                       ios_icon_name={tab.icon}
-                      size={24}
+                      size={26}
                       color={isActive ? colors.primary : '#FFFFFF'}
                     />
                     <Text
@@ -165,13 +165,13 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     flexDirection: 'row',
-    height: 65,
+    height: 90,
     alignItems: 'center',
     justifyContent: 'space-around',
     backgroundColor: '#000000',
     paddingHorizontal: 8,
-    paddingTop: 8,
-    paddingBottom: 4,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   tab: {
     flex: 1,
@@ -183,10 +183,10 @@ const styles = StyleSheet.create({
   tabContent: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 6,
   },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
     marginTop: 2,
     textAlign: 'center',

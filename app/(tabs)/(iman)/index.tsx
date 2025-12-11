@@ -493,30 +493,20 @@ export default function ImanTrackerScreen() {
             </Svg>
           </Animated.View>
           
-          {/* Center Content - Perfectly Centered */}
-          <Animated.View 
-            style={[
-              styles.centerContent,
-              {
-                transform: [{ scale: Animated.multiply(pulseAnim, scaleAnim) }],
-              }
-            ]}
-          >
-            <View style={[styles.badgeContainer, { backgroundColor: badge.color + '20' }]}>
-              <IconSymbol
-                ios_icon_name={badge.icon}
-                android_material_icon_name="star"
-                size={32}
-                color={badge.color}
-              />
-            </View>
-            <Text style={styles.centerTitle}>Iman</Text>
-            <Text style={styles.centerSubtitle}>Score</Text>
-            <Text style={[styles.centerPercentage, { color: badge.color }]}>{totalPercentage}%</Text>
-            <View style={[styles.badgeLabelContainer, { backgroundColor: badge.color }]}>
-              <Text style={styles.badgeLabel}>{badge.label}</Text>
-            </View>
-          </Animated.View>
+          {/* Center Content - Perfectly Centered with only Iman Score and Percentage */}
+          <View style={styles.centerContentWrapper}>
+            <Animated.View 
+              style={[
+                styles.centerContent,
+                {
+                  transform: [{ scale: Animated.multiply(pulseAnim, scaleAnim) }],
+                }
+              ]}
+            >
+              <Text style={styles.centerTitle}>Iman Score</Text>
+              <Text style={[styles.centerPercentage, { color: badge.color }]}>{totalPercentage}%</Text>
+            </Animated.View>
+          </View>
         </View>
         
         {/* Daily Insight */}
@@ -1129,49 +1119,30 @@ const styles = StyleSheet.create({
     width: 340,
     height: 340,
   },
-  centerContent: {
+  centerContentWrapper: {
     position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    top: '50%',
-    left: '50%',
-    transform: [{ translateX: -50 }, { translateY: -75 }],
-    width: 100,
+    pointerEvents: 'none',
   },
-  badgeContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  centerContent: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.xs,
   },
   centerTitle: {
-    ...typography.h4,
+    ...typography.h3,
     color: colors.text,
     fontWeight: '700',
-    marginTop: spacing.xs,
-  },
-  centerSubtitle: {
-    ...typography.caption,
-    color: colors.textSecondary,
     marginBottom: spacing.xs,
   },
   centerPercentage: {
-    fontSize: 40,
+    fontSize: 48,
     fontWeight: 'bold',
-    lineHeight: 44,
-    marginBottom: spacing.xs,
-  },
-  badgeLabelContainer: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.round,
-  },
-  badgeLabel: {
-    ...typography.small,
-    color: colors.card,
-    fontWeight: '700',
+    lineHeight: 52,
   },
   insightContainer: {
     flexDirection: 'row',
