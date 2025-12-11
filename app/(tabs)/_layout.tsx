@@ -8,19 +8,13 @@ import { Dimensions } from 'react-native';
 const { width: screenWidth } = Dimensions.get('window');
 
 export default function TabLayout() {
-  // Define the tabs configuration
+  // Define the tabs configuration - Prayer tab removed
   const tabs: TabBarItem[] = [
     {
       name: '(home)',
       route: '/(tabs)/(home)/',
       icon: 'home',
       label: 'Home',
-    },
-    {
-      name: '(prayer)',
-      route: '/(tabs)/(prayer)/',
-      icon: 'schedule',
-      label: 'Prayer',
     },
     {
       name: '(iman)',
@@ -49,7 +43,6 @@ export default function TabLayout() {
   ];
 
   // For Android and Web, use Stack navigation with custom floating tab bar
-  // Use full screen width minus small margins for 6 tabs
   return (
     <>
       <Stack
@@ -59,7 +52,6 @@ export default function TabLayout() {
         }}
       >
         <Stack.Screen key="home" name="(home)" />
-        <Stack.Screen key="prayer" name="(prayer)" />
         <Stack.Screen key="iman" name="(iman)" />
         <Stack.Screen key="learning" name="(learning)" />
         <Stack.Screen key="wellness" name="(wellness)" />

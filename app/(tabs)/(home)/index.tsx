@@ -1,24 +1,35 @@
 
-import React from "react";
-import { View, Text, StyleSheet, ScrollView, Platform } from "react-native";
+import React, { useState } from "react";
+import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity } from "react-native";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
+import Svg, { Circle } from 'react-native-svg';
 
 interface PrayerTime {
   name: string;
   time: string;
   arabicName: string;
+  completed: boolean;
 }
 
 export default function HomeScreen() {
-  const prayerTimes: PrayerTime[] = [
-    { name: 'Fajr', time: '5:30 AM', arabicName: 'الفجر' },
-    { name: 'Dhuhr', time: '12:45 PM', arabicName: 'الظهر' },
-    { name: 'Asr', time: '4:15 PM', arabicName: 'العصر' },
-    { name: 'Maghrib', time: '6:30 PM', arabicName: 'المغرب' },
-    { name: 'Isha', time: '8:00 PM', arabicName: 'العشاء' },
-  ];
+  const [prayers, setPrayers] = useState<PrayerTime[]>([
+    { name: 'Fajr', time: '5:30 AM', arabicName: 'الفجر', completed: false },
+    { name: 'Dhuhr', time: '12:45 PM', arabicName: 'الظهر', completed: false },
+    { name: 'Asr', time: '4:15 PM', arabicName: 'العصر', completed: false },
+    { name: 'Maghrib', time: '6:30 PM', arabicName: 'المغرب', completed: false },
+    { name: 'Isha', time: '8:00 PM', arabicName: 'العشاء', completed: false },
+  ]);
+
+  const togglePrayer = (index: number) => {
+    const newPrayers = [...prayers];
+    newPrayers[index].completed = !newPrayers[index].completed;
+    setPrayers(newPrayers);
+  };
+
+  const completedCount = prayers.filter(p => p.completed).length;
+  const progressPercentage = (completedCount / prayers.length) * 100;
 
   const dailyHadith = {
     text: "The best of you are those who are best to their families.",
@@ -37,6 +48,46 @@ export default function HomeScreen() {
     month: 'long', 
     day: 'numeric' 
   });
+
+  const renderProgressCircle = () => {
+    const size = 140;
+    const strokeWidth = 12;
+    const radius = (size - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference * (1 - completedCount / prayers.length);
+
+    return (
+      <View style={styles.progressCircleContainer}>
+        <Svg width={size} height={size}>
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={colors.highlight}
+            strokeWidth={strokeWidth}
+            fill="none"
+          />
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={colors.card}
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            rotation="-90"
+            origin={`${size / 2}, ${size / 2}`}
+          />
+        </Svg>
+        <View style={styles.progressContent}>
+          <Text style={styles.progressNumber}>{completedCount}/{prayers.length}</Text>
+          <Text style={styles.progressLabel}>Prayers</Text>
+        </View>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -64,7 +115,7 @@ export default function HomeScreen() {
           <Text style={styles.date}>{currentDate}</Text>
         </LinearGradient>
         
-        {/* Prayer Times Section */}
+        {/* Prayer Tracker Section with Progress Circle */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionIconContainer}>
@@ -75,24 +126,83 @@ export default function HomeScreen() {
                 color={colors.primary}
               />
             </View>
-            <Text style={styles.sectionTitle}>Prayer Times</Text>
+            <Text style={styles.sectionTitle}>Prayer Tracker</Text>
           </View>
-          <View style={styles.prayerGrid}>
-            {prayerTimes.map((prayer, index) => (
+          
+          {/* Progress Summary Card */}
+          <LinearGradient
+            colors={colors.gradientPrimary}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.summaryCard}
+          >
+            {renderProgressCircle()}
+            <Text style={styles.summaryText}>
+              {completedCount === prayers.length 
+                ? 'All prayers completed! 🎉' 
+                : `${completedCount} of ${prayers.length} prayers completed`}
+            </Text>
+          </LinearGradient>
+
+          {/* Prayer List */}
+          <View style={styles.prayerList}>
+            {prayers.map((prayer, index) => (
               <React.Fragment key={index}>
-                <View style={styles.prayerCard}>
-                  <View style={styles.prayerIconContainer}>
-                    <IconSymbol
-                      ios_icon_name="moon"
-                      android_material_icon_name="brightness-3"
-                      size={18}
-                      color={colors.primary}
-                    />
+                <TouchableOpacity
+                  style={[
+                    styles.prayerCard,
+                    prayer.completed && styles.prayerCardCompleted
+                  ]}
+                  onPress={() => togglePrayer(index)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.prayerLeft}>
+                    <View style={[
+                      styles.prayerIconContainer,
+                      prayer.completed && styles.prayerIconContainerCompleted
+                    ]}>
+                      <IconSymbol
+                        ios_icon_name="moon"
+                        android_material_icon_name="brightness-3"
+                        size={18}
+                        color={prayer.completed ? colors.card : colors.primary}
+                      />
+                    </View>
+                    <View style={styles.prayerInfo}>
+                      <Text style={[
+                        styles.prayerName,
+                        prayer.completed && styles.prayerNameCompleted
+                      ]}>
+                        {prayer.name}
+                      </Text>
+                      <Text style={[
+                        styles.prayerArabic,
+                        prayer.completed && styles.prayerArabicCompleted
+                      ]}>
+                        {prayer.arabicName}
+                      </Text>
+                      <Text style={[
+                        styles.prayerTime,
+                        prayer.completed && styles.prayerTimeCompleted
+                      ]}>
+                        {prayer.time}
+                      </Text>
+                    </View>
                   </View>
-                  <Text style={styles.prayerArabic}>{prayer.arabicName}</Text>
-                  <Text style={styles.prayerName}>{prayer.name}</Text>
-                  <Text style={styles.prayerTime}>{prayer.time}</Text>
-                </View>
+                  <View style={[
+                    styles.checkbox,
+                    prayer.completed && styles.checkboxCompleted
+                  ]}>
+                    {prayer.completed && (
+                      <IconSymbol
+                        ios_icon_name="checkmark"
+                        android_material_icon_name="check"
+                        size={18}
+                        color={colors.card}
+                      />
+                    )}
+                  </View>
+                </TouchableOpacity>
               </React.Fragment>
             ))}
           </View>
@@ -220,21 +330,63 @@ const styles = StyleSheet.create({
     ...typography.h4,
     color: colors.text,
   },
-  prayerGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+  summaryCard: {
+    borderRadius: borderRadius.xl,
+    padding: spacing.xxl,
+    marginBottom: spacing.lg,
+    alignItems: 'center',
+    ...shadows.colored,
+  },
+  progressCircleContainer: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  progressContent: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressNumber: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: colors.card,
+  },
+  progressLabel: {
+    ...typography.caption,
+    color: colors.card,
+    opacity: 0.95,
+    marginTop: spacing.xs,
+  },
+  summaryText: {
+    ...typography.bodyBold,
+    color: colors.card,
+    textAlign: 'center',
+  },
+  prayerList: {
     gap: spacing.md,
   },
   prayerCard: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
-    width: '48%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     ...shadows.medium,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  prayerCardCompleted: {
+    backgroundColor: colors.highlight,
+    borderColor: colors.primary,
+    borderWidth: 2,
+  },
+  prayerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   prayerIconContainer: {
     width: 44,
@@ -243,22 +395,50 @@ const styles = StyleSheet.create({
     backgroundColor: colors.highlight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+    marginRight: spacing.md,
   },
-  prayerArabic: {
-    ...typography.h4,
-    color: colors.primary,
-    marginBottom: spacing.xs,
+  prayerIconContainerCompleted: {
+    backgroundColor: colors.primary,
+  },
+  prayerInfo: {
+    flex: 1,
   },
   prayerName: {
     ...typography.bodyBold,
     color: colors.text,
-    marginBottom: spacing.xs,
+    marginBottom: 2,
   },
-  prayerTime: {
+  prayerNameCompleted: {
+    color: colors.primary,
+  },
+  prayerArabic: {
     ...typography.caption,
     color: colors.textSecondary,
-    fontWeight: '500',
+    marginBottom: 2,
+  },
+  prayerArabicCompleted: {
+    color: colors.primary,
+  },
+  prayerTime: {
+    ...typography.small,
+    color: colors.textSecondary,
+  },
+  prayerTimeCompleted: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  checkbox: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
+    borderColor: colors.textSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxCompleted: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   contentCard: {
     backgroundColor: colors.card,

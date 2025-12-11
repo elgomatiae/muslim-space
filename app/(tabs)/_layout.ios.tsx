@@ -8,14 +8,11 @@ export default function TabLayout() {
     <NativeTabs
       tintColor={colors.primary}
       iconColor={colors.textSecondary}
+      barTintColor="#000000"
     >
       <NativeTabs.Trigger key="home" name="(home)">
         <Icon sf="house.fill" />
         <Label>Home</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger key="prayer" name="(prayer)">
-        <Icon sf="clock.fill" />
-        <Label>Prayer</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger key="iman" name="(iman)">
         <Icon sf="chart.pie.fill" />
