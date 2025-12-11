@@ -8,7 +8,8 @@ import { LinearGradient } from "expo-linear-gradient";
 interface LearningSection {
   title: string;
   description: string;
-  icon: string;
+  iosIcon: string;
+  androidIcon: string;
   gradientColors: string[];
   count: number;
 }
@@ -18,28 +19,32 @@ export default function LearningScreen() {
     {
       title: 'Islamic Lectures',
       description: 'Listen to inspiring lectures from scholars',
-      icon: 'play-circle',
+      iosIcon: 'play.circle.fill',
+      androidIcon: 'play-circle',
       gradientColors: colors.gradientPrimary,
       count: 24,
     },
     {
       title: 'Quran Recitations',
       description: 'Beautiful recitations of the Holy Quran',
-      icon: 'headset',
+      iosIcon: 'headphones',
+      androidIcon: 'headset',
       gradientColors: colors.gradientAccent,
       count: 30,
     },
     {
       title: 'Islamic Quizzes',
       description: 'Test your Islamic knowledge',
-      icon: 'quiz',
+      iosIcon: 'questionmark.circle.fill',
+      androidIcon: 'quiz',
       gradientColors: colors.gradientInfo,
       count: 15,
     },
     {
       title: 'Daily Duas',
       description: 'Learn daily supplications',
-      icon: 'auto-stories',
+      iosIcon: 'book.pages.fill',
+      androidIcon: 'auto-stories',
       gradientColors: colors.gradientPurple,
       count: 40,
     },
@@ -64,7 +69,7 @@ export default function LearningScreen() {
         >
           <View style={styles.featuredIconContainer}>
             <IconSymbol
-              ios_icon_name="star"
+              ios_icon_name="star.fill"
               android_material_icon_name="star"
               size={36}
               color={colors.card}
@@ -94,8 +99,8 @@ export default function LearningScreen() {
                   <View style={styles.sectionContent}>
                     <View style={styles.iconContainer}>
                       <IconSymbol
-                        ios_icon_name={section.icon}
-                        android_material_icon_name={section.icon}
+                        ios_icon_name={section.iosIcon}
+                        android_material_icon_name={section.androidIcon}
                         size={34}
                         color={colors.card}
                       />
@@ -109,7 +114,7 @@ export default function LearningScreen() {
                     </View>
                   </View>
                   <IconSymbol
-                    ios_icon_name="chevron-right"
+                    ios_icon_name="chevron.right"
                     android_material_icon_name="chevron-right"
                     size={26}
                     color={colors.card}
@@ -124,7 +129,7 @@ export default function LearningScreen() {
         <View style={styles.placeholderCard}>
           <View style={styles.placeholderIconContainer}>
             <IconSymbol
-              ios_icon_name="cloud-upload"
+              ios_icon_name="icloud.and.arrow.up.fill"
               android_material_icon_name="cloud-upload"
               size={52}
               color={colors.primary}

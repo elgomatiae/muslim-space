@@ -143,7 +143,7 @@ export default function HomeScreen() {
         >
           <View style={styles.headerIconContainer}>
             <IconSymbol
-              ios_icon_name="moon-stars"
+              ios_icon_name="moon.fill"
               android_material_icon_name="nightlight"
               size={32}
               color={colors.card}
@@ -158,7 +158,7 @@ export default function HomeScreen() {
           <View style={styles.sectionHeader}>
             <View style={styles.sectionIconContainer}>
               <IconSymbol
-                ios_icon_name="clock"
+                ios_icon_name="clock.fill"
                 android_material_icon_name="schedule"
                 size={20}
                 color={colors.primary}
@@ -200,7 +200,7 @@ export default function HomeScreen() {
                       prayer.completed && styles.prayerIconContainerCompleted
                     ]}>
                       <IconSymbol
-                        ios_icon_name="moon"
+                        ios_icon_name="moon.fill"
                         android_material_icon_name="brightness-3"
                         size={16}
                         color={prayer.completed ? colors.card : colors.primary}
@@ -251,7 +251,7 @@ export default function HomeScreen() {
           <View style={styles.sectionHeader}>
             <View style={styles.sectionIconContainer}>
               <IconSymbol
-                ios_icon_name="book"
+                ios_icon_name="book.fill"
                 android_material_icon_name="menu-book"
                 size={20}
                 color={colors.accent}
@@ -262,7 +262,7 @@ export default function HomeScreen() {
           <View style={styles.contentCard}>
             <View style={styles.quoteIconContainer}>
               <IconSymbol
-                ios_icon_name="quote"
+                ios_icon_name="quote.opening"
                 android_material_icon_name="format-quote"
                 size={28}
                 color={colors.accent}
@@ -281,7 +281,7 @@ export default function HomeScreen() {
           <View style={styles.sectionHeader}>
             <View style={styles.sectionIconContainer}>
               <IconSymbol
-                ios_icon_name="book-closed"
+                ios_icon_name="book.closed.fill"
                 android_material_icon_name="book"
                 size={20}
                 color={colors.primary}

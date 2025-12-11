@@ -11,7 +11,8 @@ type WellnessTab = 'mental' | 'physical';
 interface WellnessActivity {
   title: string;
   description: string;
-  icon: string;
+  iosIcon: string;
+  androidIcon: string;
   duration: string;
 }
 
@@ -22,25 +23,29 @@ export default function WellnessScreen() {
     {
       title: 'Meditation & Reflection',
       description: 'Practice mindfulness and spiritual reflection',
-      icon: 'self-improvement',
+      iosIcon: 'figure.walk',
+      androidIcon: 'self-improvement',
       duration: '10 min',
     },
     {
       title: 'Gratitude Journal',
       description: 'Write down things you are grateful for',
-      icon: 'edit-note',
+      iosIcon: 'pencil.and.list.clipboard',
+      androidIcon: 'edit-note',
       duration: '5 min',
     },
     {
       title: 'Stress Management',
       description: 'Learn techniques to manage daily stress',
-      icon: 'spa',
+      iosIcon: 'leaf.fill',
+      androidIcon: 'spa',
       duration: '15 min',
     },
     {
       title: 'Positive Affirmations',
       description: 'Start your day with positive thoughts',
-      icon: 'sentiment-satisfied',
+      iosIcon: 'face.smiling.fill',
+      androidIcon: 'sentiment-satisfied',
       duration: '5 min',
     },
   ];
@@ -49,25 +54,29 @@ export default function WellnessScreen() {
     {
       title: 'Exercise Routine',
       description: 'Stay active with daily physical activities',
-      icon: 'fitness-center',
+      iosIcon: 'figure.run',
+      androidIcon: 'fitness-center',
       duration: '30 min',
     },
     {
       title: 'Healthy Eating',
       description: 'Follow a balanced and nutritious diet',
-      icon: 'restaurant',
+      iosIcon: 'fork.knife',
+      androidIcon: 'restaurant',
       duration: 'Daily',
     },
     {
       title: 'Sleep Tracking',
       description: 'Monitor and improve your sleep quality',
-      icon: 'bedtime',
+      iosIcon: 'bed.double.fill',
+      androidIcon: 'bedtime',
       duration: '8 hours',
     },
     {
       title: 'Hydration',
       description: 'Track your daily water intake',
-      icon: 'water-drop',
+      iosIcon: 'drop.fill',
+      androidIcon: 'water-drop',
       duration: '8 glasses',
     },
   ];
@@ -102,7 +111,7 @@ export default function WellnessScreen() {
                 style={styles.tabGradient}
               >
                 <IconSymbol
-                  ios_icon_name="brain"
+                  ios_icon_name="brain.head.profile"
                   android_material_icon_name="psychology"
                   size={24}
                   color={colors.card}
@@ -112,7 +121,7 @@ export default function WellnessScreen() {
             ) : (
               <View style={styles.tabInactive}>
                 <IconSymbol
-                  ios_icon_name="brain"
+                  ios_icon_name="brain.head.profile"
                   android_material_icon_name="psychology"
                   size={24}
                   color={colors.textSecondary}
@@ -137,7 +146,7 @@ export default function WellnessScreen() {
                 style={styles.tabGradient}
               >
                 <IconSymbol
-                  ios_icon_name="heart"
+                  ios_icon_name="heart.fill"
                   android_material_icon_name="favorite"
                   size={24}
                   color={colors.card}
@@ -147,7 +156,7 @@ export default function WellnessScreen() {
             ) : (
               <View style={styles.tabInactive}>
                 <IconSymbol
-                  ios_icon_name="heart"
+                  ios_icon_name="heart.fill"
                   android_material_icon_name="favorite"
                   size={24}
                   color={colors.textSecondary}
@@ -163,7 +172,7 @@ export default function WellnessScreen() {
           <View style={styles.sectionHeader}>
             <View style={styles.sectionIconContainer}>
               <IconSymbol
-                ios_icon_name="list"
+                ios_icon_name="list.bullet"
                 android_material_icon_name="list"
                 size={22}
                 color={colors.primary}
@@ -183,8 +192,8 @@ export default function WellnessScreen() {
                 <View style={styles.activityLeft}>
                   <View style={styles.activityIconContainer}>
                     <IconSymbol
-                      ios_icon_name={activity.icon}
-                      android_material_icon_name={activity.icon}
+                      ios_icon_name={activity.iosIcon}
+                      android_material_icon_name={activity.androidIcon}
                       size={30}
                       color={colors.primary}
                     />
@@ -194,7 +203,7 @@ export default function WellnessScreen() {
                     <Text style={styles.activityDescription}>{activity.description}</Text>
                     <View style={styles.durationBadge}>
                       <IconSymbol
-                        ios_icon_name="clock"
+                        ios_icon_name="clock.fill"
                         android_material_icon_name="schedule"
                         size={14}
                         color={colors.primary}
@@ -204,7 +213,7 @@ export default function WellnessScreen() {
                   </View>
                 </View>
                 <IconSymbol
-                  ios_icon_name="chevron-right"
+                  ios_icon_name="chevron.right"
                   android_material_icon_name="chevron-right"
                   size={24}
                   color={colors.textSecondary}

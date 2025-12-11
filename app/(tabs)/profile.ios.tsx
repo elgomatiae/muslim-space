@@ -10,7 +10,7 @@ import * as Haptics from 'expo-haptics';
 
 interface ProfileOption {
   title: string;
-  icon: string;
+  iosIcon: string;
   androidIcon: string;
   color: string;
   action: () => void;
@@ -19,7 +19,7 @@ interface ProfileOption {
 interface StatItem {
   value: string;
   label: string;
-  icon: string;
+  iosIcon: string;
   androidIcon: string;
   color: string;
 }
@@ -42,9 +42,9 @@ export default function ProfileScreen() {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [tempProfile, setTempProfile] = useState<UserProfile>(profile);
   const [stats, setStats] = useState<StatItem[]>([
-    { value: '0', label: 'Days Active', icon: 'calendar', androidIcon: 'calendar-today', color: colors.primary },
-    { value: '0', label: 'Prayers', icon: 'hands.sparkles', androidIcon: 'self-improvement', color: colors.accent },
-    { value: '0', label: 'Day Streak', icon: 'flame', androidIcon: 'local-fire-department', color: colors.error },
+    { value: '0', label: 'Days Active', iosIcon: 'calendar', androidIcon: 'calendar-today', color: colors.primary },
+    { value: '0', label: 'Prayers', iosIcon: 'moon.stars', androidIcon: 'self-improvement', color: colors.accent },
+    { value: '0', label: 'Day Streak', iosIcon: 'flame.fill', androidIcon: 'local-fire-department', color: colors.error },
   ]);
 
   useEffect(() => {
@@ -86,9 +86,9 @@ export default function ProfileScreen() {
       }
 
       setStats([
-        { value: daysActive.toString(), label: 'Days Active', icon: 'calendar', androidIcon: 'calendar-today', color: colors.primary },
-        { value: totalPrayers.toString(), label: 'Prayers', icon: 'hands.sparkles', androidIcon: 'self-improvement', color: colors.accent },
-        { value: currentStreak.toString(), label: 'Day Streak', icon: 'flame', androidIcon: 'local-fire-department', color: colors.error },
+        { value: daysActive.toString(), label: 'Days Active', iosIcon: 'calendar', androidIcon: 'calendar-today', color: colors.primary },
+        { value: totalPrayers.toString(), label: 'Prayers', iosIcon: 'moon.stars', androidIcon: 'self-improvement', color: colors.accent },
+        { value: currentStreak.toString(), label: 'Day Streak', iosIcon: 'flame.fill', androidIcon: 'local-fire-department', color: colors.error },
       ]);
     } catch (error) {
       console.log('Error loading stats:', error);
@@ -155,28 +155,28 @@ export default function ProfileScreen() {
   const profileOptions: ProfileOption[] = [
     { 
       title: 'Edit Profile', 
-      icon: 'pencil', 
+      iosIcon: 'pencil', 
       androidIcon: 'edit', 
       color: colors.primary,
       action: handleEditProfile
     },
     { 
       title: 'Notifications', 
-      icon: 'bell', 
+      iosIcon: 'bell', 
       androidIcon: 'notifications', 
       color: colors.accent,
       action: handleNotifications
     },
     { 
       title: 'Prayer Settings', 
-      icon: 'gear', 
+      iosIcon: 'gear', 
       androidIcon: 'settings', 
       color: colors.info,
       action: handlePrayerSettings
     },
     { 
       title: 'About', 
-      icon: 'info.circle', 
+      iosIcon: 'info.circle', 
       androidIcon: 'info', 
       color: colors.secondary,
       action: handleAbout
@@ -230,7 +230,7 @@ export default function ProfileScreen() {
                 <View style={styles.statCard}>
                   <View style={[styles.statIconContainer, { backgroundColor: stat.color }]}>
                     <IconSymbol
-                      ios_icon_name={stat.icon}
+                      ios_icon_name={stat.iosIcon}
                       android_material_icon_name={stat.androidIcon}
                       size={26}
                       color={colors.card}
@@ -326,7 +326,7 @@ export default function ProfileScreen() {
                   <View style={styles.optionLeft}>
                     <View style={[styles.optionIconContainer, { backgroundColor: option.color }]}>
                       <IconSymbol
-                        ios_icon_name={option.icon}
+                        ios_icon_name={option.iosIcon}
                         android_material_icon_name={option.androidIcon}
                         size={24}
                         color={colors.card}
