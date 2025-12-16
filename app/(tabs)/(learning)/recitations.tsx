@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Platform, ActivityIndicator, TouchableOpacity, TextInput, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Platform, ActivityIndicator, TouchableOpacity, TextInput, Keyboard, Alert } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import CategoryRow from '@/components/CategoryRow';
 import VideoPlayer from '@/components/VideoPlayer';
-import { fetchCategories, fetchVideosByCategory, incrementVideoViews, isSupabaseConfigured, searchVideos, Video, VideoCategory } from '@/lib/supabase';
+import { fetchCategories, fetchVideosByCategory, incrementVideoViews, isSupabaseConfigured, searchVideos, Video, VideoCategory, isYouTubeUrl, getYouTubeWatchUrl } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as WebBrowser from 'expo-web-browser';
 
 export default function RecitationsScreen() {
   const [categories, setCategories] = useState<VideoCategory[]>([]);
@@ -72,8 +73,23 @@ export default function RecitationsScreen() {
   }, [searchQuery, performSearch]);
 
   const handleVideoPress = async (video: Video) => {
-    setSelectedVideo(video);
+    // Increment views first
     await incrementVideoViews(video.id);
+
+    // Check if it's a YouTube video
+    if (isYouTubeUrl(video.video_url)) {
+      try {
+        const youtubeUrl = getYouTubeWatchUrl(video.video_url);
+        console.log('Opening YouTube video:', youtubeUrl);
+        await WebBrowser.openBrowserAsync(youtubeUrl);
+      } catch (error) {
+        console.error('Error opening YouTube video:', error);
+        Alert.alert('Error', 'Could not open YouTube video. Please try again.');
+      }
+    } else {
+      // Use the in-app video player for non-YouTube videos
+      setSelectedVideo(video);
+    }
   };
 
   const handleCloseVideo = () => {
@@ -281,6 +297,11 @@ export default function RecitationsScreen() {
                           <Text style={styles.searchResultViews}>
                             {video.views} views
                           </Text>
+                          {isYouTubeUrl(video.video_url) && (
+                            <View style={styles.youtubeIndicator}>
+                              <Text style={styles.youtubeIndicatorText}>YouTube</Text>
+                            </View>
+                          )}
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -463,6 +484,19 @@ const styles = StyleSheet.create({
     ...typography.small,
     color: colors.textSecondary,
     marginLeft: spacing.xs,
+  },
+  youtubeIndicator: {
+    backgroundColor: '#FF0000',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+    marginLeft: spacing.sm,
+  },
+  youtubeIndicatorText: {
+    ...typography.small,
+    color: colors.card,
+    fontWeight: '700',
+    fontSize: 9,
   },
   noResultsContainer: {
     alignItems: 'center',

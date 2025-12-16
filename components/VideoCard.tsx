@@ -3,7 +3,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from './IconSymbol';
-import { Video } from '@/lib/supabase';
+import { Video, getYouTubeThumbnailUrl, isYouTubeUrl } from '@/lib/supabase';
 
 interface VideoCardProps {
   video: Video;
@@ -30,6 +30,11 @@ export default function VideoCard({ video, onPress }: VideoCardProps) {
     return views.toString();
   };
 
+  // Get the appropriate thumbnail URL
+  const thumbnailUrl = isYouTubeUrl(video.video_url) 
+    ? getYouTubeThumbnailUrl(video.video_url)
+    : video.thumbnail_url;
+
   return (
     <TouchableOpacity
       style={styles.container}
@@ -38,7 +43,7 @@ export default function VideoCard({ video, onPress }: VideoCardProps) {
     >
       <View style={styles.thumbnailContainer}>
         <Image
-          source={{ uri: video.thumbnail_url }}
+          source={{ uri: thumbnailUrl }}
           style={styles.thumbnail}
           resizeMode="cover"
         />
@@ -55,6 +60,11 @@ export default function VideoCard({ video, onPress }: VideoCardProps) {
             />
           </View>
         </View>
+        {isYouTubeUrl(video.video_url) && (
+          <View style={styles.youtubeBadge}>
+            <Text style={styles.youtubeText}>YouTube</Text>
+          </View>
+        )}
       </View>
       <View style={styles.infoContainer}>
         <Text style={styles.title} numberOfLines={2}>
@@ -124,6 +134,21 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  youtubeBadge: {
+    position: 'absolute',
+    top: spacing.sm,
+    left: spacing.sm,
+    backgroundColor: '#FF0000',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+  },
+  youtubeText: {
+    ...typography.small,
+    color: colors.card,
+    fontWeight: '700',
+    fontSize: 10,
   },
   infoContainer: {
     paddingTop: spacing.sm,

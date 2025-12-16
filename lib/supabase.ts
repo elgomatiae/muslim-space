@@ -29,6 +29,56 @@ export interface Video {
   created_at: string;
 }
 
+// Helper function to extract YouTube video ID from URL
+export const extractYouTubeVideoId = (url: string): string | null => {
+  if (!url) return null;
+  
+  // Handle various YouTube URL formats
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+    /^([a-zA-Z0-9_-]{11})$/ // Direct video ID
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  
+  return null;
+};
+
+// Helper function to get YouTube thumbnail URL from video URL
+export const getYouTubeThumbnailUrl = (videoUrl: string): string => {
+  const videoId = extractYouTubeVideoId(videoUrl);
+  
+  if (videoId) {
+    // Use maxresdefault for highest quality, fallback to hqdefault if not available
+    return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+  }
+  
+  // Return a placeholder or the original thumbnail_url if it's not a YouTube video
+  return videoUrl;
+};
+
+// Helper function to check if URL is a YouTube video
+export const isYouTubeUrl = (url: string): boolean => {
+  if (!url) return false;
+  return url.includes('youtube.com') || url.includes('youtu.be');
+};
+
+// Helper function to get proper YouTube watch URL
+export const getYouTubeWatchUrl = (videoUrl: string): string => {
+  const videoId = extractYouTubeVideoId(videoUrl);
+  
+  if (videoId) {
+    return `https://www.youtube.com/watch?v=${videoId}`;
+  }
+  
+  return videoUrl;
+};
+
 // Helper function to check if Supabase is configured
 export const isSupabaseConfigured = (): boolean => {
   // Check if the supabase client is properly initialized
