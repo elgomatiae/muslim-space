@@ -5,7 +5,7 @@ import { Stack } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 
 export default function TabLayout() {
-  // Define the tabs configuration - Prayer tab removed
+  // Define the tabs configuration with Iman in the center
   const tabs: TabBarItem[] = [
     {
       name: '(home)',
@@ -15,18 +15,18 @@ export default function TabLayout() {
       label: 'Home',
     },
     {
-      name: '(iman)',
-      route: '/(tabs)/(iman)/',
-      icon: 'track-changes',
-      iosIcon: 'chart.pie.fill',
-      label: 'Iman',
-    },
-    {
       name: '(learning)',
       route: '/(tabs)/(learning)/',
       icon: 'school',
       iosIcon: 'book.fill',
       label: 'Learn',
+    },
+    {
+      name: '(iman)',
+      route: '/(tabs)/(iman)/',
+      icon: 'track-changes',
+      iosIcon: 'chart.pie.fill',
+      label: 'Iman',
     },
     {
       name: '(wellness)',
@@ -69,7 +69,7 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F8FF',
+    backgroundColor: '#F8F9FD',
   },
   content: {
     flex: 1,

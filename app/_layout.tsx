@@ -5,6 +5,7 @@ import { ImanTrackerProvider } from "@/contexts/ImanTrackerContext";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { useEffect } from "react";
 import * as SplashScreen from "expo-splash-screen";
+import { colors } from "@/styles/commonStyles";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -21,6 +22,9 @@ export default function RootLayout() {
             screenOptions={{
               headerShown: false,
               animation: "default",
+              contentStyle: {
+                backgroundColor: colors.background,
+              },
             }}
           >
             <Stack.Screen name="(auth)" />

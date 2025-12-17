@@ -19,6 +19,9 @@ import Animated, {
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Href } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
+import { BlurView } from 'expo-blur';
 
 export interface TabBarItem {
   name: string;
@@ -36,6 +39,10 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const animatedValue = useSharedValue(0);
+  const scaleValues = tabs.map(() => useSharedValue(1));
+
+  // Find the center tab index (should be Iman)
+  const centerTabIndex = Math.floor(tabs.length / 2);
 
   // Improved active tab detection with better path matching
   const activeTabIndex = React.useMemo(() => {
@@ -80,15 +87,32 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
         stiffness: 120,
         mass: 1,
       });
-    }
-  }, [activeTabIndex, animatedValue]);
 
-  const handleTabPress = (route: Href) => {
+      // Animate scale for active tab
+      scaleValues.forEach((scale, index) => {
+        if (index === activeTabIndex) {
+          scale.value = withSpring(1.1, {
+            damping: 15,
+            stiffness: 150,
+          });
+        } else {
+          scale.value = withSpring(1, {
+            damping: 15,
+            stiffness: 150,
+          });
+        }
+      });
+    }
+  }, [activeTabIndex, animatedValue, scaleValues]);
+
+  const handleTabPress = (route: Href, index: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push(route);
   };
 
+  const tabWidth = 100 / tabs.length;
+
   const indicatorStyle = useAnimatedStyle(() => {
-    const tabWidth = 100 / tabs.length;
     return {
       transform: [
         {
@@ -105,73 +129,151 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-      <View style={styles.container}>
-        <Animated.View style={[styles.indicator, indicatorStyle]} />
-        <View style={styles.tabsContainer}>
-          {tabs.map((tab, index) => {
-            const isActive = activeTabIndex === index;
+      <BlurView intensity={80} tint="light" style={styles.blurContainer}>
+        <View style={styles.container}>
+          <Animated.View style={[styles.indicator, indicatorStyle]}>
+            <LinearGradient
+              colors={colors.gradientOcean}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.indicatorGradient}
+            />
+          </Animated.View>
+          <View style={styles.tabsContainer}>
+            {tabs.map((tab, index) => {
+              const isActive = activeTabIndex === index;
+              const isCenterTab = index === centerTabIndex;
 
-            return (
-              <React.Fragment key={index}>
-                <TouchableOpacity
-                  style={styles.tab}
-                  onPress={() => handleTabPress(tab.route)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.tabContent}>
-                    <View style={styles.iconContainer}>
-                      <IconSymbol
-                        android_material_icon_name={tab.icon}
-                        ios_icon_name={tab.iosIcon || tab.icon}
-                        size={28}
-                        color={isActive ? colors.primary : '#666666'}
-                      />
-                    </View>
-                    <Text
-                      style={[
-                        styles.tabLabel,
-                        isActive && styles.tabLabelActive,
-                      ]}
-                      numberOfLines={1}
+              const animatedTabStyle = useAnimatedStyle(() => {
+                return {
+                  transform: [{ scale: scaleValues[index].value }],
+                };
+              });
+
+              // Center tab (Iman) gets special treatment - BIGGER and ELEVATED
+              if (isCenterTab) {
+                return (
+                  <React.Fragment key={index}>
+                    <TouchableOpacity
+                      style={styles.centerTabWrapper}
+                      onPress={() => handleTabPress(tab.route, index)}
+                      activeOpacity={0.8}
                     >
-                      {tab.label}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              </React.Fragment>
-            );
-          })}
+                      <Animated.View style={[styles.centerTab, animatedTabStyle]}>
+                        <LinearGradient
+                          colors={isActive ? colors.gradientOcean : colors.gradientPrimary}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.centerTabGradient}
+                        >
+                          <View style={styles.centerIconContainer}>
+                            <IconSymbol
+                              android_material_icon_name={tab.icon}
+                              ios_icon_name={tab.iosIcon || tab.icon}
+                              size={40}
+                              color="#FFFFFF"
+                            />
+                          </View>
+                        </LinearGradient>
+                      </Animated.View>
+                      <Text
+                        style={[
+                          styles.centerTabLabel,
+                          isActive && styles.centerTabLabelActive,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {tab.label}
+                      </Text>
+                    </TouchableOpacity>
+                  </React.Fragment>
+                );
+              }
+
+              // Regular tabs
+              return (
+                <React.Fragment key={index}>
+                  <TouchableOpacity
+                    style={styles.tab}
+                    onPress={() => handleTabPress(tab.route, index)}
+                    activeOpacity={0.7}
+                  >
+                    <Animated.View style={[styles.tabContent, animatedTabStyle]}>
+                      <View style={[styles.iconContainer, isActive && styles.iconContainerActive]}>
+                        <IconSymbol
+                          android_material_icon_name={tab.icon}
+                          ios_icon_name={tab.iosIcon || tab.icon}
+                          size={24}
+                          color={isActive ? colors.primary : colors.textSecondary}
+                        />
+                      </View>
+                      <Text
+                        style={[
+                          styles.tabLabel,
+                          isActive && styles.tabLabelActive,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {tab.label}
+                      </Text>
+                    </Animated.View>
+                  </TouchableOpacity>
+                </React.Fragment>
+              );
+            })}
+          </View>
         </View>
-      </View>
+      </BlurView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5E5',
+    backgroundColor: 'transparent',
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 12,
+      },
+    }),
+  },
+  blurContainer: {
+    overflow: 'hidden',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
   container: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
     width: '100%',
     position: 'relative',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   indicator: {
     position: 'absolute',
     top: 0,
     left: 0,
-    height: 3,
-    backgroundColor: colors.primary,
+    height: 4,
     borderRadius: 2,
+    overflow: 'hidden',
+  },
+  indicatorGradient: {
+    width: '100%',
+    height: '100%',
   },
   tabsContainer: {
     flexDirection: 'row',
     height: 90,
     alignItems: 'center',
     justifyContent: 'space-around',
-    backgroundColor: '#FFFFFF',
     paddingHorizontal: 8,
     paddingTop: 12,
     paddingBottom: 8,
@@ -189,20 +291,75 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   iconContainer: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 18,
+    backgroundColor: 'transparent',
+  },
+  iconContainerActive: {
+    backgroundColor: colors.highlight,
   },
   tabLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
     marginTop: 2,
     textAlign: 'center',
-    color: '#666666',
+    color: colors.textSecondary,
   },
   tabLabelActive: {
     color: colors.primary,
     fontWeight: '700',
+  },
+  // Center tab (Iman) special styles - ENHANCED
+  centerTabWrapper: {
+    flex: 1.2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+    marginTop: -32, // Elevate the center tab MORE
+  },
+  centerTab: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    marginBottom: 6,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.4,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 12,
+      },
+    }),
+  },
+  centerTabGradient: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
+  },
+  centerIconContainer: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  centerTabLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+    color: colors.textSecondary,
+  },
+  centerTabLabelActive: {
+    color: colors.primary,
+    fontWeight: '800',
   },
 });

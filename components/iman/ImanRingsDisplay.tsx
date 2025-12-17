@@ -134,7 +134,7 @@ export default function ImanRingsDisplay({ onRefresh }: ImanRingsDisplayProps) {
 
   return (
     <LinearGradient
-      colors={['#F8F8FF', '#E8E8F8', '#F8F8FF']}
+      colors={['#FFFFFF', '#F5F7FA', '#FFFFFF']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}
@@ -163,7 +163,7 @@ export default function ImanRingsDisplay({ onRefresh }: ImanRingsDisplayProps) {
               cx={centerX}
               cy={centerY}
               r={prayerRadius}
-              stroke="#D0D0D0"
+              stroke="#E5E7EB"
               strokeWidth={prayerStroke}
               fill="none"
               opacity={0.3}
@@ -187,7 +187,7 @@ export default function ImanRingsDisplay({ onRefresh }: ImanRingsDisplayProps) {
               cx={centerX}
               cy={centerY}
               r={quranRadius}
-              stroke="#D0D0D0"
+              stroke="#E5E7EB"
               strokeWidth={quranStroke}
               fill="none"
               opacity={0.3}
@@ -211,7 +211,7 @@ export default function ImanRingsDisplay({ onRefresh }: ImanRingsDisplayProps) {
               cx={centerX}
               cy={centerY}
               r={dhikrRadius}
-              stroke="#D0D0D0"
+              stroke="#E5E7EB"
               strokeWidth={dhikrStroke}
               fill="none"
               opacity={0.3}
@@ -328,7 +328,7 @@ export default function ImanRingsDisplay({ onRefresh }: ImanRingsDisplayProps) {
       <View style={styles.ringLabelsContainer}>
         <View style={styles.ringLabel}>
           <LinearGradient
-            colors={[colors.primary, colors.primaryDark]}
+            colors={colors.gradientPrimary}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.ringLabelDot}
@@ -346,7 +346,7 @@ export default function ImanRingsDisplay({ onRefresh }: ImanRingsDisplayProps) {
         
         <View style={styles.ringLabel}>
           <LinearGradient
-            colors={[colors.accent, colors.accentDark]}
+            colors={colors.gradientAccent}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.ringLabelDot}

@@ -6,25 +6,28 @@ import { colors } from '@/styles/commonStyles';
 export default function TabLayout() {
   return (
     <NativeTabs
-      backgroundColor="#FFFFFF"
+      backgroundColor="rgba(255, 255, 255, 0.9)"
       tintColor={colors.primary}
-      iconColor="#666666"
+      iconColor={colors.textSecondary}
       labelStyle={{
-        color: '#666666',
+        color: colors.textSecondary,
+        fontSize: 11,
+        fontWeight: '500',
       }}
       disableTransparentOnScrollEdge
+      blurEffect="systemChromeMaterial"
     >
       <NativeTabs.Trigger key="home" name="(home)">
         <Icon sf="house.fill" />
         <Label>Home</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger key="iman" name="(iman)">
-        <Icon sf="chart.pie.fill" />
-        <Label>Iman</Label>
-      </NativeTabs.Trigger>
       <NativeTabs.Trigger key="learning" name="(learning)">
         <Icon sf="book.fill" />
         <Label>Learn</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger key="iman" name="(iman)">
+        <Icon sf="chart.pie.fill" />
+        <Label>Iman</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger key="wellness" name="(wellness)">
         <Icon sf="heart.fill" />
