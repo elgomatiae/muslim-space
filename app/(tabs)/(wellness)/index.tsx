@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
+import { router } from "expo-router";
 
 type WellnessTab = 'mental' | 'physical';
 
@@ -14,6 +15,7 @@ interface WellnessActivity {
   iosIcon: string;
   androidIcon: string;
   duration: string;
+  route?: string;
 }
 
 export default function WellnessScreen() {
@@ -21,32 +23,52 @@ export default function WellnessScreen() {
 
   const mentalActivities: WellnessActivity[] = [
     {
-      title: 'Meditation & Reflection',
-      description: 'Practice mindfulness and spiritual reflection',
-      iosIcon: 'figure.walk',
-      androidIcon: 'self-improvement',
+      title: 'Mental Health Hub',
+      description: 'Comprehensive mental wellness resources',
+      iosIcon: 'brain.head.profile',
+      androidIcon: 'psychology',
+      duration: 'Explore',
+      route: '/mental-health',
+    },
+    {
+      title: 'Journal & Prompts',
+      description: 'Write your thoughts and feelings',
+      iosIcon: 'book.fill',
+      androidIcon: 'menu-book',
       duration: '10 min',
+      route: '/journal',
     },
     {
-      title: 'Gratitude Journal',
-      description: 'Write down things you are grateful for',
-      iosIcon: 'pencil.and.list.clipboard',
-      androidIcon: 'edit-note',
+      title: 'Prophet Stories',
+      description: 'Learn from the Prophet&apos;s life',
+      iosIcon: 'book.closed.fill',
+      androidIcon: 'auto-stories',
+      duration: '15 min',
+      route: '/prophet-stories',
+    },
+    {
+      title: 'Healing Duas',
+      description: 'Prayers for mental wellness',
+      iosIcon: 'hands.sparkles.fill',
+      androidIcon: 'self-improvement',
       duration: '5 min',
+      route: '/mental-duas',
     },
     {
-      title: 'Stress Management',
-      description: 'Learn techniques to manage daily stress',
+      title: 'Mood Tracker',
+      description: 'Track your emotional patterns',
+      iosIcon: 'chart.line.uptrend.xyaxis',
+      androidIcon: 'insights',
+      duration: '2 min',
+      route: '/mood-tracker',
+    },
+    {
+      title: 'Meditation & Dhikr',
+      description: 'Mindfulness and remembrance',
       iosIcon: 'leaf.fill',
       androidIcon: 'spa',
-      duration: '15 min',
-    },
-    {
-      title: 'Positive Affirmations',
-      description: 'Start your day with positive thoughts',
-      iosIcon: 'face.smiling.fill',
-      androidIcon: 'sentiment-satisfied',
-      duration: '5 min',
+      duration: '10 min',
+      route: '/meditation',
     },
   ];
 
@@ -82,6 +104,14 @@ export default function WellnessScreen() {
   ];
 
   const activities = activeTab === 'mental' ? mentalActivities : physicalActivities;
+
+  const handleActivityPress = (activity: WellnessActivity) => {
+    if (activity.route) {
+      router.push(activity.route as any);
+    } else {
+      console.log(`Pressed ${activity.title}`);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -187,7 +217,7 @@ export default function WellnessScreen() {
               <TouchableOpacity
                 style={styles.activityCard}
                 activeOpacity={0.7}
-                onPress={() => console.log(`Pressed ${activity.title}`)}
+                onPress={() => handleActivityPress(activity)}
               >
                 <View style={styles.activityLeft}>
                   <View style={styles.activityIconContainer}>
