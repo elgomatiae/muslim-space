@@ -94,26 +94,27 @@ export default function ImanRingsDisplay({ onRefresh }: ImanRingsDisplayProps) {
   const badge = getAchievementBadge(overallScore);
   const decayWarning = getDecayWarning();
 
-  const centerX = 170;
-  const centerY = 170;
+  // INCREASED RING SIZES - Made significantly larger
+  const centerX = 200;
+  const centerY = 200;
   
-  // Prayer ring (outer)
-  const prayerRadius = 140;
-  const prayerStroke = 20;
+  // Prayer ring (outer) - INCREASED
+  const prayerRadius = 170;
+  const prayerStroke = 22;
   const prayerCircumference = 2 * Math.PI * prayerRadius;
   const prayerProgress = sectionScores.prayer / 100;
   const prayerOffset = prayerCircumference * (1 - prayerProgress);
   
-  // Quran ring (middle)
-  const quranRadius = 100;
-  const quranStroke = 18;
+  // Quran ring (middle) - INCREASED
+  const quranRadius = 125;
+  const quranStroke = 20;
   const quranCircumference = 2 * Math.PI * quranRadius;
   const quranProgress = sectionScores.quran / 100;
   const quranOffset = quranCircumference * (1 - quranProgress);
   
-  // Dhikr ring (inner)
-  const dhikrRadius = 60;
-  const dhikrStroke = 16;
+  // Dhikr ring (inner) - INCREASED
+  const dhikrRadius = 80;
+  const dhikrStroke = 18;
   const dhikrCircumference = 2 * Math.PI * dhikrRadius;
   const dhikrProgress = sectionScores.dhikr / 100;
   const dhikrOffset = dhikrCircumference * (1 - dhikrProgress);
@@ -142,7 +143,7 @@ export default function ImanRingsDisplay({ onRefresh }: ImanRingsDisplayProps) {
     >
       <View style={styles.ringsWrapper}>
         <Animated.View style={{ transform: [{ rotate: spin }] }}>
-          <Svg width={340} height={340}>
+          <Svg width={400} height={400}>
             <Defs>
               <RadialGradient id="glow" cx="50%" cy="50%">
                 <Stop offset="0%" stopColor={badge.color} stopOpacity="0.3" />
@@ -154,7 +155,7 @@ export default function ImanRingsDisplay({ onRefresh }: ImanRingsDisplayProps) {
               <Circle
                 cx={centerX}
                 cy={centerY}
-                r={150}
+                r={180}
                 fill="url(#glow)"
               />
             </Animated.View>
@@ -397,8 +398,8 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    width: 340,
-    height: 340,
+    width: 400,
+    height: 400,
   },
   centerContentWrapper: {
     position: 'absolute',
@@ -420,9 +421,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   centerPercentage: {
-    fontSize: 48,
+    fontSize: 56,
     fontWeight: 'bold',
-    lineHeight: 52,
+    lineHeight: 64,
   },
   centerHint: {
     ...typography.small,

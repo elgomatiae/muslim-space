@@ -144,12 +144,34 @@ export default function ImanTrackerScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
       >
-        <View style={styles.headerContainer}>
-          <View>
-            <Text style={styles.header}>Iman Tracker</Text>
-            <Text style={styles.subtitle}>Track your spiritual journey</Text>
+        {/* ENHANCED HEADER - BIGGER AND MORE EYE-CATCHING */}
+        <LinearGradient
+          colors={colors.gradientOcean}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerContainer}
+        >
+          <View style={styles.headerIconContainer}>
+            <IconSymbol
+              ios_icon_name="sparkles"
+              android_material_icon_name="auto-awesome"
+              size={48}
+              color="#FFFFFF"
+            />
           </View>
-        </View>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.header}>Iman Tracker</Text>
+            <Text style={styles.subtitle}>Track your spiritual journey daily</Text>
+          </View>
+          <View style={styles.headerDecoration}>
+            <IconSymbol
+              ios_icon_name="moon.stars.fill"
+              android_material_icon_name="nights-stay"
+              size={36}
+              color="rgba(255, 255, 255, 0.6)"
+            />
+          </View>
+        </LinearGradient>
 
         <ImanRingsDisplay onRefresh={onRefresh} />
 
@@ -694,18 +716,41 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    justifyContent: 'space-between',
+    marginBottom: spacing.xxl,
+    padding: spacing.xl,
+    borderRadius: borderRadius.xl,
+    ...shadows.large,
+  },
+  headerIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTextContainer: {
+    flex: 1,
+    marginLeft: spacing.lg,
   },
   header: {
-    ...typography.h2,
-    color: colors.text,
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFFFFF',
     marginBottom: spacing.xs,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   subtitle: {
-    ...typography.caption,
-    color: colors.textSecondary,
+    fontSize: 16,
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.9)',
+  },
+  headerDecoration: {
+    opacity: 0.8,
   },
   section: {
     marginBottom: spacing.xxl,

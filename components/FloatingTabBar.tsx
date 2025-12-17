@@ -144,6 +144,7 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
       <BlurView intensity={80} tint="light" style={styles.blurContainer}>
         <View style={styles.container}>
+          {/* TOP INDICATOR LINE - ENHANCED FOR VISIBILITY */}
           <Animated.View style={[styles.indicator, indicatorStyle]}>
             <LinearGradient
               colors={colors.gradientOcean}
@@ -294,6 +295,9 @@ const styles = StyleSheet.create({
       android: {
         elevation: 12,
       },
+      web: {
+        boxShadow: '0px -4px 12px rgba(139, 92, 246, 0.15)',
+      },
     }),
   },
   blurContainer: {
@@ -314,9 +318,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
-    height: 4,
-    borderRadius: 2,
+    height: 5,
+    borderRadius: 2.5,
     overflow: 'hidden',
+    zIndex: 10,
   },
   indicatorGradient: {
     width: '100%',
@@ -387,6 +392,9 @@ const styles = StyleSheet.create({
       },
       android: {
         elevation: 12,
+      },
+      web: {
+        boxShadow: '0px 6px 12px rgba(139, 92, 246, 0.4)',
       },
     }),
   },
