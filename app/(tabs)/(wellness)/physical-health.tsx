@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Animated, TextInput, RefreshControl } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Animated, RefreshControl } from "react-native";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
@@ -52,10 +51,6 @@ export default function PhysicalHealthHubScreen() {
   const [weeklyWorkouts, setWeeklyWorkouts] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  
-  // Quick add states
-  const [quickWaterAmount, setQuickWaterAmount] = useState('250');
-  const [quickExerciseMinutes, setQuickExerciseMinutes] = useState('');
   
   // Animation values
   const fadeAnim = new Animated.Value(0);
@@ -240,7 +235,6 @@ export default function PhysicalHealthHubScreen() {
       });
 
     if (!error) {
-      setQuickExerciseMinutes('');
       await loadRecentActivities();
       await loadTodayStats();
       await updateGoalsProgress();
@@ -310,566 +304,558 @@ export default function PhysicalHealthHubScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading...</Text>
-        </View>
-      </SafeAreaView>
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-        }
+    <ScrollView
+      style={styles.scrollView}
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+      }
+    >
+      {/* Hero Section with Stats */}
+      <Animated.View 
+        style={[
+          styles.heroSection,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          },
+        ]}
       >
-        {/* Hero Section with Stats */}
-        <Animated.View 
-          style={[
-            styles.heroSection,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
+        <LinearGradient
+          colors={colors.gradientAccent}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroGradient}
         >
-          <LinearGradient
-            colors={colors.gradientAccent}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.heroGradient}
-          >
-            <View style={styles.heroHeader}>
-              <IconSymbol
-                ios_icon_name="figure.run"
-                android_material_icon_name="directions-run"
-                size={48}
-                color={colors.card}
-              />
-              <Text style={styles.heroTitle}>Physical Wellness</Text>
-              <Text style={styles.heroSubtitle}>
-                Strengthen your body, strengthen your faith
-              </Text>
+          <View style={styles.heroHeader}>
+            <IconSymbol
+              ios_icon_name="figure.run"
+              android_material_icon_name="directions-run"
+              size={48}
+              color={colors.card}
+            />
+            <Text style={styles.heroTitle}>Physical Wellness</Text>
+            <Text style={styles.heroSubtitle}>
+              Strengthen your body, strengthen your faith
+            </Text>
+          </View>
+          
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{todayExerciseMinutes}</Text>
+              <Text style={styles.statLabel}>Min Today</Text>
             </View>
-            
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{todayExerciseMinutes}</Text>
-                <Text style={styles.statLabel}>Min Today</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{waterIntakeToday}</Text>
-                <Text style={styles.statLabel}>Glasses</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{weeklyWorkouts}</Text>
-                <Text style={styles.statLabel}>This Week</Text>
-              </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{waterIntakeToday}</Text>
+              <Text style={styles.statLabel}>Glasses</Text>
             </View>
-
-            {/* Quick Access to Iman Tracker */}
-            <TouchableOpacity
-              style={styles.imanTrackerLink}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/(tabs)/(iman)' as any);
-              }}
-              activeOpacity={0.8}
-            >
-              <IconSymbol
-                ios_icon_name="sparkles"
-                android_material_icon_name="auto-awesome"
-                size={20}
-                color={colors.card}
-              />
-              <Text style={styles.imanTrackerLinkText}>View in Iman Tracker</Text>
-              <IconSymbol
-                ios_icon_name="arrow.right"
-                android_material_icon_name="arrow-forward"
-                size={20}
-                color={colors.card}
-              />
-            </TouchableOpacity>
-          </LinearGradient>
-        </Animated.View>
-
-        {/* Daily Goals Progress */}
-        {goals && (
-          <View style={styles.goalsSection}>
-            <View style={styles.sectionHeader}>
-              <IconSymbol
-                ios_icon_name="target"
-                android_material_icon_name="track-changes"
-                size={28}
-                color={colors.primary}
-              />
-              <Text style={styles.sectionTitle}>Today&apos;s Goals</Text>
-              <TouchableOpacity
-                onPress={() => router.push('/(tabs)/(wellness)/physical-goals' as any)}
-                style={styles.seeAllButton}
-              >
-                <Text style={styles.seeAllText}>Set Goals</Text>
-                <IconSymbol
-                  ios_icon_name="chevron.right"
-                  android_material_icon_name="chevron-right"
-                  size={18}
-                  color={colors.primary}
-                />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.goalsGrid}>
-              {/* Water Goal */}
-              <View style={styles.goalCard}>
-                <LinearGradient
-                  colors={colors.gradientInfo}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.goalGradient}
-                >
-                  <IconSymbol
-                    ios_icon_name="drop.fill"
-                    android_material_icon_name="water-drop"
-                    size={32}
-                    color={colors.card}
-                  />
-                  <Text style={styles.goalValue}>
-                    {waterIntakeToday}/{goals.daily_water_glasses_goal}
-                  </Text>
-                  <Text style={styles.goalLabel}>Glasses</Text>
-                  <View style={styles.goalProgressBar}>
-                    <View 
-                      style={[
-                        styles.goalProgressFill,
-                        { width: `${Math.min(100, (waterIntakeToday / goals.daily_water_glasses_goal) * 100)}%` }
-                      ]} 
-                    />
-                  </View>
-                </LinearGradient>
-              </View>
-
-              {/* Exercise Goal */}
-              <View style={styles.goalCard}>
-                <LinearGradient
-                  colors={colors.gradientWarning}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.goalGradient}
-                >
-                  <IconSymbol
-                    ios_icon_name="figure.mixed.cardio"
-                    android_material_icon_name="fitness-center"
-                    size={32}
-                    color={colors.card}
-                  />
-                  <Text style={styles.goalValue}>
-                    {todayExerciseMinutes}/{goals.daily_exercise_minutes_goal}
-                  </Text>
-                  <Text style={styles.goalLabel}>Minutes</Text>
-                  <View style={styles.goalProgressBar}>
-                    <View 
-                      style={[
-                        styles.goalProgressFill,
-                        { width: `${Math.min(100, (todayExerciseMinutes / goals.daily_exercise_minutes_goal) * 100)}%` }
-                      ]} 
-                    />
-                  </View>
-                </LinearGradient>
-              </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{weeklyWorkouts}</Text>
+              <Text style={styles.statLabel}>This Week</Text>
             </View>
           </View>
-        )}
 
-        {/* Quick Actions */}
-        <View style={styles.quickActionsSection}>
+          {/* Quick Access to Iman Tracker */}
+          <TouchableOpacity
+            style={styles.imanTrackerLink}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/(tabs)/(iman)' as any);
+            }}
+            activeOpacity={0.8}
+          >
+            <IconSymbol
+              ios_icon_name="sparkles"
+              android_material_icon_name="auto-awesome"
+              size={20}
+              color={colors.card}
+            />
+            <Text style={styles.imanTrackerLinkText}>View in Iman Tracker</Text>
+            <IconSymbol
+              ios_icon_name="arrow.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={colors.card}
+            />
+          </TouchableOpacity>
+        </LinearGradient>
+      </Animated.View>
+
+      {/* Daily Goals Progress */}
+      {goals && (
+        <View style={styles.goalsSection}>
           <View style={styles.sectionHeader}>
             <IconSymbol
-              ios_icon_name="bolt.fill"
-              android_material_icon_name="bolt"
+              ios_icon_name="target"
+              android_material_icon_name="track-changes"
               size={28}
               color={colors.primary}
             />
-            <Text style={styles.sectionTitle}>Quick Track</Text>
+            <Text style={styles.sectionTitle}>Today&apos;s Goals</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/(wellness)/physical-goals' as any)}
+              style={styles.seeAllButton}
+            >
+              <Text style={styles.seeAllText}>Set Goals</Text>
+              <IconSymbol
+                ios_icon_name="chevron.right"
+                android_material_icon_name="chevron-right"
+                size={18}
+                color={colors.primary}
+              />
+            </TouchableOpacity>
           </View>
 
-          {/* Water Intake */}
-          <View style={styles.quickActionCard}>
-            <View style={styles.quickActionHeader}>
-              <IconSymbol
-                ios_icon_name="drop.fill"
-                android_material_icon_name="water-drop"
-                size={24}
-                color={colors.info}
-              />
-              <Text style={styles.quickActionTitle}>Water Intake</Text>
-            </View>
-            <View style={styles.quickActionButtons}>
-              <TouchableOpacity
-                style={styles.quickButton}
-                onPress={() => addWaterIntake(250)}
-                activeOpacity={0.7}
+          <View style={styles.goalsGrid}>
+            {/* Water Goal */}
+            <View style={styles.goalCard}>
+              <LinearGradient
+                colors={colors.gradientInfo}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.goalGradient}
               >
-                <LinearGradient
-                  colors={colors.gradientInfo}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.quickButtonGradient}
-                >
-                  <Text style={styles.quickButtonText}>+1 Glass</Text>
-                  <Text style={styles.quickButtonSubtext}>(250ml)</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.quickButton}
-                onPress={() => addWaterIntake(500)}
-                activeOpacity={0.7}
-              >
-                <LinearGradient
-                  colors={colors.gradientInfo}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.quickButtonGradient}
-                >
-                  <Text style={styles.quickButtonText}>+2 Glasses</Text>
-                  <Text style={styles.quickButtonSubtext}>(500ml)</Text>
-                </LinearGradient>
-              </TouchableOpacity>
+                <IconSymbol
+                  ios_icon_name="drop.fill"
+                  android_material_icon_name="water-drop"
+                  size={32}
+                  color={colors.card}
+                />
+                <Text style={styles.goalValue}>
+                  {waterIntakeToday}/{goals.daily_water_glasses_goal}
+                </Text>
+                <Text style={styles.goalLabel}>Glasses</Text>
+                <View style={styles.goalProgressBar}>
+                  <View 
+                    style={[
+                      styles.goalProgressFill,
+                      { width: `${Math.min(100, (waterIntakeToday / goals.daily_water_glasses_goal) * 100)}%` }
+                    ]} 
+                  />
+                </View>
+              </LinearGradient>
             </View>
-          </View>
 
-          {/* Exercise Tracking */}
-          <View style={styles.quickActionCard}>
-            <View style={styles.quickActionHeader}>
-              <IconSymbol
-                ios_icon_name="figure.run"
-                android_material_icon_name="directions-run"
-                size={24}
-                color={colors.warning}
-              />
-              <Text style={styles.quickActionTitle}>Log Exercise</Text>
-            </View>
-            <View style={styles.quickActionButtons}>
-              <TouchableOpacity
-                style={styles.quickButton}
-                onPress={() => addExerciseSession(15, 'general')}
-                activeOpacity={0.7}
+            {/* Exercise Goal */}
+            <View style={styles.goalCard}>
+              <LinearGradient
+                colors={colors.gradientWarning}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.goalGradient}
               >
-                <LinearGradient
-                  colors={colors.gradientWarning}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.quickButtonGradient}
-                >
-                  <Text style={styles.quickButtonText}>+15 Min</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.quickButton}
-                onPress={() => addExerciseSession(30, 'general')}
-                activeOpacity={0.7}
-              >
-                <LinearGradient
-                  colors={colors.gradientWarning}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.quickButtonGradient}
-                >
-                  <Text style={styles.quickButtonText}>+30 Min</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.quickButton}
-                onPress={() => addExerciseSession(60, 'general')}
-                activeOpacity={0.7}
-              >
-                <LinearGradient
-                  colors={colors.gradientWarning}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.quickButtonGradient}
-                >
-                  <Text style={styles.quickButtonText}>+60 Min</Text>
-                </LinearGradient>
-              </TouchableOpacity>
+                <IconSymbol
+                  ios_icon_name="figure.mixed.cardio"
+                  android_material_icon_name="fitness-center"
+                  size={32}
+                  color={colors.card}
+                />
+                <Text style={styles.goalValue}>
+                  {todayExerciseMinutes}/{goals.daily_exercise_minutes_goal}
+                </Text>
+                <Text style={styles.goalLabel}>Minutes</Text>
+                <View style={styles.goalProgressBar}>
+                  <View 
+                    style={[
+                      styles.goalProgressFill,
+                      { width: `${Math.min(100, (todayExerciseMinutes / goals.daily_exercise_minutes_goal) * 100)}%` }
+                    ]} 
+                  />
+                </View>
+              </LinearGradient>
             </View>
           </View>
         </View>
+      )}
 
-        {/* Activity Types */}
-        <View style={styles.activityTypesSection}>
+      {/* Quick Actions */}
+      <View style={styles.quickActionsSection}>
+        <View style={styles.sectionHeader}>
+          <IconSymbol
+            ios_icon_name="bolt.fill"
+            android_material_icon_name="bolt"
+            size={28}
+            color={colors.primary}
+          />
+          <Text style={styles.sectionTitle}>Quick Track</Text>
+        </View>
+
+        {/* Water Intake */}
+        <View style={styles.quickActionCard}>
+          <View style={styles.quickActionHeader}>
+            <IconSymbol
+              ios_icon_name="drop.fill"
+              android_material_icon_name="water-drop"
+              size={24}
+              color={colors.info}
+            />
+            <Text style={styles.quickActionTitle}>Water Intake</Text>
+          </View>
+          <View style={styles.quickActionButtons}>
+            <TouchableOpacity
+              style={styles.quickButton}
+              onPress={() => addWaterIntake(250)}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={colors.gradientInfo}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.quickButtonGradient}
+              >
+                <Text style={styles.quickButtonText}>+1 Glass</Text>
+                <Text style={styles.quickButtonSubtext}>(250ml)</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickButton}
+              onPress={() => addWaterIntake(500)}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={colors.gradientInfo}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.quickButtonGradient}
+              >
+                <Text style={styles.quickButtonText}>+2 Glasses</Text>
+                <Text style={styles.quickButtonSubtext}>(500ml)</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Exercise Tracking */}
+        <View style={styles.quickActionCard}>
+          <View style={styles.quickActionHeader}>
+            <IconSymbol
+              ios_icon_name="figure.run"
+              android_material_icon_name="directions-run"
+              size={24}
+              color={colors.warning}
+            />
+            <Text style={styles.quickActionTitle}>Log Exercise</Text>
+          </View>
+          <View style={styles.quickActionButtons}>
+            <TouchableOpacity
+              style={styles.quickButton}
+              onPress={() => addExerciseSession(15, 'general')}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={colors.gradientWarning}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.quickButtonGradient}
+              >
+                <Text style={styles.quickButtonText}>+15 Min</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickButton}
+              onPress={() => addExerciseSession(30, 'general')}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={colors.gradientWarning}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.quickButtonGradient}
+              >
+                <Text style={styles.quickButtonText}>+30 Min</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickButton}
+              onPress={() => addExerciseSession(60, 'general')}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={colors.gradientWarning}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.quickButtonGradient}
+              >
+                <Text style={styles.quickButtonText}>+60 Min</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
+      {/* Activity Types */}
+      <View style={styles.activityTypesSection}>
+        <View style={styles.sectionHeader}>
+          <IconSymbol
+            ios_icon_name="figure.mixed.cardio"
+            android_material_icon_name="fitness-center"
+            size={28}
+            color={colors.primary}
+          />
+          <Text style={styles.sectionTitle}>Activities</Text>
+        </View>
+        <View style={styles.activityTypesGrid}>
+          {[
+            { type: 'walking', label: 'Walking', ios: 'figure.walk', android: 'directions-walk', gradient: colors.gradientPrimary },
+            { type: 'running', label: 'Running', ios: 'figure.run', android: 'directions-run', gradient: colors.gradientAccent },
+            { type: 'strength', label: 'Strength', ios: 'dumbbell.fill', android: 'fitness-center', gradient: colors.gradientWarning },
+            { type: 'yoga', label: 'Yoga', ios: 'figure.yoga', android: 'self-improvement', gradient: colors.gradientSecondary },
+          ].map((activity, index) => (
+            <React.Fragment key={index}>
+              <TouchableOpacity
+                style={styles.activityTypeCard}
+                onPress={() => router.push({
+                  pathname: '/(tabs)/(wellness)/activity-tracker' as any,
+                  params: { type: activity.type }
+                })}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={activity.gradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.activityTypeGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name={activity.ios}
+                    android_material_icon_name={activity.android}
+                    size={36}
+                    color={colors.card}
+                  />
+                  <Text style={styles.activityTypeLabel}>{activity.label}</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </React.Fragment>
+          ))}
+        </View>
+      </View>
+
+      {/* Recent Activities */}
+      {recentActivities.length > 0 && (
+        <View style={styles.recentSection}>
           <View style={styles.sectionHeader}>
             <IconSymbol
-              ios_icon_name="figure.mixed.cardio"
-              android_material_icon_name="fitness-center"
+              ios_icon_name="clock.fill"
+              android_material_icon_name="history"
               size={28}
               color={colors.primary}
             />
-            <Text style={styles.sectionTitle}>Activities</Text>
+            <Text style={styles.sectionTitle}>Recent Activities</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/(wellness)/activity-history' as any)}
+              style={styles.seeAllButton}
+            >
+              <Text style={styles.seeAllText}>See All</Text>
+              <IconSymbol
+                ios_icon_name="chevron.right"
+                android_material_icon_name="chevron-right"
+                size={18}
+                color={colors.primary}
+              />
+            </TouchableOpacity>
           </View>
-          <View style={styles.activityTypesGrid}>
-            {[
-              { type: 'walking', label: 'Walking', ios: 'figure.walk', android: 'directions-walk', gradient: colors.gradientPrimary },
-              { type: 'running', label: 'Running', ios: 'figure.run', android: 'directions-run', gradient: colors.gradientAccent },
-              { type: 'strength', label: 'Strength', ios: 'dumbbell.fill', android: 'fitness-center', gradient: colors.gradientWarning },
-              { type: 'yoga', label: 'Yoga', ios: 'figure.yoga', android: 'self-improvement', gradient: colors.gradientSecondary },
-            ].map((activity, index) => (
+          <View style={styles.activitiesList}>
+            {recentActivities.map((activity, index) => {
+              const icon = getActivityIcon(activity.activity_type);
+              return (
+                <React.Fragment key={index}>
+                  <View style={styles.activityItem}>
+                    <View style={styles.activityIconContainer}>
+                      <IconSymbol
+                        ios_icon_name={icon.ios}
+                        android_material_icon_name={icon.android}
+                        size={24}
+                        color={colors.primary}
+                      />
+                    </View>
+                    <View style={styles.activityInfo}>
+                      <Text style={styles.activityType}>
+                        {activity.activity_type.charAt(0).toUpperCase() + activity.activity_type.slice(1)}
+                      </Text>
+                      <Text style={styles.activityDate}>{formatDate(activity.date)}</Text>
+                    </View>
+                    <Text style={styles.activityDuration}>{activity.duration_minutes} min</Text>
+                  </View>
+                </React.Fragment>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* Fitness Challenges */}
+      {challenges.length > 0 && (
+        <View style={styles.challengesSection}>
+          <View style={styles.sectionHeader}>
+            <IconSymbol
+              ios_icon_name="trophy.fill"
+              android_material_icon_name="emoji-events"
+              size={28}
+              color={colors.primary}
+            />
+            <Text style={styles.sectionTitle}>Fitness Challenges</Text>
+          </View>
+          <View style={styles.challengesGrid}>
+            {challenges.map((challenge, index) => (
               <React.Fragment key={index}>
-                <TouchableOpacity
-                  style={styles.activityTypeCard}
-                  onPress={() => router.push({
-                    pathname: '/(tabs)/(wellness)/activity-tracker' as any,
-                    params: { type: activity.type }
-                  })}
-                  activeOpacity={0.8}
-                >
+                <View style={styles.challengeCard}>
                   <LinearGradient
-                    colors={activity.gradient}
+                    colors={colors.gradientSunset}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
-                    style={styles.activityTypeGradient}
+                    style={styles.challengeGradient}
                   >
-                    <IconSymbol
-                      ios_icon_name={activity.ios}
-                      android_material_icon_name={activity.android}
-                      size={36}
-                      color={colors.card}
-                    />
-                    <Text style={styles.activityTypeLabel}>{activity.label}</Text>
+                    <View style={styles.challengeHeader}>
+                      <IconSymbol
+                        ios_icon_name="trophy.fill"
+                        android_material_icon_name="emoji-events"
+                        size={28}
+                        color={colors.card}
+                      />
+                      {challenge.is_enrolled && (
+                        <View style={styles.enrolledBadge}>
+                          <Text style={styles.enrolledBadgeText}>Enrolled</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.challengeTitle} numberOfLines={2}>
+                      {challenge.title}
+                    </Text>
+                    <Text style={styles.challengeDescription} numberOfLines={2}>
+                      {challenge.description}
+                    </Text>
+                    <View style={styles.challengeStats}>
+                      <Text style={styles.challengeStat}>
+                        {challenge.duration_days} days
+                      </Text>
+                      <Text style={styles.challengeStat}>
+                        Target: {challenge.target_value}
+                      </Text>
+                    </View>
+                    {challenge.is_enrolled ? (
+                      <View style={styles.challengeProgress}>
+                        <View style={styles.challengeProgressBar}>
+                          <View 
+                            style={[
+                              styles.challengeProgressFill,
+                              { width: `${Math.min(100, (challenge.current_progress! / challenge.target_value) * 100)}%` }
+                            ]} 
+                          />
+                        </View>
+                        <Text style={styles.challengeProgressText}>
+                          {challenge.current_progress}/{challenge.target_value}
+                        </Text>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.enrollButton}
+                        onPress={() => enrollInChallenge(challenge.id)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.enrollButtonText}>Join Challenge</Text>
+                      </TouchableOpacity>
+                    )}
                   </LinearGradient>
-                </TouchableOpacity>
+                </View>
               </React.Fragment>
             ))}
           </View>
         </View>
+      )}
 
-        {/* Recent Activities */}
-        {recentActivities.length > 0 && (
-          <View style={styles.recentSection}>
-            <View style={styles.sectionHeader}>
-              <IconSymbol
-                ios_icon_name="clock.fill"
-                android_material_icon_name="history"
-                size={28}
-                color={colors.primary}
-              />
-              <Text style={styles.sectionTitle}>Recent Activities</Text>
-              <TouchableOpacity
-                onPress={() => router.push('/(tabs)/(wellness)/activity-history' as any)}
-                style={styles.seeAllButton}
-              >
-                <Text style={styles.seeAllText}>See All</Text>
-                <IconSymbol
-                  ios_icon_name="chevron.right"
-                  android_material_icon_name="chevron-right"
-                  size={18}
-                  color={colors.primary}
-                />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.activitiesList}>
-              {recentActivities.map((activity, index) => {
-                const icon = getActivityIcon(activity.activity_type);
-                return (
-                  <React.Fragment key={index}>
-                    <View style={styles.activityItem}>
-                      <View style={styles.activityIconContainer}>
-                        <IconSymbol
-                          ios_icon_name={icon.ios}
-                          android_material_icon_name={icon.android}
-                          size={24}
-                          color={colors.primary}
-                        />
-                      </View>
-                      <View style={styles.activityInfo}>
-                        <Text style={styles.activityType}>
-                          {activity.activity_type.charAt(0).toUpperCase() + activity.activity_type.slice(1)}
-                        </Text>
-                        <Text style={styles.activityDate}>{formatDate(activity.date)}</Text>
-                      </View>
-                      <Text style={styles.activityDuration}>{activity.duration_minutes} min</Text>
-                    </View>
-                  </React.Fragment>
-                );
-              })}
-            </View>
-          </View>
-        )}
-
-        {/* Fitness Challenges */}
-        {challenges.length > 0 && (
-          <View style={styles.challengesSection}>
-            <View style={styles.sectionHeader}>
-              <IconSymbol
-                ios_icon_name="trophy.fill"
-                android_material_icon_name="emoji-events"
-                size={28}
-                color={colors.primary}
-              />
-              <Text style={styles.sectionTitle}>Fitness Challenges</Text>
-            </View>
-            <View style={styles.challengesGrid}>
-              {challenges.map((challenge, index) => (
-                <React.Fragment key={index}>
-                  <View style={styles.challengeCard}>
-                    <LinearGradient
-                      colors={colors.gradientSunset}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.challengeGradient}
-                    >
-                      <View style={styles.challengeHeader}>
-                        <IconSymbol
-                          ios_icon_name="trophy.fill"
-                          android_material_icon_name="emoji-events"
-                          size={28}
-                          color={colors.card}
-                        />
-                        {challenge.is_enrolled && (
-                          <View style={styles.enrolledBadge}>
-                            <Text style={styles.enrolledBadgeText}>Enrolled</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.challengeTitle} numberOfLines={2}>
-                        {challenge.title}
-                      </Text>
-                      <Text style={styles.challengeDescription} numberOfLines={2}>
-                        {challenge.description}
-                      </Text>
-                      <View style={styles.challengeStats}>
-                        <Text style={styles.challengeStat}>
-                          {challenge.duration_days} days
-                        </Text>
-                        <Text style={styles.challengeStat}>
-                          Target: {challenge.target_value}
-                        </Text>
-                      </View>
-                      {challenge.is_enrolled ? (
-                        <View style={styles.challengeProgress}>
-                          <View style={styles.challengeProgressBar}>
-                            <View 
-                              style={[
-                                styles.challengeProgressFill,
-                                { width: `${Math.min(100, (challenge.current_progress! / challenge.target_value) * 100)}%` }
-                              ]} 
-                            />
-                          </View>
-                          <Text style={styles.challengeProgressText}>
-                            {challenge.current_progress}/{challenge.target_value}
-                          </Text>
-                        </View>
-                      ) : (
-                        <TouchableOpacity
-                          style={styles.enrollButton}
-                          onPress={() => enrollInChallenge(challenge.id)}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={styles.enrollButtonText}>Join Challenge</Text>
-                        </TouchableOpacity>
-                      )}
-                    </LinearGradient>
-                  </View>
-                </React.Fragment>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Additional Tools */}
-        <View style={styles.toolsSection}>
-          <View style={styles.sectionHeader}>
-            <IconSymbol
-              ios_icon_name="wrench.and.screwdriver.fill"
-              android_material_icon_name="build"
-              size={28}
-              color={colors.primary}
-            />
-            <Text style={styles.sectionTitle}>More Tools</Text>
-          </View>
-          <View style={styles.toolsGrid}>
-            <TouchableOpacity
-              style={styles.toolCard}
-              activeOpacity={0.8}
-              onPress={() => router.push('/(tabs)/(wellness)/nutrition-tracker' as any)}
-            >
-              <LinearGradient
-                colors={colors.gradientSecondary}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.toolGradient}
-              >
-                <IconSymbol
-                  ios_icon_name="fork.knife"
-                  android_material_icon_name="restaurant"
-                  size={36}
-                  color={colors.card}
-                />
-                <Text style={styles.toolTitle}>Nutrition</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.toolCard}
-              activeOpacity={0.8}
-              onPress={() => router.push('/(tabs)/(wellness)/sleep-tracker' as any)}
-            >
-              <LinearGradient
-                colors={colors.gradientPurple}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.toolGradient}
-              >
-                <IconSymbol
-                  ios_icon_name="moon.stars.fill"
-                  android_material_icon_name="bedtime"
-                  size={36}
-                  color={colors.card}
-                />
-                <Text style={styles.toolTitle}>Sleep</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
+      {/* Additional Tools */}
+      <View style={styles.toolsSection}>
+        <View style={styles.sectionHeader}>
+          <IconSymbol
+            ios_icon_name="wrench.and.screwdriver.fill"
+            android_material_icon_name="build"
+            size={28}
+            color={colors.primary}
+          />
+          <Text style={styles.sectionTitle}>More Tools</Text>
         </View>
-
-        {/* Islamic Reminder */}
-        <View style={styles.reminderSection}>
-          <LinearGradient
-            colors={colors.gradientTeal}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.reminderGradient}
+        <View style={styles.toolsGrid}>
+          <TouchableOpacity
+            style={styles.toolCard}
+            activeOpacity={0.8}
+            onPress={() => router.push('/(tabs)/(wellness)/nutrition-tracker' as any)}
           >
-            <IconSymbol
-              ios_icon_name="quote.opening"
-              android_material_icon_name="format-quote"
-              size={32}
-              color={colors.card}
-            />
-            <Text style={styles.reminderText}>
-              &quot;Your body has a right over you.&quot;
-            </Text>
-            <Text style={styles.reminderSource}>Prophet Muhammad (ﷺ)</Text>
-          </LinearGradient>
-        </View>
+            <LinearGradient
+              colors={colors.gradientSecondary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.toolGradient}
+            >
+              <IconSymbol
+                ios_icon_name="fork.knife"
+                android_material_icon_name="restaurant"
+                size={36}
+                color={colors.card}
+              />
+              <Text style={styles.toolTitle}>Nutrition</Text>
+            </LinearGradient>
+          </TouchableOpacity>
 
-        <View style={styles.bottomPadding} />
-      </ScrollView>
-    </SafeAreaView>
+          <TouchableOpacity
+            style={styles.toolCard}
+            activeOpacity={0.8}
+            onPress={() => router.push('/(tabs)/(wellness)/sleep-tracker' as any)}
+          >
+            <LinearGradient
+              colors={colors.gradientPurple}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.toolGradient}
+            >
+              <IconSymbol
+                ios_icon_name="moon.stars.fill"
+                android_material_icon_name="bedtime"
+                size={36}
+                color={colors.card}
+              />
+              <Text style={styles.toolTitle}>Sleep</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Islamic Reminder */}
+      <View style={styles.reminderSection}>
+        <LinearGradient
+          colors={colors.gradientTeal}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.reminderGradient}
+        >
+          <IconSymbol
+            ios_icon_name="quote.opening"
+            android_material_icon_name="format-quote"
+            size={32}
+            color={colors.card}
+          />
+          <Text style={styles.reminderText}>
+            &quot;Your body has a right over you.&quot;
+          </Text>
+          <Text style={styles.reminderSource}>Prophet Muhammad (ﷺ)</Text>
+        </LinearGradient>
+      </View>
+
+      <View style={styles.bottomPadding} />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',

@@ -1,119 +1,127 @@
 
-import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import React, { useState } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Animated } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
 import * as Haptics from 'expo-haptics';
 
+// Import the hub screens
+import MentalHealthHubScreen from './mental-health';
+import PhysicalHealthHubScreen from './physical-health';
+
+type TabType = 'mental' | 'physical';
+
 export default function WellnessScreen() {
+  const [activeTab, setActiveTab] = useState<TabType>('mental');
+  const slideAnim = React.useRef(new Animated.Value(0)).current;
+
+  const switchTab = (tab: TabType) => {
+    if (tab === activeTab) return;
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    // Animate tab switch
+    Animated.spring(slideAnim, {
+      toValue: tab === 'mental' ? 0 : 1,
+      useNativeDriver: true,
+      tension: 80,
+      friction: 10,
+    }).start();
+    
+    setActiveTab(tab);
+  };
+
+  const indicatorTranslateX = slideAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 180], // Half of container width minus padding
+  });
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header with Tabs */}
+      <View style={styles.header}>
+        <LinearGradient
+          colors={colors.gradientOcean}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.headerTop}>
+            <IconSymbol
+              ios_icon_name="heart.circle.fill"
+              android_material_icon_name="favorite"
+              size={40}
+              color={colors.card}
+            />
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle}>Wellness Hub</Text>
+              <Text style={styles.headerSubtitle}>Nurture mind, body, and soul</Text>
+            </View>
+          </View>
+
+          {/* Tab Switcher */}
+          <View style={styles.tabContainer}>
+            <View style={styles.tabBackground}>
+              <Animated.View 
+                style={[
+                  styles.tabIndicator,
+                  {
+                    transform: [{ translateX: indicatorTranslateX }],
+                  }
+                ]}
+              />
+              
+              <TouchableOpacity
+                style={styles.tab}
+                onPress={() => switchTab('mental')}
+                activeOpacity={0.8}
+              >
+                <IconSymbol
+                  ios_icon_name="brain.head.profile"
+                  android_material_icon_name="psychology"
+                  size={20}
+                  color={activeTab === 'mental' ? colors.primary : colors.card}
+                />
+                <Text style={[
+                  styles.tabText,
+                  activeTab === 'mental' && styles.tabTextActive
+                ]}>
+                  Mental
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.tab}
+                onPress={() => switchTab('physical')}
+                activeOpacity={0.8}
+              >
+                <IconSymbol
+                  ios_icon_name="figure.run"
+                  android_material_icon_name="directions-run"
+                  size={20}
+                  color={activeTab === 'physical' ? colors.primary : colors.card}
+                />
+                <Text style={[
+                  styles.tabText,
+                  activeTab === 'physical' && styles.tabTextActive
+                ]}>
+                  Physical
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </LinearGradient>
+      </View>
+
+      {/* Content */}
       <View style={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <IconSymbol
-            ios_icon_name="heart.circle.fill"
-            android_material_icon_name="favorite"
-            size={64}
-            color={colors.primary}
-          />
-          <Text style={styles.title}>Wellness Hub</Text>
-          <Text style={styles.subtitle}>
-            Nurture your mind, body, and soul
-          </Text>
-        </View>
-
-        {/* Mental Health Card */}
-        <TouchableOpacity
-          style={styles.card}
-          activeOpacity={0.8}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push('/mental-health' as any);
-          }}
-        >
-          <LinearGradient
-            colors={colors.gradientOcean}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.cardGradient}
-          >
-            <View style={styles.cardIconContainer}>
-              <IconSymbol
-                ios_icon_name="brain.head.profile"
-                android_material_icon_name="psychology"
-                size={48}
-                color={colors.card}
-              />
-            </View>
-            <View style={styles.cardContent}>
-              <Text style={styles.cardTitle}>Mental Wellness</Text>
-              <Text style={styles.cardDescription}>
-                Journal, meditate, and find inner peace through Islamic guidance
-              </Text>
-            </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron-right"
-              size={28}
-              color={colors.card}
-            />
-          </LinearGradient>
-        </TouchableOpacity>
-
-        {/* Physical Health Card */}
-        <TouchableOpacity
-          style={styles.card}
-          activeOpacity={0.8}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push('/physical-health' as any);
-          }}
-        >
-          <LinearGradient
-            colors={colors.gradientAccent}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.cardGradient}
-          >
-            <View style={styles.cardIconContainer}>
-              <IconSymbol
-                ios_icon_name="figure.run"
-                android_material_icon_name="directions-run"
-                size={48}
-                color={colors.card}
-              />
-            </View>
-            <View style={styles.cardContent}>
-              <Text style={styles.cardTitle}>Physical Wellness</Text>
-              <Text style={styles.cardDescription}>
-                Track activities, nutrition, and strengthen your body
-              </Text>
-            </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron-right"
-              size={28}
-              color={colors.card}
-            />
-          </LinearGradient>
-        </TouchableOpacity>
-
-        {/* Info Card */}
-        <View style={styles.infoCard}>
-          <IconSymbol
-            ios_icon_name="info.circle.fill"
-            android_material_icon_name="info"
-            size={24}
-            color={colors.primary}
-          />
-          <Text style={styles.infoText}>
-            All wellness goals are integrated with your Iman Tracker for holistic spiritual and physical growth.
-          </Text>
-        </View>
+        {activeTab === 'mental' ? (
+          <MentalHealthHubScreen />
+        ) : (
+          <PhysicalHealthHubScreen />
+        )}
       </View>
     </SafeAreaView>
   );
@@ -124,75 +132,76 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  content: {
-    flex: 1,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxl,
-  },
   header: {
-    alignItems: 'center',
-    marginBottom: spacing.xxl * 2,
-  },
-  title: {
-    ...typography.h1,
-    color: colors.text,
+    marginHorizontal: spacing.xl,
     marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  card: {
     marginBottom: spacing.lg,
     borderRadius: borderRadius.xl,
     overflow: 'hidden',
     ...shadows.large,
   },
-  cardGradient: {
+  headerGradient: {
+    padding: spacing.xl,
+  },
+  headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.xl,
-    gap: spacing.lg,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
-  cardIconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardContent: {
+  headerTextContainer: {
     flex: 1,
   },
-  cardTitle: {
-    ...typography.h3,
+  headerTitle: {
+    ...typography.h2,
     color: colors.card,
     marginBottom: spacing.xs,
   },
-  cardDescription: {
+  headerSubtitle: {
     ...typography.body,
     color: colors.card,
     opacity: 0.95,
-    lineHeight: 22,
   },
-  infoCard: {
+  tabContainer: {
+    width: '100%',
+  },
+  tabBackground: {
     flexDirection: 'row',
-    gap: spacing.md,
-    backgroundColor: colors.card,
-    padding: spacing.lg,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.small,
-    marginTop: spacing.xl,
+    padding: spacing.xs,
+    position: 'relative',
   },
-  infoText: {
-    ...typography.body,
-    color: colors.textSecondary,
+  tabIndicator: {
+    position: 'absolute',
+    top: spacing.xs,
+    left: spacing.xs,
+    width: '48%',
+    height: '85%',
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.md,
+    ...shadows.medium,
+  },
+  tab: {
     flex: 1,
-    lineHeight: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    zIndex: 1,
+  },
+  tabText: {
+    ...typography.bodyBold,
+    color: colors.card,
+    opacity: 0.8,
+  },
+  tabTextActive: {
+    color: colors.primary,
+    opacity: 1,
+  },
+  content: {
+    flex: 1,
   },
 });

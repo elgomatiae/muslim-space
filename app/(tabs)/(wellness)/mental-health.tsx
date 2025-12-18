@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Animated, TextInput } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
@@ -225,495 +224,489 @@ export default function MentalHealthHubScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
+    <ScrollView
+      style={styles.scrollView}
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Hero Section with Stats */}
+      <Animated.View 
+        style={[
+          styles.heroSection,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          },
+        ]}
       >
-        {/* Hero Section with Stats */}
-        <Animated.View 
-          style={[
-            styles.heroSection,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
+        <LinearGradient
+          colors={colors.gradientOcean}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroGradient}
         >
-          <LinearGradient
-            colors={colors.gradientOcean}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.heroGradient}
-          >
-            <View style={styles.heroHeader}>
-              <IconSymbol
-                ios_icon_name="brain.head.profile"
-                android_material_icon_name="psychology"
-                size={48}
-                color={colors.card}
-              />
-              <Text style={styles.heroTitle}>Mental Wellness Hub</Text>
-              <Text style={styles.heroSubtitle}>
-                Your journey to inner peace
-              </Text>
-            </View>
-            
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{journalCount}</Text>
-                <Text style={styles.statLabel}>Entries</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{moodStreak}</Text>
-                <Text style={styles.statLabel}>Day Streak</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{prophetStories.length}</Text>
-                <Text style={styles.statLabel}>Stories</Text>
-              </View>
-            </View>
-          </LinearGradient>
-        </Animated.View>
-
-        {/* Quick Journal Entry */}
-        <View style={styles.quickJournalSection}>
-          <View style={styles.sectionHeader}>
+          <View style={styles.heroHeader}>
             <IconSymbol
-              ios_icon_name="pencil.circle.fill"
-              android_material_icon_name="edit"
-              size={28}
-              color={colors.primary}
-            />
-            <Text style={styles.sectionTitle}>Quick Journal</Text>
-          </View>
-          <View style={styles.quickJournalCard}>
-            <TextInput
-              style={styles.quickJournalInput}
-              placeholder="How are you feeling today?"
-              placeholderTextColor={colors.textSecondary}
-              value={quickJournalText}
-              onChangeText={setQuickJournalText}
-              multiline
-              numberOfLines={3}
-            />
-            <TouchableOpacity
-              style={styles.quickJournalButton}
-              onPress={handleQuickJournal}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={colors.gradientPrimary}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.quickJournalGradient}
-              >
-                <IconSymbol
-                  ios_icon_name="arrow.up.circle.fill"
-                  android_material_icon_name="send"
-                  size={24}
-                  color={colors.card}
-                />
-                <Text style={styles.quickJournalButtonText}>Save</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Today's Prompt */}
-        {prompts.length > 0 && (
-          <View style={styles.promptSection}>
-            <TouchableOpacity
-              style={styles.promptCard}
-              activeOpacity={0.8}
-              onPress={() => router.push('/journal-prompts' as any)}
-            >
-              <LinearGradient
-                colors={colors.gradientInfo}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.promptGradient}
-              >
-                <View style={styles.promptBadge}>
-                  <IconSymbol
-                    ios_icon_name="sparkles"
-                    android_material_icon_name="auto-awesome"
-                    size={16}
-                    color={colors.card}
-                  />
-                  <Text style={styles.promptBadgeText}>TODAY&apos;S PROMPT</Text>
-                </View>
-                <Text style={styles.promptText}>{prompts[0].prompt_text}</Text>
-                <View style={styles.promptAction}>
-                  <Text style={styles.promptActionText}>Start Writing</Text>
-                  <IconSymbol
-                    ios_icon_name="arrow.right"
-                    android_material_icon_name="arrow-forward"
-                    size={20}
-                    color={colors.card}
-                  />
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Recent Journal Entries */}
-        {journalEntries.length > 0 && (
-          <View style={styles.journalSection}>
-            <View style={styles.sectionHeader}>
-              <IconSymbol
-                ios_icon_name="book.fill"
-                android_material_icon_name="menu-book"
-                size={28}
-                color={colors.primary}
-              />
-              <Text style={styles.sectionTitle}>Recent Entries</Text>
-              <TouchableOpacity
-                onPress={() => router.push('/journal' as any)}
-                style={styles.seeAllButton}
-              >
-                <Text style={styles.seeAllText}>See All</Text>
-                <IconSymbol
-                  ios_icon_name="chevron.right"
-                  android_material_icon_name="chevron-right"
-                  size={18}
-                  color={colors.primary}
-                />
-              </TouchableOpacity>
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.horizontalScroll}
-            >
-              {journalEntries.map((entry, index) => (
-                <React.Fragment key={index}>
-                  <TouchableOpacity
-                    style={styles.journalCard}
-                    activeOpacity={0.8}
-                    onPress={() => router.push('/journal' as any)}
-                  >
-                    <View style={styles.journalCardHeader}>
-                      <Text style={styles.journalCardTitle} numberOfLines={1}>
-                        {entry.title}
-                      </Text>
-                      <Text style={styles.journalCardDate}>
-                        {formatDate(entry.created_at)}
-                      </Text>
-                    </View>
-                    <Text style={styles.journalCardContent} numberOfLines={4}>
-                      {entry.content}
-                    </Text>
-                  </TouchableOpacity>
-                </React.Fragment>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Mood Tracker */}
-        {moodEntries.length > 0 && (
-          <View style={styles.moodSection}>
-            <View style={styles.sectionHeader}>
-              <IconSymbol
-                ios_icon_name="chart.line.uptrend.xyaxis"
-                android_material_icon_name="insights"
-                size={28}
-                color={colors.primary}
-              />
-              <Text style={styles.sectionTitle}>Mood This Week</Text>
-              <TouchableOpacity
-                onPress={() => router.push('/mood-tracker' as any)}
-                style={styles.seeAllButton}
-              >
-                <Text style={styles.seeAllText}>Track</Text>
-                <IconSymbol
-                  ios_icon_name="chevron.right"
-                  android_material_icon_name="chevron-right"
-                  size={18}
-                  color={colors.primary}
-                />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.moodGrid}>
-              {moodEntries.map((entry, index) => (
-                <React.Fragment key={index}>
-                  <View style={styles.moodItem}>
-                    <Text style={styles.moodEmoji}>{getMoodEmoji(entry.mood)}</Text>
-                    <Text style={styles.moodDate}>{formatDate(entry.date)}</Text>
-                  </View>
-                </React.Fragment>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Prophet Stories */}
-        {prophetStories.length > 0 && (
-          <View style={styles.storiesSection}>
-            <View style={styles.sectionHeader}>
-              <IconSymbol
-                ios_icon_name="book.closed.fill"
-                android_material_icon_name="auto-stories"
-                size={28}
-                color={colors.primary}
-              />
-              <Text style={styles.sectionTitle}>Prophet Stories</Text>
-              <TouchableOpacity
-                onPress={() => router.push('/prophet-stories' as any)}
-                style={styles.seeAllButton}
-              >
-                <Text style={styles.seeAllText}>See All</Text>
-                <IconSymbol
-                  ios_icon_name="chevron.right"
-                  android_material_icon_name="chevron-right"
-                  size={18}
-                  color={colors.primary}
-                />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.storiesGrid}>
-              {prophetStories.map((story, index) => (
-                <React.Fragment key={index}>
-                  <TouchableOpacity
-                    style={styles.storyCard}
-                    activeOpacity={0.8}
-                    onPress={() => router.push({
-                      pathname: '/prophet-stories' as any,
-                      params: { storyId: story.id }
-                    })}
-                  >
-                    <LinearGradient
-                      colors={colors.gradientSunset}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.storyGradient}
-                    >
-                      <View style={styles.storyIconContainer}>
-                        <IconSymbol
-                          ios_icon_name="book.closed.fill"
-                          android_material_icon_name="auto-stories"
-                          size={32}
-                          color={colors.card}
-                        />
-                      </View>
-                      <Text style={styles.storyCategory}>{story.category}</Text>
-                      <Text style={styles.storyTitle} numberOfLines={2}>
-                        {story.title}
-                      </Text>
-                      <Text style={styles.storyPreview} numberOfLines={3}>
-                        {story.mental_health_connection}
-                      </Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </React.Fragment>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Healing Duas */}
-        {duas.length > 0 && (
-          <View style={styles.duasSection}>
-            <View style={styles.sectionHeader}>
-              <IconSymbol
-                ios_icon_name="hands.sparkles.fill"
-                android_material_icon_name="self-improvement"
-                size={28}
-                color={colors.primary}
-              />
-              <Text style={styles.sectionTitle}>Healing Duas</Text>
-              <TouchableOpacity
-                onPress={() => router.push('/mental-duas' as any)}
-                style={styles.seeAllButton}
-              >
-                <Text style={styles.seeAllText}>See All</Text>
-                <IconSymbol
-                  ios_icon_name="chevron.right"
-                  android_material_icon_name="chevron-right"
-                  size={18}
-                  color={colors.primary}
-                />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.duasGrid}>
-              {duas.map((dua, index) => (
-                <React.Fragment key={index}>
-                  <TouchableOpacity
-                    style={styles.duaCard}
-                    activeOpacity={0.8}
-                    onPress={() => router.push({
-                      pathname: '/mental-duas' as any,
-                      params: { duaId: dua.id }
-                    })}
-                  >
-                    <LinearGradient
-                      colors={colors.gradientPurple}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.duaGradient}
-                    >
-                      <View style={styles.duaHeader}>
-                        <IconSymbol
-                          ios_icon_name="hands.sparkles.fill"
-                          android_material_icon_name="self-improvement"
-                          size={24}
-                          color={colors.card}
-                        />
-                        <Text style={styles.duaCategory}>{dua.emotion_category}</Text>
-                      </View>
-                      <Text style={styles.duaTitle} numberOfLines={2}>
-                        {dua.title}
-                      </Text>
-                      <Text style={styles.duaTranslation} numberOfLines={3}>
-                        {dua.translation}
-                      </Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </React.Fragment>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Wellness Tools */}
-        <View style={styles.toolsSection}>
-          <View style={styles.sectionHeader}>
-            <IconSymbol
-              ios_icon_name="wrench.and.screwdriver.fill"
-              android_material_icon_name="build"
-              size={28}
-              color={colors.primary}
-            />
-            <Text style={styles.sectionTitle}>Wellness Tools</Text>
-          </View>
-          <View style={styles.toolsGrid}>
-            <TouchableOpacity
-              style={styles.toolCard}
-              activeOpacity={0.8}
-              onPress={() => router.push('/meditation' as any)}
-            >
-              <LinearGradient
-                colors={colors.gradientSecondary}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.toolGradient}
-              >
-                <IconSymbol
-                  ios_icon_name="leaf.fill"
-                  android_material_icon_name="spa"
-                  size={36}
-                  color={colors.card}
-                />
-                <Text style={styles.toolTitle}>Meditation</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.toolCard}
-              activeOpacity={0.8}
-              onPress={() => router.push('/emotional-support' as any)}
-            >
-              <LinearGradient
-                colors={colors.gradientAccent}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.toolGradient}
-              >
-                <IconSymbol
-                  ios_icon_name="heart.fill"
-                  android_material_icon_name="favorite"
-                  size={36}
-                  color={colors.card}
-                />
-                <Text style={styles.toolTitle}>Support</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Crisis Support Banner */}
-        <TouchableOpacity
-          style={styles.crisisCard}
-          activeOpacity={0.8}
-          onPress={() => router.push('/crisis-support' as any)}
-        >
-          <LinearGradient
-            colors={['#FF6B6B', '#EE5A6F']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.crisisGradient}
-          >
-            <View style={styles.crisisContent}>
-              <IconSymbol
-                ios_icon_name="exclamationmark.triangle.fill"
-                android_material_icon_name="warning"
-                size={32}
-                color={colors.card}
-              />
-              <View style={styles.crisisText}>
-                <Text style={styles.crisisTitle}>Need Immediate Help?</Text>
-                <Text style={styles.crisisSubtitle}>Crisis support resources available 24/7</Text>
-              </View>
-            </View>
-            <IconSymbol
-              ios_icon_name="arrow.right.circle.fill"
-              android_material_icon_name="arrow-forward"
-              size={28}
+              ios_icon_name="brain.head.profile"
+              android_material_icon_name="psychology"
+              size={48}
               color={colors.card}
             />
-          </LinearGradient>
-        </TouchableOpacity>
+            <Text style={styles.heroTitle}>Mental Wellness Hub</Text>
+            <Text style={styles.heroSubtitle}>
+              Your journey to inner peace
+            </Text>
+          </View>
+          
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{journalCount}</Text>
+              <Text style={styles.statLabel}>Entries</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{moodStreak}</Text>
+              <Text style={styles.statLabel}>Day Streak</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{prophetStories.length}</Text>
+              <Text style={styles.statLabel}>Stories</Text>
+            </View>
+          </View>
+        </LinearGradient>
+      </Animated.View>
 
-        {/* Inspirational Quote */}
-        <View style={styles.quoteSection}>
-          <LinearGradient
-            colors={colors.gradientTeal}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.quoteGradient}
+      {/* Quick Journal Entry */}
+      <View style={styles.quickJournalSection}>
+        <View style={styles.sectionHeader}>
+          <IconSymbol
+            ios_icon_name="pencil.circle.fill"
+            android_material_icon_name="edit"
+            size={28}
+            color={colors.primary}
+          />
+          <Text style={styles.sectionTitle}>Quick Journal</Text>
+        </View>
+        <View style={styles.quickJournalCard}>
+          <TextInput
+            style={styles.quickJournalInput}
+            placeholder="How are you feeling today?"
+            placeholderTextColor={colors.textSecondary}
+            value={quickJournalText}
+            onChangeText={setQuickJournalText}
+            multiline
+            numberOfLines={3}
+          />
+          <TouchableOpacity
+            style={styles.quickJournalButton}
+            onPress={handleQuickJournal}
+            activeOpacity={0.8}
           >
+            <LinearGradient
+              colors={colors.gradientPrimary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.quickJournalGradient}
+            >
+              <IconSymbol
+                ios_icon_name="arrow.up.circle.fill"
+                android_material_icon_name="send"
+                size={24}
+                color={colors.card}
+              />
+              <Text style={styles.quickJournalButtonText}>Save</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Today's Prompt */}
+      {prompts.length > 0 && (
+        <View style={styles.promptSection}>
+          <TouchableOpacity
+            style={styles.promptCard}
+            activeOpacity={0.8}
+            onPress={() => router.push('/journal-prompts' as any)}
+          >
+            <LinearGradient
+              colors={colors.gradientInfo}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.promptGradient}
+            >
+              <View style={styles.promptBadge}>
+                <IconSymbol
+                  ios_icon_name="sparkles"
+                  android_material_icon_name="auto-awesome"
+                  size={16}
+                  color={colors.card}
+                />
+                <Text style={styles.promptBadgeText}>TODAY&apos;S PROMPT</Text>
+              </View>
+              <Text style={styles.promptText}>{prompts[0].prompt_text}</Text>
+              <View style={styles.promptAction}>
+                <Text style={styles.promptActionText}>Start Writing</Text>
+                <IconSymbol
+                  ios_icon_name="arrow.right"
+                  android_material_icon_name="arrow-forward"
+                  size={20}
+                  color={colors.card}
+                />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Recent Journal Entries */}
+      {journalEntries.length > 0 && (
+        <View style={styles.journalSection}>
+          <View style={styles.sectionHeader}>
             <IconSymbol
-              ios_icon_name="quote.opening"
-              android_material_icon_name="format-quote"
+              ios_icon_name="book.fill"
+              android_material_icon_name="menu-book"
+              size={28}
+              color={colors.primary}
+            />
+            <Text style={styles.sectionTitle}>Recent Entries</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/journal' as any)}
+              style={styles.seeAllButton}
+            >
+              <Text style={styles.seeAllText}>See All</Text>
+              <IconSymbol
+                ios_icon_name="chevron.right"
+                android_material_icon_name="chevron-right"
+                size={18}
+                color={colors.primary}
+              />
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalScroll}
+          >
+            {journalEntries.map((entry, index) => (
+              <React.Fragment key={index}>
+                <TouchableOpacity
+                  style={styles.journalCard}
+                  activeOpacity={0.8}
+                  onPress={() => router.push('/journal' as any)}
+                >
+                  <View style={styles.journalCardHeader}>
+                    <Text style={styles.journalCardTitle} numberOfLines={1}>
+                      {entry.title}
+                    </Text>
+                    <Text style={styles.journalCardDate}>
+                      {formatDate(entry.created_at)}
+                    </Text>
+                  </View>
+                  <Text style={styles.journalCardContent} numberOfLines={4}>
+                    {entry.content}
+                  </Text>
+                </TouchableOpacity>
+              </React.Fragment>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Mood Tracker */}
+      {moodEntries.length > 0 && (
+        <View style={styles.moodSection}>
+          <View style={styles.sectionHeader}>
+            <IconSymbol
+              ios_icon_name="chart.line.uptrend.xyaxis"
+              android_material_icon_name="insights"
+              size={28}
+              color={colors.primary}
+            />
+            <Text style={styles.sectionTitle}>Mood This Week</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/mood-tracker' as any)}
+              style={styles.seeAllButton}
+            >
+              <Text style={styles.seeAllText}>Track</Text>
+              <IconSymbol
+                ios_icon_name="chevron.right"
+                android_material_icon_name="chevron-right"
+                size={18}
+                color={colors.primary}
+              />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.moodGrid}>
+            {moodEntries.map((entry, index) => (
+              <React.Fragment key={index}>
+                <View style={styles.moodItem}>
+                  <Text style={styles.moodEmoji}>{getMoodEmoji(entry.mood)}</Text>
+                  <Text style={styles.moodDate}>{formatDate(entry.date)}</Text>
+                </View>
+              </React.Fragment>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Prophet Stories */}
+      {prophetStories.length > 0 && (
+        <View style={styles.storiesSection}>
+          <View style={styles.sectionHeader}>
+            <IconSymbol
+              ios_icon_name="book.closed.fill"
+              android_material_icon_name="auto-stories"
+              size={28}
+              color={colors.primary}
+            />
+            <Text style={styles.sectionTitle}>Prophet Stories</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/prophet-stories' as any)}
+              style={styles.seeAllButton}
+            >
+              <Text style={styles.seeAllText}>See All</Text>
+              <IconSymbol
+                ios_icon_name="chevron.right"
+                android_material_icon_name="chevron-right"
+                size={18}
+                color={colors.primary}
+              />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.storiesGrid}>
+            {prophetStories.map((story, index) => (
+              <React.Fragment key={index}>
+                <TouchableOpacity
+                  style={styles.storyCard}
+                  activeOpacity={0.8}
+                  onPress={() => router.push({
+                    pathname: '/prophet-stories' as any,
+                    params: { storyId: story.id }
+                  })}
+                >
+                  <LinearGradient
+                    colors={colors.gradientSunset}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.storyGradient}
+                  >
+                    <View style={styles.storyIconContainer}>
+                      <IconSymbol
+                        ios_icon_name="book.closed.fill"
+                        android_material_icon_name="auto-stories"
+                        size={32}
+                        color={colors.card}
+                      />
+                    </View>
+                    <Text style={styles.storyCategory}>{story.category}</Text>
+                    <Text style={styles.storyTitle} numberOfLines={2}>
+                      {story.title}
+                    </Text>
+                    <Text style={styles.storyPreview} numberOfLines={3}>
+                      {story.mental_health_connection}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </React.Fragment>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Healing Duas */}
+      {duas.length > 0 && (
+        <View style={styles.duasSection}>
+          <View style={styles.sectionHeader}>
+            <IconSymbol
+              ios_icon_name="hands.sparkles.fill"
+              android_material_icon_name="self-improvement"
+              size={28}
+              color={colors.primary}
+            />
+            <Text style={styles.sectionTitle}>Healing Duas</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/mental-duas' as any)}
+              style={styles.seeAllButton}
+            >
+              <Text style={styles.seeAllText}>See All</Text>
+              <IconSymbol
+                ios_icon_name="chevron.right"
+                android_material_icon_name="chevron-right"
+                size={18}
+                color={colors.primary}
+              />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.duasGrid}>
+            {duas.map((dua, index) => (
+              <React.Fragment key={index}>
+                <TouchableOpacity
+                  style={styles.duaCard}
+                  activeOpacity={0.8}
+                  onPress={() => router.push({
+                    pathname: '/mental-duas' as any,
+                    params: { duaId: dua.id }
+                  })}
+                >
+                  <LinearGradient
+                    colors={colors.gradientPurple}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.duaGradient}
+                  >
+                    <View style={styles.duaHeader}>
+                      <IconSymbol
+                        ios_icon_name="hands.sparkles.fill"
+                        android_material_icon_name="self-improvement"
+                        size={24}
+                        color={colors.card}
+                      />
+                      <Text style={styles.duaCategory}>{dua.emotion_category}</Text>
+                    </View>
+                    <Text style={styles.duaTitle} numberOfLines={2}>
+                      {dua.title}
+                    </Text>
+                    <Text style={styles.duaTranslation} numberOfLines={3}>
+                      {dua.translation}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </React.Fragment>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Wellness Tools */}
+      <View style={styles.toolsSection}>
+        <View style={styles.sectionHeader}>
+          <IconSymbol
+            ios_icon_name="wrench.and.screwdriver.fill"
+            android_material_icon_name="build"
+            size={28}
+            color={colors.primary}
+          />
+          <Text style={styles.sectionTitle}>Wellness Tools</Text>
+        </View>
+        <View style={styles.toolsGrid}>
+          <TouchableOpacity
+            style={styles.toolCard}
+            activeOpacity={0.8}
+            onPress={() => router.push('/meditation' as any)}
+          >
+            <LinearGradient
+              colors={colors.gradientSecondary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.toolGradient}
+            >
+              <IconSymbol
+                ios_icon_name="leaf.fill"
+                android_material_icon_name="spa"
+                size={36}
+                color={colors.card}
+              />
+              <Text style={styles.toolTitle}>Meditation</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.toolCard}
+            activeOpacity={0.8}
+            onPress={() => router.push('/emotional-support' as any)}
+          >
+            <LinearGradient
+              colors={colors.gradientAccent}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.toolGradient}
+            >
+              <IconSymbol
+                ios_icon_name="heart.fill"
+                android_material_icon_name="favorite"
+                size={36}
+                color={colors.card}
+              />
+              <Text style={styles.toolTitle}>Support</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Crisis Support Banner */}
+      <TouchableOpacity
+        style={styles.crisisCard}
+        activeOpacity={0.8}
+        onPress={() => router.push('/crisis-support' as any)}
+      >
+        <LinearGradient
+          colors={['#FF6B6B', '#EE5A6F']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.crisisGradient}
+        >
+          <View style={styles.crisisContent}>
+            <IconSymbol
+              ios_icon_name="exclamationmark.triangle.fill"
+              android_material_icon_name="warning"
               size={32}
               color={colors.card}
             />
-            <Text style={styles.quoteText}>
-              &quot;Verily, with hardship comes ease.&quot;
-            </Text>
-            <Text style={styles.quoteSource}>Quran 94:6</Text>
-          </LinearGradient>
-        </View>
-
-        {/* Disclaimer */}
-        <View style={styles.disclaimerCard}>
+            <View style={styles.crisisText}>
+              <Text style={styles.crisisTitle}>Need Immediate Help?</Text>
+              <Text style={styles.crisisSubtitle}>Crisis support resources available 24/7</Text>
+            </View>
+          </View>
           <IconSymbol
-            ios_icon_name="info.circle.fill"
-            android_material_icon_name="info"
-            size={20}
-            color={colors.primary}
+            ios_icon_name="arrow.right.circle.fill"
+            android_material_icon_name="arrow-forward"
+            size={28}
+            color={colors.card}
           />
-          <Text style={styles.disclaimerText}>
-            This app provides Islamic guidance and support resources, but is not a substitute for professional mental health care.
-          </Text>
-        </View>
+        </LinearGradient>
+      </TouchableOpacity>
 
-        <View style={styles.bottomPadding} />
-      </ScrollView>
-    </SafeAreaView>
+      {/* Inspirational Quote */}
+      <View style={styles.quoteSection}>
+        <LinearGradient
+          colors={colors.gradientTeal}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.quoteGradient}
+        >
+          <IconSymbol
+            ios_icon_name="quote.opening"
+            android_material_icon_name="format-quote"
+            size={32}
+            color={colors.card}
+          />
+          <Text style={styles.quoteText}>
+            &quot;Verily, with hardship comes ease.&quot;
+          </Text>
+          <Text style={styles.quoteSource}>Quran 94:6</Text>
+        </LinearGradient>
+      </View>
+
+      {/* Disclaimer */}
+      <View style={styles.disclaimerCard}>
+        <IconSymbol
+          ios_icon_name="info.circle.fill"
+          android_material_icon_name="info"
+          size={20}
+          color={colors.primary}
+        />
+        <Text style={styles.disclaimerText}>
+          This app provides Islamic guidance and support resources, but is not a substitute for professional mental health care.
+        </Text>
+      </View>
+
+      <View style={styles.bottomPadding} />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
   scrollView: {
     flex: 1,
   },
