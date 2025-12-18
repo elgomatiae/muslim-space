@@ -24,6 +24,17 @@ export default function AmanahSection() {
     await updateAmanahGoals(updatedGoals);
   };
 
+  const hasPhysicalGoals = amanahGoals.dailyExerciseGoal > 0 || 
+                           amanahGoals.dailyWaterGoal > 0 || 
+                           amanahGoals.weeklyWorkoutGoal > 0;
+  
+  const hasMentalGoals = amanahGoals.weeklyMentalHealthGoal > 0 || 
+                         amanahGoals.weeklyStressManagementGoal > 0;
+  
+  const hasSleepGoals = amanahGoals.dailySleepGoal > 0;
+
+  const hasAnyGoals = hasPhysicalGoals || hasMentalGoals || hasSleepGoals;
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -48,7 +59,10 @@ export default function AmanahSection() {
           style={styles.settingsButton}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push('/(tabs)/(iman)/goals-settings');
+            router.push({
+              pathname: '/(tabs)/(iman)/goals-settings',
+              params: { section: 'amanah' }
+            });
           }}
           activeOpacity={0.7}
         >
@@ -61,388 +75,419 @@ export default function AmanahSection() {
         </TouchableOpacity>
       </View>
 
-      {/* Physical Health Section */}
-      <View style={styles.subsection}>
-        <View style={styles.subsectionHeader}>
+      {!hasAnyGoals && (
+        <View style={styles.emptyState}>
           <IconSymbol
-            ios_icon_name="figure.run"
-            android_material_icon_name="directions-run"
-            size={18}
-            color="#F59E0B"
+            ios_icon_name="heart"
+            android_material_icon_name="favorite-border"
+            size={48}
+            color={colors.textSecondary}
           />
-          <Text style={styles.subsectionTitle}>Physical Health</Text>
+          <Text style={styles.emptyStateText}>No wellness goals set</Text>
+          <Text style={styles.emptyStateSubtext}>
+            Tap the settings icon to customize your well-being goals
+          </Text>
         </View>
+      )}
 
-        <View style={styles.subsectionContent}>
-          <View style={styles.goalItem}>
-            <Text style={styles.goalLabel}>
-              Daily Exercise ({amanahGoals.dailyExerciseCompleted}/{amanahGoals.dailyExerciseGoal} minutes)
-            </Text>
-            <View style={styles.progressBar}>
-              <View 
-                style={[
-                  styles.progressFill,
-                  { 
-                    width: `${amanahGoals.dailyExerciseGoal > 0 ? (amanahGoals.dailyExerciseCompleted / amanahGoals.dailyExerciseGoal) * 100 : 0}%`,
-                    backgroundColor: '#F59E0B',
-                  }
-                ]} 
-              />
-            </View>
-            <View style={styles.counterButtons}>
-              <TouchableOpacity
-                style={styles.counterButton}
-                onPress={() => incrementCounter('dailyExerciseCompleted', 10, 'dailyExerciseGoal')}
-                activeOpacity={0.7}
-              >
-                <LinearGradient
-                  colors={['#F59E0B', '#D97706']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.counterGradient}
-                >
-                  <Text style={styles.counterText}>+10 min</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.counterButton}
-                onPress={() => incrementCounter('dailyExerciseCompleted', 30, 'dailyExerciseGoal')}
-                activeOpacity={0.7}
-              >
-                <LinearGradient
-                  colors={['#F59E0B', '#D97706']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.counterGradient}
-                >
-                  <Text style={styles.counterText}>+30 min</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
+      {/* Physical Health Section */}
+      {hasPhysicalGoals && (
+        <View style={styles.subsection}>
+          <View style={styles.subsectionHeader}>
+            <IconSymbol
+              ios_icon_name="figure.run"
+              android_material_icon_name="directions-run"
+              size={18}
+              color="#F59E0B"
+            />
+            <Text style={styles.subsectionTitle}>Physical Health</Text>
           </View>
 
-          <View style={styles.goalItem}>
-            <Text style={styles.goalLabel}>
-              Daily Water Intake ({amanahGoals.dailyWaterCompleted}/{amanahGoals.dailyWaterGoal} glasses)
-            </Text>
-            <View style={styles.progressBar}>
-              <View 
-                style={[
-                  styles.progressFill,
-                  { 
-                    width: `${amanahGoals.dailyWaterGoal > 0 ? (amanahGoals.dailyWaterCompleted / amanahGoals.dailyWaterGoal) * 100 : 0}%`,
-                    backgroundColor: '#F59E0B',
-                  }
-                ]} 
-              />
-            </View>
-            <View style={styles.counterButtons}>
-              <TouchableOpacity
-                style={styles.counterButton}
-                onPress={() => incrementCounter('dailyWaterCompleted', 1, 'dailyWaterGoal')}
-                activeOpacity={0.7}
-              >
-                <LinearGradient
-                  colors={['#F59E0B', '#D97706']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.counterGradient}
-                >
-                  <Text style={styles.counterText}>+1 glass</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.counterButton}
-                onPress={() => incrementCounter('dailyWaterCompleted', 2, 'dailyWaterGoal')}
-                activeOpacity={0.7}
-              >
-                <LinearGradient
-                  colors={['#F59E0B', '#D97706']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.counterGradient}
-                >
-                  <Text style={styles.counterText}>+2 glasses</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          </View>
+          <View style={styles.subsectionContent}>
+            {amanahGoals.dailyExerciseGoal > 0 && (
+              <View style={styles.goalItem}>
+                <Text style={styles.goalLabel}>
+                  Daily Exercise ({amanahGoals.dailyExerciseCompleted}/{amanahGoals.dailyExerciseGoal} minutes)
+                </Text>
+                <View style={styles.progressBar}>
+                  <View 
+                    style={[
+                      styles.progressFill,
+                      { 
+                        width: `${amanahGoals.dailyExerciseGoal > 0 ? (amanahGoals.dailyExerciseCompleted / amanahGoals.dailyExerciseGoal) * 100 : 0}%`,
+                        backgroundColor: '#F59E0B',
+                      }
+                    ]} 
+                  />
+                </View>
+                <View style={styles.counterButtons}>
+                  <TouchableOpacity
+                    style={styles.counterButton}
+                    onPress={() => incrementCounter('dailyExerciseCompleted', 10, 'dailyExerciseGoal')}
+                    activeOpacity={0.7}
+                  >
+                    <LinearGradient
+                      colors={['#F59E0B', '#D97706']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.counterGradient}
+                    >
+                      <Text style={styles.counterText}>+10 min</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.counterButton}
+                    onPress={() => incrementCounter('dailyExerciseCompleted', 30, 'dailyExerciseGoal')}
+                    activeOpacity={0.7}
+                  >
+                    <LinearGradient
+                      colors={['#F59E0B', '#D97706']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.counterGradient}
+                    >
+                      <Text style={styles.counterText}>+30 min</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
 
-          <View style={styles.goalItem}>
-            <Text style={styles.goalLabel}>
-              Weekly Workouts ({amanahGoals.weeklyWorkoutCompleted}/{amanahGoals.weeklyWorkoutGoal} sessions)
-            </Text>
-            <View style={styles.progressBar}>
-              <View 
-                style={[
-                  styles.progressFill,
-                  { 
-                    width: `${amanahGoals.weeklyWorkoutGoal > 0 ? (amanahGoals.weeklyWorkoutCompleted / amanahGoals.weeklyWorkoutGoal) * 100 : 0}%`,
-                    backgroundColor: '#F59E0B',
-                  }
-                ]} 
-              />
-            </View>
+            {amanahGoals.dailyWaterGoal > 0 && (
+              <View style={styles.goalItem}>
+                <Text style={styles.goalLabel}>
+                  Daily Water Intake ({amanahGoals.dailyWaterCompleted}/{amanahGoals.dailyWaterGoal} glasses)
+                </Text>
+                <View style={styles.progressBar}>
+                  <View 
+                    style={[
+                      styles.progressFill,
+                      { 
+                        width: `${amanahGoals.dailyWaterGoal > 0 ? (amanahGoals.dailyWaterCompleted / amanahGoals.dailyWaterGoal) * 100 : 0}%`,
+                        backgroundColor: '#F59E0B',
+                      }
+                    ]} 
+                  />
+                </View>
+                <View style={styles.counterButtons}>
+                  <TouchableOpacity
+                    style={styles.counterButton}
+                    onPress={() => incrementCounter('dailyWaterCompleted', 1, 'dailyWaterGoal')}
+                    activeOpacity={0.7}
+                  >
+                    <LinearGradient
+                      colors={['#F59E0B', '#D97706']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.counterGradient}
+                    >
+                      <Text style={styles.counterText}>+1 glass</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.counterButton}
+                    onPress={() => incrementCounter('dailyWaterCompleted', 2, 'dailyWaterGoal')}
+                    activeOpacity={0.7}
+                  >
+                    <LinearGradient
+                      colors={['#F59E0B', '#D97706']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.counterGradient}
+                    >
+                      <Text style={styles.counterText}>+2 glasses</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {amanahGoals.weeklyWorkoutGoal > 0 && (
+              <View style={styles.goalItem}>
+                <Text style={styles.goalLabel}>
+                  Weekly Workouts ({amanahGoals.weeklyWorkoutCompleted}/{amanahGoals.weeklyWorkoutGoal} sessions)
+                </Text>
+                <View style={styles.progressBar}>
+                  <View 
+                    style={[
+                      styles.progressFill,
+                      { 
+                        width: `${amanahGoals.weeklyWorkoutGoal > 0 ? (amanahGoals.weeklyWorkoutCompleted / amanahGoals.weeklyWorkoutGoal) * 100 : 0}%`,
+                        backgroundColor: '#F59E0B',
+                      }
+                    ]} 
+                  />
+                </View>
+                <TouchableOpacity
+                  style={styles.incrementButton}
+                  onPress={() => incrementCounter('weeklyWorkoutCompleted', 1, 'weeklyWorkoutGoal')}
+                  activeOpacity={0.7}
+                >
+                  <LinearGradient
+                    colors={['#F59E0B', '#D97706']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.incrementGradient}
+                  >
+                    <IconSymbol
+                      ios_icon_name="plus"
+                      android_material_icon_name="add"
+                      size={14}
+                      color="#FFFFFF"
+                    />
+                    <Text style={styles.incrementText}>Mark Workout</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            )}
+
             <TouchableOpacity
-              style={styles.incrementButton}
-              onPress={() => incrementCounter('weeklyWorkoutCompleted', 1, 'weeklyWorkoutGoal')}
+              style={styles.actionButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(tabs)/(wellness)/physical-health' as any);
+              }}
               activeOpacity={0.7}
             >
               <LinearGradient
                 colors={['#F59E0B', '#D97706']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                style={styles.incrementGradient}
+                style={styles.actionGradient}
               >
                 <IconSymbol
-                  ios_icon_name="plus"
-                  android_material_icon_name="add"
-                  size={14}
+                  ios_icon_name="arrow.right.circle.fill"
+                  android_material_icon_name="arrow-forward"
+                  size={18}
                   color="#FFFFFF"
                 />
-                <Text style={styles.incrementText}>Mark Workout</Text>
+                <Text style={styles.actionText}>Go to Physical Health</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push('/(tabs)/(wellness)/physical-health' as any);
-            }}
-            activeOpacity={0.7}
-          >
-            <LinearGradient
-              colors={['#F59E0B', '#D97706']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.actionGradient}
-            >
-              <IconSymbol
-                ios_icon_name="arrow.right.circle.fill"
-                android_material_icon_name="arrow-forward"
-                size={18}
-                color="#FFFFFF"
-              />
-              <Text style={styles.actionText}>Go to Physical Health</Text>
-            </LinearGradient>
-          </TouchableOpacity>
         </View>
-      </View>
+      )}
 
       {/* Mental Health Section */}
-      <View style={styles.subsection}>
-        <View style={styles.subsectionHeader}>
-          <IconSymbol
-            ios_icon_name="brain.head.profile"
-            android_material_icon_name="psychology"
-            size={18}
-            color="#F59E0B"
-          />
-          <Text style={styles.subsectionTitle}>Mental Health</Text>
-        </View>
+      {hasMentalGoals && (
+        <View style={styles.subsection}>
+          <View style={styles.subsectionHeader}>
+            <IconSymbol
+              ios_icon_name="brain.head.profile"
+              android_material_icon_name="psychology"
+              size={18}
+              color="#F59E0B"
+            />
+            <Text style={styles.subsectionTitle}>Mental Health</Text>
+          </View>
 
-        <View style={styles.subsectionContent}>
-          <View style={styles.goalItem}>
-            <Text style={styles.goalLabel}>
-              Weekly Mental Health Activities ({amanahGoals.weeklyMentalHealthCompleted}/{amanahGoals.weeklyMentalHealthGoal})
-            </Text>
-            <View style={styles.progressBar}>
-              <View 
-                style={[
-                  styles.progressFill,
-                  { 
-                    width: `${amanahGoals.weeklyMentalHealthGoal > 0 ? (amanahGoals.weeklyMentalHealthCompleted / amanahGoals.weeklyMentalHealthGoal) * 100 : 0}%`,
-                    backgroundColor: '#F59E0B',
-                  }
-                ]} 
-              />
-            </View>
+          <View style={styles.subsectionContent}>
+            {amanahGoals.weeklyMentalHealthGoal > 0 && (
+              <View style={styles.goalItem}>
+                <Text style={styles.goalLabel}>
+                  Weekly Mental Health Activities ({amanahGoals.weeklyMentalHealthCompleted}/{amanahGoals.weeklyMentalHealthGoal})
+                </Text>
+                <View style={styles.progressBar}>
+                  <View 
+                    style={[
+                      styles.progressFill,
+                      { 
+                        width: `${amanahGoals.weeklyMentalHealthGoal > 0 ? (amanahGoals.weeklyMentalHealthCompleted / amanahGoals.weeklyMentalHealthGoal) * 100 : 0}%`,
+                        backgroundColor: '#F59E0B',
+                      }
+                    ]} 
+                  />
+                </View>
+                <TouchableOpacity
+                  style={styles.incrementButton}
+                  onPress={() => incrementCounter('weeklyMentalHealthCompleted', 1, 'weeklyMentalHealthGoal')}
+                  activeOpacity={0.7}
+                >
+                  <LinearGradient
+                    colors={['#F59E0B', '#D97706']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.incrementGradient}
+                  >
+                    <IconSymbol
+                      ios_icon_name="plus"
+                      android_material_icon_name="add"
+                      size={14}
+                      color="#FFFFFF"
+                    />
+                    <Text style={styles.incrementText}>Mark Activity</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {amanahGoals.weeklyStressManagementGoal > 0 && (
+              <View style={styles.goalItem}>
+                <Text style={styles.goalLabel}>
+                  Weekly Stress Management ({amanahGoals.weeklyStressManagementCompleted}/{amanahGoals.weeklyStressManagementGoal})
+                </Text>
+                <View style={styles.progressBar}>
+                  <View 
+                    style={[
+                      styles.progressFill,
+                      { 
+                        width: `${amanahGoals.weeklyStressManagementGoal > 0 ? (amanahGoals.weeklyStressManagementCompleted / amanahGoals.weeklyStressManagementGoal) * 100 : 0}%`,
+                        backgroundColor: '#F59E0B',
+                      }
+                    ]} 
+                  />
+                </View>
+                <TouchableOpacity
+                  style={styles.incrementButton}
+                  onPress={() => incrementCounter('weeklyStressManagementCompleted', 1, 'weeklyStressManagementGoal')}
+                  activeOpacity={0.7}
+                >
+                  <LinearGradient
+                    colors={['#F59E0B', '#D97706']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.incrementGradient}
+                  >
+                    <IconSymbol
+                      ios_icon_name="plus"
+                      android_material_icon_name="add"
+                      size={14}
+                      color="#FFFFFF"
+                    />
+                    <Text style={styles.incrementText}>Mark Activity</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            )}
+
             <TouchableOpacity
-              style={styles.incrementButton}
-              onPress={() => incrementCounter('weeklyMentalHealthCompleted', 1, 'weeklyMentalHealthGoal')}
+              style={styles.actionButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(tabs)/(wellness)/mental-health' as any);
+              }}
               activeOpacity={0.7}
             >
               <LinearGradient
                 colors={['#F59E0B', '#D97706']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                style={styles.incrementGradient}
+                style={styles.actionGradient}
               >
                 <IconSymbol
-                  ios_icon_name="plus"
-                  android_material_icon_name="add"
-                  size={14}
+                  ios_icon_name="arrow.right.circle.fill"
+                  android_material_icon_name="arrow-forward"
+                  size={18}
                   color="#FFFFFF"
                 />
-                <Text style={styles.incrementText}>Mark Activity</Text>
+                <Text style={styles.actionText}>Go to Mental Health</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
-
-          <View style={styles.goalItem}>
-            <Text style={styles.goalLabel}>
-              Weekly Stress Management ({amanahGoals.weeklyStressManagementCompleted}/{amanahGoals.weeklyStressManagementGoal})
-            </Text>
-            <View style={styles.progressBar}>
-              <View 
-                style={[
-                  styles.progressFill,
-                  { 
-                    width: `${amanahGoals.weeklyStressManagementGoal > 0 ? (amanahGoals.weeklyStressManagementCompleted / amanahGoals.weeklyStressManagementGoal) * 100 : 0}%`,
-                    backgroundColor: '#F59E0B',
-                  }
-                ]} 
-              />
-            </View>
-            <TouchableOpacity
-              style={styles.incrementButton}
-              onPress={() => incrementCounter('weeklyStressManagementCompleted', 1, 'weeklyStressManagementGoal')}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={['#F59E0B', '#D97706']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.incrementGradient}
-              >
-                <IconSymbol
-                  ios_icon_name="plus"
-                  android_material_icon_name="add"
-                  size={14}
-                  color="#FFFFFF"
-                />
-                <Text style={styles.incrementText}>Mark Activity</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push('/(tabs)/(wellness)/mental-health' as any);
-            }}
-            activeOpacity={0.7}
-          >
-            <LinearGradient
-              colors={['#F59E0B', '#D97706']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.actionGradient}
-            >
-              <IconSymbol
-                ios_icon_name="arrow.right.circle.fill"
-                android_material_icon_name="arrow-forward"
-                size={18}
-                color="#FFFFFF"
-              />
-              <Text style={styles.actionText}>Go to Mental Health</Text>
-            </LinearGradient>
-          </TouchableOpacity>
         </View>
-      </View>
+      )}
 
       {/* Sleep Section */}
-      <View style={styles.subsection}>
-        <View style={styles.subsectionHeader}>
-          <IconSymbol
-            ios_icon_name="bed.double.fill"
-            android_material_icon_name="hotel"
-            size={18}
-            color="#F59E0B"
-          />
-          <Text style={styles.subsectionTitle}>Sleep & Rest</Text>
-        </View>
-
-        <View style={styles.subsectionContent}>
-          <View style={styles.goalItem}>
-            <Text style={styles.goalLabel}>
-              Daily Sleep ({amanahGoals.dailySleepCompleted}/{amanahGoals.dailySleepGoal} hours)
-            </Text>
-            <View style={styles.progressBar}>
-              <View 
-                style={[
-                  styles.progressFill,
-                  { 
-                    width: `${amanahGoals.dailySleepGoal > 0 ? (amanahGoals.dailySleepCompleted / amanahGoals.dailySleepGoal) * 100 : 0}%`,
-                    backgroundColor: '#F59E0B',
-                  }
-                ]} 
-              />
-            </View>
-            <View style={styles.counterButtons}>
-              <TouchableOpacity
-                style={styles.counterButton}
-                onPress={() => incrementCounter('dailySleepCompleted', 1, 'dailySleepGoal')}
-                activeOpacity={0.7}
-              >
-                <LinearGradient
-                  colors={['#F59E0B', '#D97706']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.counterGradient}
-                >
-                  <Text style={styles.counterText}>+1 hr</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.counterButton}
-                onPress={() => incrementCounter('dailySleepCompleted', 7, 'dailySleepGoal')}
-                activeOpacity={0.7}
-              >
-                <LinearGradient
-                  colors={['#F59E0B', '#D97706']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.counterGradient}
-                >
-                  <Text style={styles.counterText}>+7 hrs</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.counterButton}
-                onPress={() => incrementCounter('dailySleepCompleted', 8, 'dailySleepGoal')}
-                activeOpacity={0.7}
-              >
-                <LinearGradient
-                  colors={['#F59E0B', '#D97706']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.counterGradient}
-                >
-                  <Text style={styles.counterText}>+8 hrs</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
+      {hasSleepGoals && (
+        <View style={styles.subsection}>
+          <View style={styles.subsectionHeader}>
+            <IconSymbol
+              ios_icon_name="bed.double.fill"
+              android_material_icon_name="hotel"
+              size={18}
+              color="#F59E0B"
+            />
+            <Text style={styles.subsectionTitle}>Sleep & Rest</Text>
           </View>
 
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push('/(tabs)/(wellness)/sleep-tracker' as any);
-            }}
-            activeOpacity={0.7}
-          >
-            <LinearGradient
-              colors={['#F59E0B', '#D97706']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.actionGradient}
+          <View style={styles.subsectionContent}>
+            <View style={styles.goalItem}>
+              <Text style={styles.goalLabel}>
+                Daily Sleep ({amanahGoals.dailySleepCompleted}/{amanahGoals.dailySleepGoal} hours)
+              </Text>
+              <View style={styles.progressBar}>
+                <View 
+                  style={[
+                    styles.progressFill,
+                    { 
+                      width: `${amanahGoals.dailySleepGoal > 0 ? (amanahGoals.dailySleepCompleted / amanahGoals.dailySleepGoal) * 100 : 0}%`,
+                      backgroundColor: '#F59E0B',
+                    }
+                  ]} 
+                />
+              </View>
+              <View style={styles.counterButtons}>
+                <TouchableOpacity
+                  style={styles.counterButton}
+                  onPress={() => incrementCounter('dailySleepCompleted', 1, 'dailySleepGoal')}
+                  activeOpacity={0.7}
+                >
+                  <LinearGradient
+                    colors={['#F59E0B', '#D97706']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.counterGradient}
+                  >
+                    <Text style={styles.counterText}>+1 hr</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.counterButton}
+                  onPress={() => incrementCounter('dailySleepCompleted', 7, 'dailySleepGoal')}
+                  activeOpacity={0.7}
+                >
+                  <LinearGradient
+                    colors={['#F59E0B', '#D97706']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.counterGradient}
+                  >
+                    <Text style={styles.counterText}>+7 hrs</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.counterButton}
+                  onPress={() => incrementCounter('dailySleepCompleted', 8, 'dailySleepGoal')}
+                  activeOpacity={0.7}
+                >
+                  <LinearGradient
+                    colors={['#F59E0B', '#D97706']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.counterGradient}
+                  >
+                    <Text style={styles.counterText}>+8 hrs</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(tabs)/(wellness)/sleep-tracker' as any);
+              }}
+              activeOpacity={0.7}
             >
-              <IconSymbol
-                ios_icon_name="arrow.right.circle.fill"
-                android_material_icon_name="arrow-forward"
-                size={18}
-                color="#FFFFFF"
-              />
-              <Text style={styles.actionText}>Go to Sleep Tracker</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+              <LinearGradient
+                colors={['#F59E0B', '#D97706']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.actionGradient}
+              >
+                <IconSymbol
+                  ios_icon_name="arrow.right.circle.fill"
+                  android_material_icon_name="arrow-forward"
+                  size={18}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.actionText}>Go to Sleep Tracker</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      )}
     </View>
   );
 }
@@ -486,6 +531,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.small,
+  },
+  emptyState: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xxl,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.small,
+  },
+  emptyStateText: {
+    ...typography.h4,
+    color: colors.text,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  emptyStateSubtext: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   subsection: {
     backgroundColor: colors.card,

@@ -24,6 +24,11 @@ export default function IlmSection() {
     await updateIlmGoals(updatedGoals);
   };
 
+  const hasAnyGoals = ilmGoals.weeklyLecturesGoal > 0 || 
+                      ilmGoals.weeklyRecitationsGoal > 0 || 
+                      ilmGoals.weeklyQuizzesGoal > 0 || 
+                      ilmGoals.weeklyReflectionGoal > 0;
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -48,7 +53,10 @@ export default function IlmSection() {
           style={styles.settingsButton}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push('/(tabs)/(iman)/goals-settings');
+            router.push({
+              pathname: '/(tabs)/(iman)/goals-settings',
+              params: { section: 'ilm' }
+            });
           }}
           activeOpacity={0.7}
         >
@@ -61,261 +69,284 @@ export default function IlmSection() {
         </TouchableOpacity>
       </View>
 
-      {/* Lectures Section */}
-      <View style={styles.subsection}>
-        <View style={styles.subsectionHeader}>
+      {!hasAnyGoals && (
+        <View style={styles.emptyState}>
           <IconSymbol
-            ios_icon_name="video.fill"
-            android_material_icon_name="video-library"
-            size={18}
-            color="#3B82F6"
+            ios_icon_name="book.closed"
+            android_material_icon_name="menu-book"
+            size={48}
+            color={colors.textSecondary}
           />
-          <Text style={styles.subsectionTitle}>Islamic Lectures</Text>
+          <Text style={styles.emptyStateText}>No knowledge goals set</Text>
+          <Text style={styles.emptyStateSubtext}>
+            Tap the settings icon to customize your learning goals
+          </Text>
         </View>
+      )}
 
-        <View style={styles.subsectionContent}>
-          <View style={styles.goalItem}>
-            <Text style={styles.goalLabel}>
-              Weekly Lectures ({ilmGoals.weeklyLecturesCompleted}/{ilmGoals.weeklyLecturesGoal})
-            </Text>
-            <View style={styles.progressBar}>
-              <View 
-                style={[
-                  styles.progressFill,
-                  { 
-                    width: `${ilmGoals.weeklyLecturesGoal > 0 ? (ilmGoals.weeklyLecturesCompleted / ilmGoals.weeklyLecturesGoal) * 100 : 0}%`,
-                    backgroundColor: '#3B82F6',
-                  }
-                ]} 
-              />
+      {/* Lectures Section */}
+      {ilmGoals.weeklyLecturesGoal > 0 && (
+        <View style={styles.subsection}>
+          <View style={styles.subsectionHeader}>
+            <IconSymbol
+              ios_icon_name="video.fill"
+              android_material_icon_name="video-library"
+              size={18}
+              color="#3B82F6"
+            />
+            <Text style={styles.subsectionTitle}>Islamic Lectures</Text>
+          </View>
+
+          <View style={styles.subsectionContent}>
+            <View style={styles.goalItem}>
+              <Text style={styles.goalLabel}>
+                Weekly Lectures ({ilmGoals.weeklyLecturesCompleted}/{ilmGoals.weeklyLecturesGoal})
+              </Text>
+              <View style={styles.progressBar}>
+                <View 
+                  style={[
+                    styles.progressFill,
+                    { 
+                      width: `${ilmGoals.weeklyLecturesGoal > 0 ? (ilmGoals.weeklyLecturesCompleted / ilmGoals.weeklyLecturesGoal) * 100 : 0}%`,
+                      backgroundColor: '#3B82F6',
+                    }
+                  ]} 
+                />
+              </View>
+              <TouchableOpacity
+                style={styles.incrementButton}
+                onPress={() => incrementCounter('weeklyLecturesCompleted', 1, 'weeklyLecturesGoal')}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={['#3B82F6', '#2563EB']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.incrementGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="plus"
+                    android_material_icon_name="add"
+                    size={14}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.incrementText}>Mark Lecture</Text>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
+
             <TouchableOpacity
-              style={styles.incrementButton}
-              onPress={() => incrementCounter('weeklyLecturesCompleted', 1, 'weeklyLecturesGoal')}
+              style={styles.actionButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(tabs)/(learning)/lectures' as any);
+              }}
               activeOpacity={0.7}
             >
               <LinearGradient
                 colors={['#3B82F6', '#2563EB']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                style={styles.incrementGradient}
+                style={styles.actionGradient}
               >
                 <IconSymbol
-                  ios_icon_name="plus"
-                  android_material_icon_name="add"
-                  size={14}
+                  ios_icon_name="play.fill"
+                  android_material_icon_name="play-arrow"
+                  size={18}
                   color="#FFFFFF"
                 />
-                <Text style={styles.incrementText}>Mark Lecture</Text>
+                <Text style={styles.actionText}>Watch Lectures</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push('/(tabs)/(learning)/lectures' as any);
-            }}
-            activeOpacity={0.7}
-          >
-            <LinearGradient
-              colors={['#3B82F6', '#2563EB']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.actionGradient}
-            >
-              <IconSymbol
-                ios_icon_name="play.fill"
-                android_material_icon_name="play-arrow"
-                size={18}
-                color="#FFFFFF"
-              />
-              <Text style={styles.actionText}>Watch Lectures</Text>
-            </LinearGradient>
-          </TouchableOpacity>
         </View>
-      </View>
+      )}
 
       {/* Quran Recitations Section */}
-      <View style={styles.subsection}>
-        <View style={styles.subsectionHeader}>
-          <IconSymbol
-            ios_icon_name="music.note"
-            android_material_icon_name="headset"
-            size={18}
-            color="#3B82F6"
-          />
-          <Text style={styles.subsectionTitle}>Quran Recitations</Text>
-        </View>
+      {ilmGoals.weeklyRecitationsGoal > 0 && (
+        <View style={styles.subsection}>
+          <View style={styles.subsectionHeader}>
+            <IconSymbol
+              ios_icon_name="music.note"
+              android_material_icon_name="headset"
+              size={18}
+              color="#3B82F6"
+            />
+            <Text style={styles.subsectionTitle}>Quran Recitations</Text>
+          </View>
 
-        <View style={styles.subsectionContent}>
-          <View style={styles.goalItem}>
-            <Text style={styles.goalLabel}>
-              Weekly Recitations ({ilmGoals.weeklyRecitationsCompleted}/{ilmGoals.weeklyRecitationsGoal})
-            </Text>
-            <View style={styles.progressBar}>
-              <View 
-                style={[
-                  styles.progressFill,
-                  { 
-                    width: `${ilmGoals.weeklyRecitationsGoal > 0 ? (ilmGoals.weeklyRecitationsCompleted / ilmGoals.weeklyRecitationsGoal) * 100 : 0}%`,
-                    backgroundColor: '#3B82F6',
-                  }
-                ]} 
-              />
+          <View style={styles.subsectionContent}>
+            <View style={styles.goalItem}>
+              <Text style={styles.goalLabel}>
+                Weekly Recitations ({ilmGoals.weeklyRecitationsCompleted}/{ilmGoals.weeklyRecitationsGoal})
+              </Text>
+              <View style={styles.progressBar}>
+                <View 
+                  style={[
+                    styles.progressFill,
+                    { 
+                      width: `${ilmGoals.weeklyRecitationsGoal > 0 ? (ilmGoals.weeklyRecitationsCompleted / ilmGoals.weeklyRecitationsGoal) * 100 : 0}%`,
+                      backgroundColor: '#3B82F6',
+                    }
+                  ]} 
+                />
+              </View>
+              <TouchableOpacity
+                style={styles.incrementButton}
+                onPress={() => incrementCounter('weeklyRecitationsCompleted', 1, 'weeklyRecitationsGoal')}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={['#3B82F6', '#2563EB']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.incrementGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="plus"
+                    android_material_icon_name="add"
+                    size={14}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.incrementText}>Mark Recitation</Text>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
+
             <TouchableOpacity
-              style={styles.incrementButton}
-              onPress={() => incrementCounter('weeklyRecitationsCompleted', 1, 'weeklyRecitationsGoal')}
+              style={styles.actionButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(tabs)/(learning)/recitations' as any);
+              }}
               activeOpacity={0.7}
             >
               <LinearGradient
                 colors={['#3B82F6', '#2563EB']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                style={styles.incrementGradient}
+                style={styles.actionGradient}
               >
                 <IconSymbol
-                  ios_icon_name="plus"
-                  android_material_icon_name="add"
-                  size={14}
+                  ios_icon_name="play.fill"
+                  android_material_icon_name="play-arrow"
+                  size={18}
                   color="#FFFFFF"
                 />
-                <Text style={styles.incrementText}>Mark Recitation</Text>
+                <Text style={styles.actionText}>Listen to Recitations</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push('/(tabs)/(learning)/recitations' as any);
-            }}
-            activeOpacity={0.7}
-          >
-            <LinearGradient
-              colors={['#3B82F6', '#2563EB']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.actionGradient}
-            >
-              <IconSymbol
-                ios_icon_name="play.fill"
-                android_material_icon_name="play-arrow"
-                size={18}
-                color="#FFFFFF"
-              />
-              <Text style={styles.actionText}>Listen to Recitations</Text>
-            </LinearGradient>
-          </TouchableOpacity>
         </View>
-      </View>
+      )}
 
       {/* Quizzes Section */}
-      <View style={styles.subsection}>
-        <View style={styles.subsectionHeader}>
-          <IconSymbol
-            ios_icon_name="checkmark.circle.fill"
-            android_material_icon_name="quiz"
-            size={18}
-            color="#3B82F6"
-          />
-          <Text style={styles.subsectionTitle}>Knowledge Quizzes</Text>
-        </View>
+      {ilmGoals.weeklyQuizzesGoal > 0 && (
+        <View style={styles.subsection}>
+          <View style={styles.subsectionHeader}>
+            <IconSymbol
+              ios_icon_name="checkmark.circle.fill"
+              android_material_icon_name="quiz"
+              size={18}
+              color="#3B82F6"
+            />
+            <Text style={styles.subsectionTitle}>Knowledge Quizzes</Text>
+          </View>
 
-        <View style={styles.subsectionContent}>
-          <View style={styles.goalItem}>
-            <Text style={styles.goalLabel}>
-              Weekly Quizzes ({ilmGoals.weeklyQuizzesCompleted}/{ilmGoals.weeklyQuizzesGoal})
-            </Text>
-            <View style={styles.progressBar}>
-              <View 
-                style={[
-                  styles.progressFill,
-                  { 
-                    width: `${ilmGoals.weeklyQuizzesGoal > 0 ? (ilmGoals.weeklyQuizzesCompleted / ilmGoals.weeklyQuizzesGoal) * 100 : 0}%`,
-                    backgroundColor: '#3B82F6',
-                  }
-                ]} 
-              />
-            </View>
-            <TouchableOpacity
-              style={styles.incrementButton}
-              onPress={() => incrementCounter('weeklyQuizzesCompleted', 1, 'weeklyQuizzesGoal')}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={['#3B82F6', '#2563EB']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.incrementGradient}
-              >
-                <IconSymbol
-                  ios_icon_name="plus"
-                  android_material_icon_name="add"
-                  size={14}
-                  color="#FFFFFF"
+          <View style={styles.subsectionContent}>
+            <View style={styles.goalItem}>
+              <Text style={styles.goalLabel}>
+                Weekly Quizzes ({ilmGoals.weeklyQuizzesCompleted}/{ilmGoals.weeklyQuizzesGoal})
+              </Text>
+              <View style={styles.progressBar}>
+                <View 
+                  style={[
+                    styles.progressFill,
+                    { 
+                      width: `${ilmGoals.weeklyQuizzesGoal > 0 ? (ilmGoals.weeklyQuizzesCompleted / ilmGoals.weeklyQuizzesGoal) * 100 : 0}%`,
+                      backgroundColor: '#3B82F6',
+                    }
+                  ]} 
                 />
-                <Text style={styles.incrementText}>Mark Quiz</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={styles.incrementButton}
+                onPress={() => incrementCounter('weeklyQuizzesCompleted', 1, 'weeklyQuizzesGoal')}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={['#3B82F6', '#2563EB']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.incrementGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="plus"
+                    android_material_icon_name="add"
+                    size={14}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.incrementText}>Mark Quiz</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </View>
+      )}
 
       {/* Reflection Section */}
-      <View style={styles.subsection}>
-        <View style={styles.subsectionHeader}>
-          <IconSymbol
-            ios_icon_name="lightbulb.fill"
-            android_material_icon_name="lightbulb"
-            size={18}
-            color="#3B82F6"
-          />
-          <Text style={styles.subsectionTitle}>Reflection Prompts</Text>
-        </View>
+      {ilmGoals.weeklyReflectionGoal > 0 && (
+        <View style={styles.subsection}>
+          <View style={styles.subsectionHeader}>
+            <IconSymbol
+              ios_icon_name="lightbulb.fill"
+              android_material_icon_name="lightbulb"
+              size={18}
+              color="#3B82F6"
+            />
+            <Text style={styles.subsectionTitle}>Reflection Prompts</Text>
+          </View>
 
-        <View style={styles.subsectionContent}>
-          <View style={styles.goalItem}>
-            <Text style={styles.goalLabel}>
-              Weekly Reflections ({ilmGoals.weeklyReflectionCompleted}/{ilmGoals.weeklyReflectionGoal})
-            </Text>
-            <View style={styles.progressBar}>
-              <View 
-                style={[
-                  styles.progressFill,
-                  { 
-                    width: `${ilmGoals.weeklyReflectionGoal > 0 ? (ilmGoals.weeklyReflectionCompleted / ilmGoals.weeklyReflectionGoal) * 100 : 0}%`,
-                    backgroundColor: '#3B82F6',
-                  }
-                ]} 
-              />
-            </View>
-            <TouchableOpacity
-              style={styles.incrementButton}
-              onPress={() => incrementCounter('weeklyReflectionCompleted', 1, 'weeklyReflectionGoal')}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={['#3B82F6', '#2563EB']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.incrementGradient}
-              >
-                <IconSymbol
-                  ios_icon_name="plus"
-                  android_material_icon_name="add"
-                  size={14}
-                  color="#FFFFFF"
+          <View style={styles.subsectionContent}>
+            <View style={styles.goalItem}>
+              <Text style={styles.goalLabel}>
+                Weekly Reflections ({ilmGoals.weeklyReflectionCompleted}/{ilmGoals.weeklyReflectionGoal})
+              </Text>
+              <View style={styles.progressBar}>
+                <View 
+                  style={[
+                    styles.progressFill,
+                    { 
+                      width: `${ilmGoals.weeklyReflectionGoal > 0 ? (ilmGoals.weeklyReflectionCompleted / ilmGoals.weeklyReflectionGoal) * 100 : 0}%`,
+                      backgroundColor: '#3B82F6',
+                    }
+                  ]} 
                 />
-                <Text style={styles.incrementText}>Mark Reflection</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={styles.incrementButton}
+                onPress={() => incrementCounter('weeklyReflectionCompleted', 1, 'weeklyReflectionGoal')}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={['#3B82F6', '#2563EB']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.incrementGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="plus"
+                    android_material_icon_name="add"
+                    size={14}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.incrementText}>Mark Reflection</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </View>
+      )}
     </View>
   );
 }
@@ -359,6 +390,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.small,
+  },
+  emptyState: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xxl,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.small,
+  },
+  emptyStateText: {
+    ...typography.h4,
+    color: colors.text,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  emptyStateSubtext: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   subsection: {
     backgroundColor: colors.card,

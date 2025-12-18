@@ -1,165 +1,396 @@
 
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Switch, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useImanTracker } from '@/contexts/ImanTrackerContext';
+import { IbadahGoals, IlmGoals, AmanahGoals } from '@/utils/imanScoreCalculator';
 
-interface SunnahPrayerGoal {
-  id: string;
-  name: string;
-  rakats: number;
-  enabled: boolean;
-}
+type SectionType = 'ibadah' | 'ilm' | 'amanah';
 
-interface DuaGoal {
+interface GoalConfig {
   id: string;
-  name: string;
-  arabic: string;
-  time: string;
-  enabled: boolean;
-}
-
-interface WeeklyChallengeGoal {
-  id: string;
-  title: string;
+  label: string;
   description: string;
-  points: number;
+  goalField: string;
+  completedField?: string;
+  min: number;
+  max: number;
+  step: number;
+  unit: string;
   enabled: boolean;
+  canDisable: boolean;
+  isRequired?: boolean;
 }
-
-const DEFAULT_SUNNAH_PRAYERS: SunnahPrayerGoal[] = [
-  { id: 'fajr_sunnah', name: 'Fajr Sunnah', rakats: 2, enabled: true },
-  { id: 'dhuhr_sunnah_before', name: 'Dhuhr Sunnah (Before)', rakats: 4, enabled: true },
-  { id: 'dhuhr_sunnah_after', name: 'Dhuhr Sunnah (After)', rakats: 2, enabled: true },
-  { id: 'maghrib_sunnah', name: 'Maghrib Sunnah', rakats: 2, enabled: true },
-  { id: 'isha_sunnah', name: 'Isha Sunnah', rakats: 2, enabled: true },
-  { id: 'tahajjud', name: 'Tahajjud', rakats: 8, enabled: false },
-  { id: 'duha', name: 'Duha', rakats: 2, enabled: false },
-];
-
-const DEFAULT_DUAS: DuaGoal[] = [
-  {
-    id: 'morning',
-    name: 'Morning Adhkar',
-    arabic: 'أَذْكَارُ الصَّبَاحِ',
-    time: 'After Fajr',
-    enabled: true,
-  },
-  {
-    id: 'evening',
-    name: 'Evening Adhkar',
-    arabic: 'أَذْكَارُ الْمَسَاءِ',
-    time: 'After Asr',
-    enabled: true,
-  },
-  {
-    id: 'sleep',
-    name: 'Before Sleep',
-    arabic: 'أَذْكَارُ النَّوْمِ',
-    time: 'Bedtime',
-    enabled: true,
-  },
-  {
-    id: 'wakeup',
-    name: 'Upon Waking',
-    arabic: 'دُعَاءُ الاِسْتِيقَاظِ',
-    time: 'Morning',
-    enabled: false,
-  },
-  {
-    id: 'eating',
-    name: 'Before Eating',
-    arabic: 'دُعَاءُ الطَّعَامِ',
-    time: 'Meals',
-    enabled: false,
-  },
-];
-
-const DEFAULT_CHALLENGES: WeeklyChallengeGoal[] = [
-  {
-    id: 'kahf',
-    title: 'Surah Al-Kahf Friday',
-    description: 'Recite Surah Al-Kahf on Friday',
-    points: 20,
-    enabled: true,
-  },
-  {
-    id: 'morning_adhkar',
-    title: 'Morning Adhkar Streak',
-    description: 'Complete morning adhkar for 7 days',
-    points: 30,
-    enabled: true,
-  },
-  {
-    id: 'tahajjud',
-    title: 'Night Prayer',
-    description: 'Pray Tahajjud 3 times this week',
-    points: 25,
-    enabled: true,
-  },
-  {
-    id: 'charity',
-    title: 'Weekly Charity',
-    description: 'Give charity at least once this week',
-    points: 15,
-    enabled: false,
-  },
-  {
-    id: 'quran_memorization',
-    title: 'Quran Memorization',
-    description: 'Memorize 10 new verses this week',
-    points: 35,
-    enabled: false,
-  },
-];
 
 export default function GoalsSettingsScreen() {
-  const [sunnahPrayers, setSunnahPrayers] = useState<SunnahPrayerGoal[]>(DEFAULT_SUNNAH_PRAYERS);
-  const [duas, setDuas] = useState<DuaGoal[]>(DEFAULT_DUAS);
-  const [challenges, setChallenges] = useState<WeeklyChallengeGoal[]>(DEFAULT_CHALLENGES);
-  const [weeklyFastingGoal, setWeeklyFastingGoal] = useState('2');
+  const params = useLocalSearchParams();
+  const { ibadahGoals, ilmGoals, amanahGoals, updateIbadahGoals, updateIlmGoals, updateAmanahGoals } = useImanTracker();
+  
+  const [activeSection, setActiveSection] = useState<SectionType>((params.section as SectionType) || 'ibadah');
+  const [localIbadahGoals, setLocalIbadahGoals] = useState<IbadahGoals | null>(null);
+  const [localIlmGoals, setLocalIlmGoals] = useState<IlmGoals | null>(null);
+  const [localAmanahGoals, setLocalAmanahGoals] = useState<AmanahGoals | null>(null);
 
   useEffect(() => {
-    loadGoals();
-  }, []);
+    if (ibadahGoals) setLocalIbadahGoals({ ...ibadahGoals });
+    if (ilmGoals) setLocalIlmGoals({ ...ilmGoals });
+    if (amanahGoals) setLocalAmanahGoals({ ...amanahGoals });
+  }, [ibadahGoals, ilmGoals, amanahGoals]);
 
-  const loadGoals = async () => {
-    try {
-      const savedSunnahGoals = await AsyncStorage.getItem('sunnahPrayerGoals');
-      const savedDuaGoals = await AsyncStorage.getItem('duaGoals');
-      const savedChallengeGoals = await AsyncStorage.getItem('challengeGoals');
-      const savedFastingGoal = await AsyncStorage.getItem('weeklyFastingGoal');
+  const ibadahGoalConfigs: GoalConfig[] = [
+    {
+      id: 'sunnah',
+      label: 'Sunnah Prayers',
+      description: 'Daily Sunnah prayer goal',
+      goalField: 'sunnahDailyGoal',
+      completedField: 'sunnahCompleted',
+      min: 0,
+      max: 20,
+      step: 1,
+      unit: 'prayers',
+      enabled: (localIbadahGoals?.sunnahDailyGoal ?? 0) > 0,
+      canDisable: true,
+    },
+    {
+      id: 'tahajjud',
+      label: 'Tahajjud (Night Prayer)',
+      description: 'Weekly Tahajjud goal',
+      goalField: 'tahajjudWeeklyGoal',
+      completedField: 'tahajjudCompleted',
+      min: 0,
+      max: 7,
+      step: 1,
+      unit: 'times/week',
+      enabled: (localIbadahGoals?.tahajjudWeeklyGoal ?? 0) > 0,
+      canDisable: true,
+    },
+    {
+      id: 'quranPages',
+      label: 'Quran Pages',
+      description: 'Daily Quran reading goal',
+      goalField: 'quranDailyPagesGoal',
+      completedField: 'quranDailyPagesCompleted',
+      min: 0,
+      max: 20,
+      step: 1,
+      unit: 'pages/day',
+      enabled: (localIbadahGoals?.quranDailyPagesGoal ?? 0) > 0,
+      canDisable: true,
+    },
+    {
+      id: 'quranVerses',
+      label: 'Quran Verses',
+      description: 'Daily Quran verses goal',
+      goalField: 'quranDailyVersesGoal',
+      completedField: 'quranDailyVersesCompleted',
+      min: 0,
+      max: 50,
+      step: 5,
+      unit: 'verses/day',
+      enabled: (localIbadahGoals?.quranDailyVersesGoal ?? 0) > 0,
+      canDisable: true,
+    },
+    {
+      id: 'memorization',
+      label: 'Quran Memorization',
+      description: 'Weekly memorization goal',
+      goalField: 'quranWeeklyMemorizationGoal',
+      completedField: 'quranWeeklyMemorizationCompleted',
+      min: 0,
+      max: 20,
+      step: 1,
+      unit: 'verses/week',
+      enabled: (localIbadahGoals?.quranWeeklyMemorizationGoal ?? 0) > 0,
+      canDisable: true,
+    },
+    {
+      id: 'dhikrDaily',
+      label: 'Daily Dhikr',
+      description: 'Daily dhikr count goal',
+      goalField: 'dhikrDailyGoal',
+      completedField: 'dhikrDailyCompleted',
+      min: 0,
+      max: 500,
+      step: 10,
+      unit: 'times/day',
+      enabled: (localIbadahGoals?.dhikrDailyGoal ?? 0) > 0,
+      canDisable: true,
+    },
+    {
+      id: 'dhikrWeekly',
+      label: 'Weekly Dhikr',
+      description: 'Weekly dhikr count goal',
+      goalField: 'dhikrWeeklyGoal',
+      completedField: 'dhikrWeeklyCompleted',
+      min: 0,
+      max: 5000,
+      step: 100,
+      unit: 'times/week',
+      enabled: (localIbadahGoals?.dhikrWeeklyGoal ?? 0) > 0,
+      canDisable: true,
+    },
+    {
+      id: 'dua',
+      label: 'Daily Duʿāʾ',
+      description: 'Daily dua goal',
+      goalField: 'duaDailyGoal',
+      completedField: 'duaDailyCompleted',
+      min: 0,
+      max: 10,
+      step: 1,
+      unit: 'duas/day',
+      enabled: (localIbadahGoals?.duaDailyGoal ?? 0) > 0,
+      canDisable: true,
+    },
+    {
+      id: 'fasting',
+      label: 'Voluntary Fasting',
+      description: 'Weekly fasting goal',
+      goalField: 'fastingWeeklyGoal',
+      completedField: 'fastingWeeklyCompleted',
+      min: 0,
+      max: 7,
+      step: 1,
+      unit: 'days/week',
+      enabled: (localIbadahGoals?.fastingWeeklyGoal ?? 0) > 0,
+      canDisable: true,
+    },
+  ];
 
-      if (savedSunnahGoals) {
-        setSunnahPrayers(JSON.parse(savedSunnahGoals));
-      }
-      if (savedDuaGoals) {
-        setDuas(JSON.parse(savedDuaGoals));
-      }
-      if (savedChallengeGoals) {
-        setChallenges(JSON.parse(savedChallengeGoals));
-      }
-      if (savedFastingGoal) {
-        setWeeklyFastingGoal(savedFastingGoal);
-      }
-    } catch (error) {
-      console.log('Error loading goals:', error);
+  const ilmGoalConfigs: GoalConfig[] = [
+    {
+      id: 'lectures',
+      label: 'Islamic Lectures',
+      description: 'Weekly lecture goal',
+      goalField: 'weeklyLecturesGoal',
+      completedField: 'weeklyLecturesCompleted',
+      min: 0,
+      max: 10,
+      step: 1,
+      unit: 'lectures/week',
+      enabled: (localIlmGoals?.weeklyLecturesGoal ?? 0) > 0,
+      canDisable: true,
+    },
+    {
+      id: 'recitations',
+      label: 'Quran Recitations',
+      description: 'Weekly recitation listening goal',
+      goalField: 'weeklyRecitationsGoal',
+      completedField: 'weeklyRecitationsCompleted',
+      min: 0,
+      max: 10,
+      step: 1,
+      unit: 'recitations/week',
+      enabled: (localIlmGoals?.weeklyRecitationsGoal ?? 0) > 0,
+      canDisable: true,
+    },
+    {
+      id: 'quizzes',
+      label: 'Knowledge Quizzes',
+      description: 'Weekly quiz goal',
+      goalField: 'weeklyQuizzesGoal',
+      completedField: 'weeklyQuizzesCompleted',
+      min: 0,
+      max: 7,
+      step: 1,
+      unit: 'quizzes/week',
+      enabled: (localIlmGoals?.weeklyQuizzesGoal ?? 0) > 0,
+      canDisable: true,
+    },
+    {
+      id: 'reflection',
+      label: 'Reflection Prompts',
+      description: 'Weekly reflection goal',
+      goalField: 'weeklyReflectionGoal',
+      completedField: 'weeklyReflectionCompleted',
+      min: 0,
+      max: 7,
+      step: 1,
+      unit: 'reflections/week',
+      enabled: (localIlmGoals?.weeklyReflectionGoal ?? 0) > 0,
+      canDisable: true,
+    },
+  ];
+
+  const amanahGoalConfigs: GoalConfig[] = [
+    {
+      id: 'exercise',
+      label: 'Daily Exercise',
+      description: 'Daily exercise duration goal',
+      goalField: 'dailyExerciseGoal',
+      completedField: 'dailyExerciseCompleted',
+      min: 0,
+      max: 120,
+      step: 5,
+      unit: 'minutes/day',
+      enabled: (localAmanahGoals?.dailyExerciseGoal ?? 0) > 0,
+      canDisable: true,
+    },
+    {
+      id: 'water',
+      label: 'Daily Water Intake',
+      description: 'Daily water consumption goal',
+      goalField: 'dailyWaterGoal',
+      completedField: 'dailyWaterCompleted',
+      min: 0,
+      max: 15,
+      step: 1,
+      unit: 'glasses/day',
+      enabled: (localAmanahGoals?.dailyWaterGoal ?? 0) > 0,
+      canDisable: true,
+    },
+    {
+      id: 'workout',
+      label: 'Weekly Workouts',
+      description: 'Weekly workout sessions goal',
+      goalField: 'weeklyWorkoutGoal',
+      completedField: 'weeklyWorkoutCompleted',
+      min: 0,
+      max: 7,
+      step: 1,
+      unit: 'sessions/week',
+      enabled: (localAmanahGoals?.weeklyWorkoutGoal ?? 0) > 0,
+      canDisable: true,
+    },
+    {
+      id: 'mentalHealth',
+      label: 'Mental Health Activities',
+      description: 'Weekly mental health activities goal',
+      goalField: 'weeklyMentalHealthGoal',
+      completedField: 'weeklyMentalHealthCompleted',
+      min: 0,
+      max: 7,
+      step: 1,
+      unit: 'activities/week',
+      enabled: (localAmanahGoals?.weeklyMentalHealthGoal ?? 0) > 0,
+      canDisable: true,
+    },
+    {
+      id: 'sleep',
+      label: 'Daily Sleep',
+      description: 'Daily sleep duration goal',
+      goalField: 'dailySleepGoal',
+      completedField: 'dailySleepCompleted',
+      min: 0,
+      max: 12,
+      step: 0.5,
+      unit: 'hours/day',
+      enabled: (localAmanahGoals?.dailySleepGoal ?? 0) > 0,
+      canDisable: true,
+    },
+    {
+      id: 'stress',
+      label: 'Stress Management',
+      description: 'Weekly stress management activities goal',
+      goalField: 'weeklyStressManagementGoal',
+      completedField: 'weeklyStressManagementCompleted',
+      min: 0,
+      max: 7,
+      step: 1,
+      unit: 'activities/week',
+      enabled: (localAmanahGoals?.weeklyStressManagementGoal ?? 0) > 0,
+      canDisable: true,
+    },
+  ];
+
+  const getCurrentGoals = () => {
+    switch (activeSection) {
+      case 'ibadah':
+        return localIbadahGoals;
+      case 'ilm':
+        return localIlmGoals;
+      case 'amanah':
+        return localAmanahGoals;
     }
+  };
+
+  const getCurrentConfigs = () => {
+    switch (activeSection) {
+      case 'ibadah':
+        return ibadahGoalConfigs;
+      case 'ilm':
+        return ilmGoalConfigs;
+      case 'amanah':
+        return amanahGoalConfigs;
+    }
+  };
+
+  const updateGoalValue = (goalField: string, value: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    switch (activeSection) {
+      case 'ibadah':
+        if (localIbadahGoals) {
+          setLocalIbadahGoals({
+            ...localIbadahGoals,
+            [goalField]: value,
+          });
+        }
+        break;
+      case 'ilm':
+        if (localIlmGoals) {
+          setLocalIlmGoals({
+            ...localIlmGoals,
+            [goalField]: value,
+          });
+        }
+        break;
+      case 'amanah':
+        if (localAmanahGoals) {
+          setLocalAmanahGoals({
+            ...localAmanahGoals,
+            [goalField]: value,
+          });
+        }
+        break;
+    }
+  };
+
+  const toggleGoal = (goalField: string, currentValue: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    const newValue = currentValue > 0 ? 0 : getDefaultValue(goalField);
+    updateGoalValue(goalField, newValue);
+  };
+
+  const getDefaultValue = (goalField: string): number => {
+    const defaults: { [key: string]: number } = {
+      sunnahDailyGoal: 5,
+      tahajjudWeeklyGoal: 2,
+      quranDailyPagesGoal: 2,
+      quranDailyVersesGoal: 10,
+      quranWeeklyMemorizationGoal: 5,
+      dhikrDailyGoal: 100,
+      dhikrWeeklyGoal: 1000,
+      duaDailyGoal: 3,
+      fastingWeeklyGoal: 2,
+      weeklyLecturesGoal: 2,
+      weeklyRecitationsGoal: 2,
+      weeklyQuizzesGoal: 1,
+      weeklyReflectionGoal: 3,
+      dailyExerciseGoal: 30,
+      dailyWaterGoal: 8,
+      weeklyWorkoutGoal: 3,
+      weeklyMentalHealthGoal: 3,
+      dailySleepGoal: 7,
+      weeklyStressManagementGoal: 2,
+    };
+    return defaults[goalField] || 1;
   };
 
   const saveGoals = async () => {
     try {
-      await AsyncStorage.setItem('sunnahPrayerGoals', JSON.stringify(sunnahPrayers));
-      await AsyncStorage.setItem('duaGoals', JSON.stringify(duas));
-      await AsyncStorage.setItem('challengeGoals', JSON.stringify(challenges));
-      await AsyncStorage.setItem('weeklyFastingGoal', weeklyFastingGoal);
-
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      if (localIbadahGoals) await updateIbadahGoals(localIbadahGoals);
+      if (localIlmGoals) await updateIlmGoals(localIlmGoals);
+      if (localAmanahGoals) await updateAmanahGoals(localAmanahGoals);
+      
       Alert.alert('Success', 'Your goals have been saved!', [
         { text: 'OK', onPress: () => router.back() }
       ]);
@@ -169,37 +400,116 @@ export default function GoalsSettingsScreen() {
     }
   };
 
-  const toggleSunnahPrayer = (id: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSunnahPrayers(prev => 
-      prev.map(prayer => 
-        prayer.id === id ? { ...prayer, enabled: !prayer.enabled } : prayer
-      )
+  const renderGoalItem = (config: GoalConfig) => {
+    const currentGoals = getCurrentGoals();
+    if (!currentGoals) return null;
+
+    const currentValue = currentGoals[config.goalField as keyof typeof currentGoals] as number;
+    const isEnabled = currentValue > 0;
+
+    return (
+      <View key={config.id} style={styles.goalItem}>
+        <View style={styles.goalHeader}>
+          <View style={styles.goalInfo}>
+            <Text style={styles.goalLabel}>{config.label}</Text>
+            <Text style={styles.goalDescription}>{config.description}</Text>
+          </View>
+          {config.canDisable && (
+            <Switch
+              value={isEnabled}
+              onValueChange={() => toggleGoal(config.goalField, currentValue)}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={colors.card}
+            />
+          )}
+        </View>
+
+        {isEnabled && (
+          <View style={styles.goalControls}>
+            <View style={styles.valueDisplay}>
+              <Text style={styles.valueText}>{currentValue}</Text>
+              <Text style={styles.unitText}>{config.unit}</Text>
+            </View>
+
+            <View style={styles.controlButtons}>
+              <TouchableOpacity
+                style={styles.controlButton}
+                onPress={() => {
+                  const newValue = Math.max(config.min, currentValue - config.step);
+                  if (newValue >= config.min) {
+                    updateGoalValue(config.goalField, newValue);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <IconSymbol
+                  ios_icon_name="minus"
+                  android_material_icon_name="remove"
+                  size={20}
+                  color={colors.text}
+                />
+              </TouchableOpacity>
+
+              <View style={styles.rangeInfo}>
+                <Text style={styles.rangeText}>
+                  {config.min} - {config.max}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.controlButton}
+                onPress={() => {
+                  const newValue = Math.min(config.max, currentValue + config.step);
+                  if (newValue <= config.max) {
+                    updateGoalValue(config.goalField, newValue);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <IconSymbol
+                  ios_icon_name="plus"
+                  android_material_icon_name="add"
+                  size={20}
+                  color={colors.text}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </View>
     );
   };
 
-  const toggleDua = (id: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setDuas(prev => 
-      prev.map(dua => 
-        dua.id === id ? { ...dua, enabled: !dua.enabled } : dua
-      )
-    );
+  const getSectionColor = (section: SectionType) => {
+    switch (section) {
+      case 'ibadah':
+        return ['#10B981', '#059669'];
+      case 'ilm':
+        return ['#3B82F6', '#2563EB'];
+      case 'amanah':
+        return ['#F59E0B', '#D97706'];
+    }
   };
 
-  const toggleChallenge = (id: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setChallenges(prev => 
-      prev.map(challenge => 
-        challenge.id === id ? { ...challenge, enabled: !challenge.enabled } : challenge
-      )
-    );
+  const getSectionIcon = (section: SectionType) => {
+    switch (section) {
+      case 'ibadah':
+        return { ios: 'hands.sparkles.fill', android: 'auto-awesome' };
+      case 'ilm':
+        return { ios: 'book.fill', android: 'menu-book' };
+      case 'amanah':
+        return { ios: 'heart.fill', android: 'favorite' };
+    }
   };
 
-  const updateFastingGoal = (value: string) => {
-    const numValue = parseInt(value) || 0;
-    if (numValue >= 0 && numValue <= 7) {
-      setWeeklyFastingGoal(value);
+  const getSectionTitle = (section: SectionType) => {
+    switch (section) {
+      case 'ibadah':
+        return 'ʿIbādah';
+      case 'ilm':
+        return 'ʿIlm';
+      case 'amanah':
+        return 'Amanah';
     }
   };
 
@@ -231,192 +541,108 @@ export default function GoalsSettingsScreen() {
         </TouchableOpacity>
       </View>
 
+      <View style={styles.infoCard}>
+        <IconSymbol
+          ios_icon_name="info.circle.fill"
+          android_material_icon_name="info"
+          size={24}
+          color={colors.info}
+        />
+        <Text style={styles.infoText}>
+          Customize your spiritual goals. The five daily prayers (Fard) are obligatory and cannot be changed.
+        </Text>
+      </View>
+
+      <View style={styles.sectionTabs}>
+        {(['ibadah', 'ilm', 'amanah'] as SectionType[]).map((section, index) => {
+          const isActive = activeSection === section;
+          const icon = getSectionIcon(section);
+          const colors_gradient = getSectionColor(section);
+
+          return (
+            <React.Fragment key={index}>
+              <TouchableOpacity
+                style={[styles.sectionTab, isActive && styles.sectionTabActive]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setActiveSection(section);
+                }}
+                activeOpacity={0.7}
+              >
+                {isActive ? (
+                  <LinearGradient
+                    colors={colors_gradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.sectionTabGradient}
+                  >
+                    <IconSymbol
+                      ios_icon_name={icon.ios}
+                      android_material_icon_name={icon.android}
+                      size={20}
+                      color="#FFFFFF"
+                    />
+                    <Text style={styles.sectionTabTextActive}>{getSectionTitle(section)}</Text>
+                  </LinearGradient>
+                ) : (
+                  <View style={styles.sectionTabContent}>
+                    <IconSymbol
+                      ios_icon_name={icon.ios}
+                      android_material_icon_name={icon.android}
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={styles.sectionTabText}>{getSectionTitle(section)}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </React.Fragment>
+          );
+        })}
+      </View>
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.infoCard}>
-          <IconSymbol
-            ios_icon_name="info.circle.fill"
-            android_material_icon_name="info"
-            size={24}
-            color={colors.info}
-          />
-          <Text style={styles.infoText}>
-            Customize your spiritual goals. The five daily prayers are fixed and cannot be changed.
-          </Text>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <LinearGradient
-              colors={[colors.primary, colors.primaryDark]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.sectionIconContainer}
-            >
+        {activeSection === 'ibadah' && (
+          <View style={styles.fardPrayersInfo}>
+            <View style={styles.fardHeader}>
               <IconSymbol
-                ios_icon_name="hands.sparkles.fill"
-                android_material_icon_name="auto-awesome"
+                ios_icon_name="lock.fill"
+                android_material_icon_name="lock"
                 size={20}
-                color={colors.card}
+                color={colors.primary}
               />
-            </LinearGradient>
-            <Text style={styles.sectionTitle}>Sunnah Prayer Goals</Text>
-          </View>
-          <Text style={styles.sectionDescription}>
-            Select which Sunnah prayers you want to track daily
-          </Text>
-
-          {sunnahPrayers.map((prayer, index) => (
-            <React.Fragment key={index}>
-              <View style={styles.goalItem}>
-                <View style={styles.goalInfo}>
-                  <Text style={styles.goalName}>{prayer.name}</Text>
-                  <Text style={styles.goalDetail}>{prayer.rakats} Rakats</Text>
-                </View>
-                <Switch
-                  value={prayer.enabled}
-                  onValueChange={() => toggleSunnahPrayer(prayer.id)}
-                  trackColor={{ false: colors.border, true: colors.primary }}
-                  thumbColor={colors.card}
-                />
-              </View>
-            </React.Fragment>
-          ))}
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <LinearGradient
-              colors={colors.gradientPurple}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.sectionIconContainer}
-            >
-              <IconSymbol
-                ios_icon_name="moon.fill"
-                android_material_icon_name="nightlight"
-                size={20}
-                color={colors.card}
-              />
-            </LinearGradient>
-            <Text style={styles.sectionTitle}>Weekly Fasting Goal</Text>
-          </View>
-          <Text style={styles.sectionDescription}>
-            How many days per week do you want to fast?
-          </Text>
-
-          <View style={styles.fastingGoalContainer}>
-            <Text style={styles.fastingGoalLabel}>Days per week:</Text>
-            <TextInput
-              style={styles.fastingGoalInput}
-              value={weeklyFastingGoal}
-              onChangeText={updateFastingGoal}
-              keyboardType="number-pad"
-              maxLength={1}
-              placeholder="0-7"
-              placeholderTextColor={colors.textSecondary}
-            />
-            <Text style={styles.fastingGoalUnit}>/ 7 days</Text>
-          </View>
-
-          <View style={styles.recommendationBox}>
-            <IconSymbol
-              ios_icon_name="star.fill"
-              android_material_icon_name="star"
-              size={16}
-              color={colors.accent}
-            />
-            <Text style={styles.recommendationText}>
-              Recommended: Fast on Mondays and Thursdays (Sunnah)
+              <Text style={styles.fardTitle}>Five Daily Prayers (Fard)</Text>
+            </View>
+            <Text style={styles.fardDescription}>
+              The five daily prayers are obligatory for every Muslim and cannot be disabled. They are:
             </Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <LinearGradient
-              colors={colors.gradientInfo}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.sectionIconContainer}
-            >
-              <IconSymbol
-                ios_icon_name="text.bubble.fill"
-                android_material_icon_name="chat-bubble"
-                size={20}
-                color={colors.card}
-              />
-            </LinearGradient>
-            <Text style={styles.sectionTitle}>Daily Dua Goals</Text>
-          </View>
-          <Text style={styles.sectionDescription}>
-            Select which daily duas you want to track
-          </Text>
-
-          {duas.map((dua, index) => (
-            <React.Fragment key={index}>
-              <View style={styles.goalItem}>
-                <View style={styles.goalInfo}>
-                  <Text style={styles.goalName}>{dua.name}</Text>
-                  <Text style={styles.goalArabic}>{dua.arabic}</Text>
-                  <Text style={styles.goalDetail}>{dua.time}</Text>
-                </View>
-                <Switch
-                  value={dua.enabled}
-                  onValueChange={() => toggleDua(dua.id)}
-                  trackColor={{ false: colors.border, true: colors.info }}
-                  thumbColor={colors.card}
-                />
-              </View>
-            </React.Fragment>
-          ))}
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <LinearGradient
-              colors={[colors.accent, colors.accentDark]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.sectionIconContainer}
-            >
-              <IconSymbol
-                ios_icon_name="trophy.fill"
-                android_material_icon_name="emoji-events"
-                size={20}
-                color={colors.card}
-              />
-            </LinearGradient>
-            <Text style={styles.sectionTitle}>Weekly Challenges</Text>
-          </View>
-          <Text style={styles.sectionDescription}>
-            Select which weekly challenges you want to participate in
-          </Text>
-
-          {challenges.map((challenge, index) => (
-            <React.Fragment key={index}>
-              <View style={styles.goalItem}>
-                <View style={styles.goalInfo}>
-                  <View style={styles.challengeHeader}>
-                    <Text style={styles.goalName}>{challenge.title}</Text>
-                    <View style={styles.pointsBadge}>
-                      <Text style={styles.pointsText}>+{challenge.points}</Text>
-                    </View>
+            <View style={styles.fardList}>
+              {['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].map((prayer, index) => (
+                <React.Fragment key={index}>
+                  <View style={styles.fardItem}>
+                    <IconSymbol
+                      ios_icon_name="checkmark.circle.fill"
+                      android_material_icon_name="check-circle"
+                      size={16}
+                      color={colors.primary}
+                    />
+                    <Text style={styles.fardItemText}>{prayer}</Text>
                   </View>
-                  <Text style={styles.goalDetail}>{challenge.description}</Text>
-                </View>
-                <Switch
-                  value={challenge.enabled}
-                  onValueChange={() => toggleChallenge(challenge.id)}
-                  trackColor={{ false: colors.border, true: colors.accent }}
-                  thumbColor={colors.card}
-                />
-              </View>
-            </React.Fragment>
-          ))}
+                </React.Fragment>
+              ))}
+            </View>
+          </View>
+        )}
+
+        <View style={styles.goalsSection}>
+          <Text style={styles.goalsSectionTitle}>
+            {activeSection === 'ibadah' ? 'Optional Worship Goals' : 'Goals'}
+          </Text>
+          {getCurrentConfigs().map(config => renderGoalItem(config))}
         </View>
 
         <View style={styles.bottomPadding} />
@@ -461,21 +687,15 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.card,
   },
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-  },
   infoCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
     backgroundColor: colors.info + '10',
     padding: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
     borderRadius: borderRadius.md,
-    marginBottom: spacing.xl,
     borderWidth: 1,
     borderColor: colors.info + '30',
   },
@@ -484,129 +704,179 @@ const styles = StyleSheet.create({
     color: colors.text,
     flex: 1,
   },
-  section: {
-    marginBottom: spacing.xxl,
-  },
-  sectionHeader: {
+  sectionTabs: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
     gap: spacing.sm,
   },
-  sectionIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.sm,
+  sectionTab: {
+    flex: 1,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sectionTabActive: {
+    borderColor: 'transparent',
+  },
+  sectionTabGradient: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
-  sectionTitle: {
-    ...typography.h4,
+  sectionTabContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    backgroundColor: colors.card,
+  },
+  sectionTabText: {
+    ...typography.small,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  sectionTabTextActive: {
+    ...typography.small,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+  },
+  fardPrayersInfo: {
+    backgroundColor: colors.primary + '10',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.primary + '30',
+  },
+  fardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  fardTitle: {
+    ...typography.bodyBold,
     color: colors.text,
+    fontSize: 16,
   },
-  sectionDescription: {
+  fardDescription: {
     ...typography.caption,
     color: colors.textSecondary,
     marginBottom: spacing.md,
-    marginLeft: 44,
   },
-  goalItem: {
+  fardList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  fardItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: spacing.xs,
     backgroundColor: colors.card,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+  },
+  fardItemText: {
+    ...typography.small,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  goalsSection: {
+    marginBottom: spacing.xl,
+  },
+  goalsSectionTitle: {
+    ...typography.h4,
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  goalItem: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
     ...shadows.small,
+  },
+  goalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   goalInfo: {
     flex: 1,
     marginRight: spacing.md,
   },
-  goalName: {
+  goalLabel: {
     ...typography.body,
     color: colors.text,
     fontWeight: '600',
     marginBottom: 2,
   },
-  goalArabic: {
-    ...typography.caption,
-    color: colors.text,
-    marginBottom: 2,
-  },
-  goalDetail: {
+  goalDescription: {
     ...typography.small,
     color: colors.textSecondary,
   },
-  challengeHeader: {
+  goalControls: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  valueDisplay: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  valueText: {
+    ...typography.h2,
+    color: colors.text,
+    fontWeight: '700',
+  },
+  unitText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginLeft: spacing.xs,
+  },
+  controlButtons: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
   },
-  pointsBadge: {
-    backgroundColor: colors.accent + '20',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-  },
-  pointsText: {
-    ...typography.small,
-    color: colors.accent,
-    fontWeight: '700',
-  },
-  fastingGoalContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    padding: spacing.lg,
+  controlButton: {
+    width: 44,
+    height: 44,
     borderRadius: borderRadius.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.small,
-  },
-  fastingGoalLabel: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
-    marginRight: spacing.md,
-  },
-  fastingGoalInput: {
-    ...typography.h3,
-    color: colors.text,
     backgroundColor: colors.highlight,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.sm,
-    minWidth: 60,
-    textAlign: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.border,
   },
-  fastingGoalUnit: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginLeft: spacing.sm,
-  },
-  recommendationBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.accent + '10',
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.accent + '30',
-  },
-  recommendationText: {
-    ...typography.small,
-    color: colors.accent,
+  rangeInfo: {
     flex: 1,
-    fontWeight: '600',
+    alignItems: 'center',
+  },
+  rangeText: {
+    ...typography.small,
+    color: colors.textSecondary,
   },
   bottomPadding: {
     height: 100,
