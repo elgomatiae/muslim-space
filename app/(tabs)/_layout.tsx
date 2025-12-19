@@ -54,17 +54,17 @@ export default function TabLayout() {
             animation: 'none',
           }}
         >
-          <Stack.Screen key="home" name="(home)" />
-          <Stack.Screen key="iman" name="(iman)" />
-          <Stack.Screen key="learning" name="(learning)" />
-          <Stack.Screen key="wellness" name="(wellness)" />
-          <Stack.Screen key="profile" name="profile" />
+          <Stack.Screen name="(home)" />
+          <Stack.Screen name="(iman)" />
+          <Stack.Screen name="(learning)" />
+          <Stack.Screen name="(wellness)" />
+          <Stack.Screen name="profile" />
           <Stack.Screen 
-            key="admin-panel" 
             name="admin-panel"
             options={{
               presentation: 'modal',
               animation: 'slide_from_bottom',
+              headerShown: false,
             }}
           />
         </Stack>
