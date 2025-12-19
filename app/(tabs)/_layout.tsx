@@ -59,6 +59,14 @@ export default function TabLayout() {
           <Stack.Screen key="learning" name="(learning)" />
           <Stack.Screen key="wellness" name="(wellness)" />
           <Stack.Screen key="profile" name="profile" />
+          <Stack.Screen 
+            key="admin-panel" 
+            name="admin-panel"
+            options={{
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+            }}
+          />
         </Stack>
       </View>
       <FloatingTabBar tabs={tabs} />

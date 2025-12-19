@@ -176,16 +176,29 @@ export default function ProfileScreen() {
 
   const handlePinSubmit = () => {
     console.log('PIN submitted:', pinInput);
+    console.log('Expected PIN:', ADMIN_PIN);
+    console.log('PIN match:', pinInput === ADMIN_PIN);
+    
     if (pinInput === ADMIN_PIN) {
-      setPinModalVisible(false);
-      setPinInput('');
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      console.log('Navigating to admin panel...');
+      
+      // Close modal first
+      setPinModalVisible(false);
+      setPinInput('');
+      
+      // Navigate after a short delay to ensure modal is closed
       setTimeout(() => {
-        router.push('/(tabs)/admin-panel');
-      }, 100);
+        console.log('Attempting to navigate to admin panel...');
+        try {
+          router.push('/(tabs)/admin-panel');
+          console.log('Navigation command executed');
+        } catch (error) {
+          console.error('Navigation error:', error);
+          Alert.alert('Error', 'Failed to open admin panel. Please try again.');
+        }
+      }, 300);
     } else {
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -591,6 +604,7 @@ export default function ProfileScreen() {
                 maxLength={4}
                 secureTextEntry
                 autoFocus
+                returnKeyType="done"
                 onSubmitEditing={handlePinSubmit}
               />
             </View>

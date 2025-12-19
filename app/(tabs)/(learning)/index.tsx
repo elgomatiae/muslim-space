@@ -148,9 +148,9 @@ export default function LearningScreen() {
               color={colors.primary}
             />
           </View>
-          <Text style={styles.infoTitle}>Supabase Integration</Text>
+          <Text style={styles.infoTitle}>Content Management</Text>
           <Text style={styles.infoText}>
-            Islamic Lectures and Quran Recitations now feature a Netflix-style browsing experience. Connect to Supabase to upload and manage your video content.
+            Islamic Lectures and Quran Recitations feature a Netflix-style browsing experience. Admins can manage content through the admin panel accessible from the profile tab.
           </Text>
         </View>
 
