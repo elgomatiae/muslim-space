@@ -7,7 +7,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from 'expo-haptics';
 import { useAuth } from "@/contexts/AuthContext";
-import { syncProfileToSupabase, syncProfileFromSupabase, updateUserProfile } from "@/utils/profileSupabaseSync";
+import { syncProfileFromSupabase, updateUserProfile } from "@/utils/profileSupabaseSync";
 import { router } from "expo-router";
 
 interface ProfileOption {
@@ -35,7 +35,7 @@ interface UserProfile {
 
 const ADMIN_PIN = "2218";
 const TAP_THRESHOLD = 10;
-const TAP_TIMEOUT = 3000; // 3 seconds
+const TAP_TIMEOUT = 3000;
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
@@ -54,7 +54,6 @@ export default function ProfileScreen() {
     { value: '0', label: 'Day Streak', iosIcon: 'flame.fill', androidIcon: 'local-fire-department', color: colors.error },
   ]);
 
-  // Admin panel access state
   const [tapCount, setTapCount] = useState(0);
   const [lastTapTime, setLastTapTime] = useState(0);
   const [pinModalVisible, setPinModalVisible] = useState(false);
@@ -63,7 +62,6 @@ export default function ProfileScreen() {
   const loadProfile = useCallback(async () => {
     try {
       if (user) {
-        // Sync from Supabase first
         await syncProfileFromSupabase(user.id);
       }
 
@@ -129,11 +127,9 @@ export default function ProfileScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
       
-      // Save to local storage
       await AsyncStorage.setItem('userProfile', JSON.stringify(tempProfile));
       setProfile(tempProfile);
       
-      // Sync to Supabase
       if (user) {
         await updateUserProfile(user.id, {
           display_name: tempProfile.name,
@@ -153,7 +149,6 @@ export default function ProfileScreen() {
   const handleUsernameTap = () => {
     const currentTime = Date.now();
     
-    // Reset tap count if too much time has passed
     if (currentTime - lastTapTime > TAP_TIMEOUT) {
       setTapCount(1);
       setLastTapTime(currentTime);
@@ -168,8 +163,9 @@ export default function ProfileScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
 
+    console.log(`Username tapped: ${newTapCount}/${TAP_THRESHOLD}`);
+
     if (newTapCount >= TAP_THRESHOLD) {
-      // Reset tap count and show PIN modal
       setTapCount(0);
       setPinModalVisible(true);
       if (Platform.OS !== 'web') {
@@ -179,13 +175,17 @@ export default function ProfileScreen() {
   };
 
   const handlePinSubmit = () => {
+    console.log('PIN submitted:', pinInput);
     if (pinInput === ADMIN_PIN) {
       setPinModalVisible(false);
       setPinInput('');
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      router.push('/(tabs)/admin-panel');
+      console.log('Navigating to admin panel...');
+      setTimeout(() => {
+        router.push('/(tabs)/admin-panel');
+      }, 100);
     } else {
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -464,7 +464,6 @@ export default function ProfileScreen() {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* Edit Profile Modal */}
       <Modal
         visible={editModalVisible}
         animationType="slide"
@@ -554,7 +553,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* PIN Modal */}
       <Modal
         visible={pinModalVisible}
         animationType="fade"
@@ -593,6 +591,7 @@ export default function ProfileScreen() {
                 maxLength={4}
                 secureTextEntry
                 autoFocus
+                onSubmitEditing={handlePinSubmit}
               />
             </View>
 
