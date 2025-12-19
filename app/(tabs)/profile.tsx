@@ -8,6 +8,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from 'expo-haptics';
 import { useAuth } from "@/contexts/AuthContext";
 import { syncProfileToSupabase, syncProfileFromSupabase, updateUserProfile } from "@/utils/profileSupabaseSync";
+import { router } from "expo-router";
 
 interface ProfileOption {
   title: string;
@@ -32,6 +33,10 @@ interface UserProfile {
   location: string;
 }
 
+const ADMIN_PIN = "2218";
+const TAP_THRESHOLD = 10;
+const TAP_TIMEOUT = 3000; // 3 seconds
+
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<UserProfile>({
@@ -48,6 +53,12 @@ export default function ProfileScreen() {
     { value: '0', label: 'Prayers', iosIcon: 'moon.stars', androidIcon: 'self-improvement', color: colors.accent },
     { value: '0', label: 'Day Streak', iosIcon: 'flame.fill', androidIcon: 'local-fire-department', color: colors.error },
   ]);
+
+  // Admin panel access state
+  const [tapCount, setTapCount] = useState(0);
+  const [lastTapTime, setLastTapTime] = useState(0);
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [pinInput, setPinInput] = useState('');
 
   const loadProfile = useCallback(async () => {
     try {
@@ -136,6 +147,51 @@ export default function ProfileScreen() {
     } catch (error) {
       console.log('Error saving profile:', error);
       Alert.alert('Error', 'Failed to save profile');
+    }
+  };
+
+  const handleUsernameTap = () => {
+    const currentTime = Date.now();
+    
+    // Reset tap count if too much time has passed
+    if (currentTime - lastTapTime > TAP_TIMEOUT) {
+      setTapCount(1);
+      setLastTapTime(currentTime);
+      return;
+    }
+
+    const newTapCount = tapCount + 1;
+    setTapCount(newTapCount);
+    setLastTapTime(currentTime);
+
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+
+    if (newTapCount >= TAP_THRESHOLD) {
+      // Reset tap count and show PIN modal
+      setTapCount(0);
+      setPinModalVisible(true);
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      }
+    }
+  };
+
+  const handlePinSubmit = () => {
+    if (pinInput === ADMIN_PIN) {
+      setPinModalVisible(false);
+      setPinInput('');
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      router.push('/(tabs)/admin-panel');
+    } else {
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+      Alert.alert('Access Denied', 'Incorrect PIN. Please try again.');
+      setPinInput('');
     }
   };
 
@@ -244,7 +300,12 @@ export default function ProfileScreen() {
               color={colors.card}
             />
           </View>
-          <Text style={styles.name}>{profile.name}</Text>
+          <TouchableOpacity 
+            onPress={handleUsernameTap}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.name}>{profile.name}</Text>
+          </TouchableOpacity>
           <Text style={styles.email}>{profile.email}</Text>
           <TouchableOpacity 
             style={styles.editButton} 
@@ -403,6 +464,7 @@ export default function ProfileScreen() {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
+      {/* Edit Profile Modal */}
       <Modal
         visible={editModalVisible}
         animationType="slide"
@@ -488,6 +550,86 @@ export default function ProfileScreen() {
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* PIN Modal */}
+      <Modal
+        visible={pinModalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => {
+          setPinModalVisible(false);
+          setPinInput('');
+        }}
+      >
+        <View style={styles.pinModalOverlay}>
+          <View style={styles.pinModalContent}>
+            <LinearGradient
+              colors={['#EF4444', '#DC2626']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.pinModalHeader}
+            >
+              <IconSymbol
+                ios_icon_name="lock.shield.fill"
+                android_material_icon_name="admin-panel-settings"
+                size={48}
+                color={colors.card}
+              />
+              <Text style={styles.pinModalTitle}>Admin Access</Text>
+              <Text style={styles.pinModalSubtitle}>Enter PIN to continue</Text>
+            </LinearGradient>
+
+            <View style={styles.pinInputContainer}>
+              <TextInput
+                style={styles.pinInput}
+                value={pinInput}
+                onChangeText={setPinInput}
+                placeholder="Enter 4-digit PIN"
+                placeholderTextColor={colors.textSecondary}
+                keyboardType="numeric"
+                maxLength={4}
+                secureTextEntry
+                autoFocus
+              />
+            </View>
+
+            <View style={styles.pinButtonContainer}>
+              <TouchableOpacity
+                style={styles.pinCancelButton}
+                onPress={() => {
+                  setPinModalVisible(false);
+                  setPinInput('');
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.pinCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.pinSubmitButton, pinInput.length !== 4 && styles.pinSubmitButtonDisabled]}
+                onPress={handlePinSubmit}
+                activeOpacity={0.7}
+                disabled={pinInput.length !== 4}
+              >
+                <LinearGradient
+                  colors={pinInput.length === 4 ? ['#EF4444', '#DC2626'] : [colors.border, colors.border]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.pinSubmitGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="lock.open.fill"
+                    android_material_icon_name="lock-open"
+                    size={20}
+                    color={colors.card}
+                  />
+                  <Text style={styles.pinSubmitButtonText}>Unlock</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -756,5 +898,89 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     ...typography.h4,
     color: colors.textSecondary,
+  },
+  pinModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  pinModalContent: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xxl,
+    width: '100%',
+    maxWidth: 400,
+    overflow: 'hidden',
+    ...shadows.large,
+  },
+  pinModalHeader: {
+    padding: spacing.xxxl,
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  pinModalTitle: {
+    ...typography.h2,
+    color: colors.card,
+    textAlign: 'center',
+  },
+  pinModalSubtitle: {
+    ...typography.body,
+    color: colors.card,
+    opacity: 0.9,
+    textAlign: 'center',
+  },
+  pinInputContainer: {
+    padding: spacing.xl,
+  },
+  pinInput: {
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    ...typography.h3,
+    color: colors.text,
+    textAlign: 'center',
+    borderWidth: 2,
+    borderColor: colors.border,
+    letterSpacing: 8,
+  },
+  pinButtonContainer: {
+    flexDirection: 'row',
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  pinCancelButton: {
+    flex: 1,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  pinCancelButtonText: {
+    ...typography.bodyBold,
+    color: colors.text,
+  },
+  pinSubmitButton: {
+    flex: 1,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    ...shadows.medium,
+  },
+  pinSubmitButtonDisabled: {
+    opacity: 0.5,
+  },
+  pinSubmitGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    padding: spacing.lg,
+  },
+  pinSubmitButtonText: {
+    ...typography.bodyBold,
+    color: colors.card,
   },
 });
