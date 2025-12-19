@@ -174,27 +174,24 @@ export default function ProfileScreen() {
     console.log('Expected PIN:', ADMIN_PIN);
     console.log('PIN match:', pinInput === ADMIN_PIN);
     
-    // Dismiss keyboard first
     Keyboard.dismiss();
     
     if (pinInput === ADMIN_PIN) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
-      // Close modal and reset PIN
       setPinModalVisible(false);
       setPinInput('');
       
-      // Navigate after a short delay to ensure modal is closed and keyboard is dismissed
       setTimeout(() => {
-        console.log('Attempting to navigate to admin panel...');
+        console.log('Navigating to admin panel at /admin');
         try {
-          router.push('/(tabs)/admin-panel');
-          console.log('Navigation command executed');
+          router.push('/admin');
+          console.log('Navigation to /admin executed successfully');
         } catch (error) {
           console.error('Navigation error:', error);
           Alert.alert('Error', 'Failed to open admin panel. Please try again.');
         }
-      }, 400);
+      }, 300);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Access Denied', 'Incorrect PIN. Please try again.');
