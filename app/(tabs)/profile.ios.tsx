@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert, KeyboardAvoidingView, Keyboard } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
@@ -174,14 +174,17 @@ export default function ProfileScreen() {
     console.log('Expected PIN:', ADMIN_PIN);
     console.log('PIN match:', pinInput === ADMIN_PIN);
     
+    // Dismiss keyboard first
+    Keyboard.dismiss();
+    
     if (pinInput === ADMIN_PIN) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
-      // Close modal first
+      // Close modal and reset PIN
       setPinModalVisible(false);
       setPinInput('');
       
-      // Navigate after a short delay to ensure modal is closed
+      // Navigate after a short delay to ensure modal is closed and keyboard is dismissed
       setTimeout(() => {
         console.log('Attempting to navigate to admin panel...');
         try {
@@ -191,7 +194,7 @@ export default function ProfileScreen() {
           console.error('Navigation error:', error);
           Alert.alert('Error', 'Failed to open admin panel. Please try again.');
         }
-      }, 300);
+      }, 400);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Access Denied', 'Incorrect PIN. Please try again.');
@@ -557,76 +560,93 @@ export default function ProfileScreen() {
             setPinInput('');
           }}
         >
-          <View style={styles.pinModalOverlay}>
-            <View style={styles.pinModalContent}>
-              <LinearGradient
-                colors={['#EF4444', '#DC2626']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.pinModalHeader}
+          <KeyboardAvoidingView 
+            behavior="padding"
+            style={styles.pinModalOverlay}
+          >
+            <TouchableOpacity 
+              style={styles.pinModalBackdrop}
+              activeOpacity={1}
+              onPress={() => {
+                Keyboard.dismiss();
+              }}
+            >
+              <TouchableOpacity 
+                activeOpacity={1}
+                onPress={(e) => e.stopPropagation()}
               >
-                <IconSymbol
-                  ios_icon_name="lock.shield.fill"
-                  android_material_icon_name="admin-panel-settings"
-                  size={48}
-                  color={colors.card}
-                />
-                <Text style={styles.pinModalTitle}>Admin Access</Text>
-                <Text style={styles.pinModalSubtitle}>Enter PIN to continue</Text>
-              </LinearGradient>
-
-              <View style={styles.pinInputContainer}>
-                <TextInput
-                  style={styles.pinInput}
-                  value={pinInput}
-                  onChangeText={setPinInput}
-                  placeholder="Enter 4-digit PIN"
-                  placeholderTextColor={colors.textSecondary}
-                  keyboardType="numeric"
-                  maxLength={4}
-                  secureTextEntry
-                  autoFocus
-                  returnKeyType="done"
-                  onSubmitEditing={handlePinSubmit}
-                />
-              </View>
-
-              <View style={styles.pinButtonContainer}>
-                <TouchableOpacity
-                  style={styles.pinCancelButton}
-                  onPress={() => {
-                    setPinModalVisible(false);
-                    setPinInput('');
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.pinCancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.pinSubmitButton, pinInput.length !== 4 && styles.pinSubmitButtonDisabled]}
-                  onPress={handlePinSubmit}
-                  activeOpacity={0.7}
-                  disabled={pinInput.length !== 4}
-                >
+                <View style={styles.pinModalContent}>
                   <LinearGradient
-                    colors={pinInput.length === 4 ? ['#EF4444', '#DC2626'] : [colors.border, colors.border]}
+                    colors={['#EF4444', '#DC2626']}
                     start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.pinSubmitGradient}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.pinModalHeader}
                   >
                     <IconSymbol
-                      ios_icon_name="lock.open.fill"
-                      android_material_icon_name="lock-open"
-                      size={20}
+                      ios_icon_name="lock.shield.fill"
+                      android_material_icon_name="admin-panel-settings"
+                      size={48}
                       color={colors.card}
                     />
-                    <Text style={styles.pinSubmitButtonText}>Unlock</Text>
+                    <Text style={styles.pinModalTitle}>Admin Access</Text>
+                    <Text style={styles.pinModalSubtitle}>Enter PIN to continue</Text>
                   </LinearGradient>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
+
+                  <View style={styles.pinInputContainer}>
+                    <TextInput
+                      style={styles.pinInput}
+                      value={pinInput}
+                      onChangeText={setPinInput}
+                      placeholder="Enter 4-digit PIN"
+                      placeholderTextColor={colors.textSecondary}
+                      keyboardType="numeric"
+                      maxLength={4}
+                      secureTextEntry
+                      autoFocus
+                      returnKeyType="done"
+                      onSubmitEditing={handlePinSubmit}
+                    />
+                  </View>
+
+                  <View style={styles.pinButtonContainer}>
+                    <TouchableOpacity
+                      style={styles.pinCancelButton}
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setPinModalVisible(false);
+                        setPinInput('');
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.pinCancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.pinSubmitButton, pinInput.length !== 4 && styles.pinSubmitButtonDisabled]}
+                      onPress={handlePinSubmit}
+                      activeOpacity={0.7}
+                      disabled={pinInput.length !== 4}
+                    >
+                      <LinearGradient
+                        colors={pinInput.length === 4 ? ['#EF4444', '#DC2626'] : [colors.border, colors.border]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.pinSubmitGradient}
+                      >
+                        <IconSymbol
+                          ios_icon_name="lock.open.fill"
+                          android_material_icon_name="lock-open"
+                          size={20}
+                          color={colors.card}
+                        />
+                        <Text style={styles.pinSubmitButtonText}>Unlock</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
         </Modal>
       </View>
     </SafeAreaView>
@@ -904,6 +924,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  pinModalBackdrop: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
     padding: spacing.xl,
   },
   pinModalContent: {
@@ -948,6 +974,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: spacing.lg,
     gap: spacing.md,
+    paddingBottom: spacing.xl,
   },
   pinCancelButton: {
     flex: 1,
