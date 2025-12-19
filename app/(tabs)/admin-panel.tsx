@@ -18,8 +18,12 @@ interface VideoFormData {
   duration: string;
 }
 
+interface PlaylistImportData {
+  playlistUrl: string;
+}
+
 export default function AdminPanelScreen() {
-  const [activeTab, setActiveTab] = useState<'lectures' | 'recitations' | null>(null);
+  const [activeTab, setActiveTab] = useState<'lectures' | 'recitations' | 'playlist' | null>(null);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<VideoFormData>({
     title: '',
@@ -30,6 +34,10 @@ export default function AdminPanelScreen() {
     description: '',
     duration: '0',
   });
+  const [playlistData, setPlaylistData] = useState<PlaylistImportData>({
+    playlistUrl: '',
+  });
+  const [fetchingMetadata, setFetchingMetadata] = useState(false);
 
   const handleBack = () => {
     if (Platform.OS !== 'web') {
@@ -38,7 +46,7 @@ export default function AdminPanelScreen() {
     router.back();
   };
 
-  const handleTabSelect = (tab: 'lectures' | 'recitations') => {
+  const handleTabSelect = (tab: 'lectures' | 'recitations' | 'playlist') => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
@@ -51,6 +59,9 @@ export default function AdminPanelScreen() {
       reciterName: '',
       description: '',
       duration: '0',
+    });
+    setPlaylistData({
+      playlistUrl: '',
     });
   };
 
@@ -71,6 +82,66 @@ export default function AdminPanelScreen() {
 
   const getYouTubeThumbnail = (videoId: string): string => {
     return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+  };
+
+  const fetchYouTubeMetadata = async (videoUrl: string) => {
+    const videoId = extractYouTubeVideoId(videoUrl);
+    if (!videoId) {
+      Alert.alert('Error', 'Invalid YouTube URL');
+      return;
+    }
+
+    setFetchingMetadata(true);
+
+    try {
+      // Call Supabase Edge Function to fetch YouTube metadata
+      const { data, error } = await supabase.functions.invoke('fetch-youtube-metadata', {
+        body: { videoId },
+      });
+
+      if (error) {
+        console.error('Error fetching YouTube metadata:', error);
+        Alert.alert('Error', 'Failed to fetch video details. Using defaults.');
+        // Set defaults
+        setFormData(prev => ({
+          ...prev,
+          thumbnailUrl: getYouTubeThumbnail(videoId),
+        }));
+        return;
+      }
+
+      if (data && data.success) {
+        setFormData(prev => ({
+          ...prev,
+          title: data.title || prev.title,
+          description: data.description || prev.description,
+          thumbnailUrl: data.thumbnailUrl || getYouTubeThumbnail(videoId),
+          duration: data.duration?.toString() || prev.duration,
+          scholarName: data.channelTitle || prev.scholarName,
+          reciterName: data.channelTitle || prev.reciterName,
+        }));
+
+        if (Platform.OS !== 'web') {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+        Alert.alert('Success', 'Video details fetched successfully!');
+      } else {
+        Alert.alert('Info', 'Could not fetch all video details. Please fill in manually.');
+        setFormData(prev => ({
+          ...prev,
+          thumbnailUrl: getYouTubeThumbnail(videoId),
+        }));
+      }
+    } catch (error: any) {
+      console.error('Error fetching YouTube metadata:', error);
+      Alert.alert('Error', 'Failed to fetch video details. Please fill in manually.');
+      setFormData(prev => ({
+        ...prev,
+        thumbnailUrl: getYouTubeThumbnail(videoId),
+      }));
+    } finally {
+      setFetchingMetadata(false);
+    }
   };
 
   const validateForm = (): boolean => {
@@ -218,6 +289,97 @@ export default function AdminPanelScreen() {
     }
   };
 
+  const handlePlaylistImport = async () => {
+    if (!playlistData.playlistUrl.trim()) {
+      Alert.alert('Validation Error', 'Please enter a YouTube playlist URL');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Get the first category for the selected type
+      const categoryType = activeTab === 'playlist' ? 'lecture' : 'lecture';
+      const { data: categories, error: categoryError } = await supabase
+        .from('video_categories')
+        .select('id')
+        .eq('type', categoryType)
+        .limit(1);
+
+      if (categoryError) {
+        throw categoryError;
+      }
+
+      let categoryId: string;
+      if (categories && categories.length > 0) {
+        categoryId = categories[0].id;
+      } else {
+        // Create a default category if none exists
+        const { data: newCategory, error: createCategoryError } = await supabase
+          .from('video_categories')
+          .insert({
+            name: 'Imported Lectures',
+            description: 'Videos imported from YouTube playlists',
+            type: categoryType,
+            order_index: 0,
+          })
+          .select('id')
+          .single();
+
+        if (createCategoryError) {
+          throw createCategoryError;
+        }
+
+        categoryId = newCategory.id;
+      }
+
+      // Call Supabase Edge Function to import playlist
+      const { data, error } = await supabase.functions.invoke('youtube-playlist-import', {
+        body: {
+          playlistUrl: playlistData.playlistUrl,
+          categoryId: categoryId,
+        },
+      });
+
+      if (error) {
+        console.error('Error importing playlist:', error);
+        throw new Error(error.message || 'Failed to import playlist');
+      }
+
+      if (data && data.success) {
+        if (Platform.OS !== 'web') {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+
+        Alert.alert(
+          'Success',
+          `Playlist imported successfully!\n\nTotal videos: ${data.totalVideos}\nSuccessfully added: ${data.successCount}\nErrors: ${data.errorCount}`,
+          [
+            {
+              text: 'Import Another',
+              onPress: () => {
+                setPlaylistData({ playlistUrl: '' });
+              },
+            },
+            {
+              text: 'Done',
+              onPress: () => {
+                setActiveTab(null);
+              },
+            },
+          ]
+        );
+      } else {
+        throw new Error(data?.error || 'Failed to import playlist');
+      }
+    } catch (error: any) {
+      console.error('Error importing playlist:', error);
+      Alert.alert('Error', error.message || 'Failed to import playlist. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCancel = () => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -231,6 +393,9 @@ export default function AdminPanelScreen() {
       reciterName: '',
       description: '',
       duration: '0',
+    });
+    setPlaylistData({
+      playlistUrl: '',
     });
   };
 
@@ -306,7 +471,7 @@ export default function AdminPanelScreen() {
                   </View>
                   <Text style={styles.optionTitle}>Add Lecture</Text>
                   <Text style={styles.optionDescription}>
-                    Add YouTube links to the lectures section
+                    Add YouTube links to the lectures section with auto-fetch
                   </Text>
                   <View style={styles.optionArrow}>
                     <IconSymbol
@@ -352,8 +517,114 @@ export default function AdminPanelScreen() {
                   </View>
                 </LinearGradient>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.optionCard}
+                onPress={() => handleTabSelect('playlist')}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={['#F59E0B', '#D97706']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.optionGradient}
+                >
+                  <View style={styles.optionIconContainer}>
+                    <IconSymbol
+                      ios_icon_name="list.bullet.rectangle"
+                      android_material_icon_name="playlist-add"
+                      size={48}
+                      color={colors.card}
+                    />
+                  </View>
+                  <Text style={styles.optionTitle}>Import Playlist</Text>
+                  <Text style={styles.optionDescription}>
+                    Import entire YouTube playlists at once
+                  </Text>
+                  <View style={styles.optionArrow}>
+                    <IconSymbol
+                      ios_icon_name="arrow.right.circle.fill"
+                      android_material_icon_name="arrow-circle-right"
+                      size={32}
+                      color={colors.card}
+                    />
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
           </React.Fragment>
+        ) : activeTab === 'playlist' ? (
+          <View style={styles.formContainer}>
+            <View style={styles.formHeader}>
+              <IconSymbol
+                ios_icon_name="list.bullet.rectangle"
+                android_material_icon_name="playlist-add"
+                size={32}
+                color={colors.primary}
+              />
+              <Text style={styles.formTitle}>Import YouTube Playlist</Text>
+            </View>
+
+            <View style={styles.infoBox}>
+              <IconSymbol
+                ios_icon_name="info.circle.fill"
+                android_material_icon_name="info"
+                size={24}
+                color={colors.info}
+              />
+              <Text style={styles.infoText}>
+                Paste a YouTube playlist URL to import all videos at once. Video details will be automatically fetched.
+              </Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>YouTube Playlist URL *</Text>
+              <TextInput
+                style={styles.input}
+                value={playlistData.playlistUrl}
+                onChangeText={(text) => setPlaylistData({ playlistUrl: text })}
+                placeholder="https://www.youtube.com/playlist?list=..."
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="none"
+                keyboardType="url"
+              />
+              <Text style={styles.inputHint}>
+                All videos from the playlist will be imported as lectures
+              </Text>
+            </View>
+
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={handleCancel}
+                activeOpacity={0.7}
+                disabled={loading}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+                onPress={handlePlaylistImport}
+                activeOpacity={0.7}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color={colors.card} />
+                ) : (
+                  <React.Fragment>
+                    <IconSymbol
+                      ios_icon_name="arrow.down.circle.fill"
+                      android_material_icon_name="download"
+                      size={20}
+                      color={colors.card}
+                    />
+                    <Text style={styles.submitButtonText}>Import Playlist</Text>
+                  </React.Fragment>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
         ) : (
           <View style={styles.formContainer}>
             <View style={styles.formHeader}>
@@ -369,6 +640,44 @@ export default function AdminPanelScreen() {
             </View>
 
             <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>YouTube URL *</Text>
+              <View style={styles.urlInputContainer}>
+                <TextInput
+                  style={[styles.input, styles.urlInput]}
+                  value={formData.videoUrl}
+                  onChangeText={(text) => setFormData({ ...formData, videoUrl: text })}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  placeholderTextColor={colors.textSecondary}
+                  autoCapitalize="none"
+                  keyboardType="url"
+                />
+                <TouchableOpacity
+                  style={[styles.fetchButton, fetchingMetadata && styles.fetchButtonDisabled]}
+                  onPress={() => fetchYouTubeMetadata(formData.videoUrl)}
+                  activeOpacity={0.7}
+                  disabled={fetchingMetadata || !formData.videoUrl.trim()}
+                >
+                  {fetchingMetadata ? (
+                    <ActivityIndicator size="small" color={colors.card} />
+                  ) : (
+                    <React.Fragment>
+                      <IconSymbol
+                        ios_icon_name="arrow.down.circle.fill"
+                        android_material_icon_name="download"
+                        size={18}
+                        color={colors.card}
+                      />
+                      <Text style={styles.fetchButtonText}>Fetch</Text>
+                    </React.Fragment>
+                  )}
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.inputHint}>
+                Paste the YouTube URL and tap &quot;Fetch&quot; to auto-fill details
+              </Text>
+            </View>
+
+            <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Title *</Text>
               <TextInput
                 style={styles.input}
@@ -377,22 +686,6 @@ export default function AdminPanelScreen() {
                 placeholder="Enter video title"
                 placeholderTextColor={colors.textSecondary}
               />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>YouTube URL *</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.videoUrl}
-                onChangeText={(text) => setFormData({ ...formData, videoUrl: text })}
-                placeholder="https://www.youtube.com/watch?v=..."
-                placeholderTextColor={colors.textSecondary}
-                autoCapitalize="none"
-                keyboardType="url"
-              />
-              <Text style={styles.inputHint}>
-                Paste the full YouTube URL or video ID
-              </Text>
             </View>
 
             {activeTab === 'lectures' && (
@@ -435,20 +728,7 @@ export default function AdminPanelScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Thumbnail URL (Optional)</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.thumbnailUrl}
-                onChangeText={(text) => setFormData({ ...formData, thumbnailUrl: text })}
-                placeholder="Auto-generated from YouTube if left empty"
-                placeholderTextColor={colors.textSecondary}
-                autoCapitalize="none"
-                keyboardType="url"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Duration (minutes)</Text>
+              <Text style={styles.inputLabel}>Duration (seconds)</Text>
               <TextInput
                 style={styles.input}
                 value={formData.duration}
@@ -626,6 +906,22 @@ const styles = StyleSheet.create({
     ...typography.h3,
     color: colors.text,
   },
+  infoBox: {
+    flexDirection: 'row',
+    backgroundColor: colors.highlight,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    gap: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.info,
+  },
+  infoText: {
+    ...typography.small,
+    color: colors.text,
+    flex: 1,
+    lineHeight: 20,
+  },
   inputGroup: {
     marginBottom: spacing.lg,
   },
@@ -642,6 +938,31 @@ const styles = StyleSheet.create({
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  urlInputContainer: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  urlInput: {
+    flex: 1,
+  },
+  fetchButton: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    minWidth: 80,
+  },
+  fetchButtonDisabled: {
+    opacity: 0.6,
+  },
+  fetchButtonText: {
+    ...typography.captionBold,
+    color: colors.card,
   },
   textArea: {
     minHeight: 100,
