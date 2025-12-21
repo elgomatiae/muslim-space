@@ -18,14 +18,8 @@ interface JournalEntry {
   id: string;
   title: string;
   content: string;
+  mood: string;
   created_at: string;
-}
-
-interface ProphetStory {
-  id: string;
-  title: string;
-  mental_health_connection: string;
-  category: string;
 }
 
 interface Dua {
@@ -48,11 +42,19 @@ interface MoodEntry {
   date: string;
 }
 
+const MOODS = [
+  { emoji: '😊', label: 'Happy', value: 'happy' },
+  { emoji: '😌', label: 'Peaceful', value: 'peaceful' },
+  { emoji: '😔', label: 'Sad', value: 'sad' },
+  { emoji: '😰', label: 'Anxious', value: 'anxious' },
+  { emoji: '😤', label: 'Angry', value: 'angry' },
+  { emoji: '🙏', label: 'Grateful', value: 'grateful' },
+];
+
 export default function MentalHealthHubScreen() {
   const { user } = useAuth();
   const { amanahGoals, updateAmanahGoals } = useImanTracker();
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
-  const [prophetStories, setProphetStories] = useState<ProphetStory[]>([]);
   const [duas, setDuas] = useState<Dua[]>([]);
   const [prompts, setPrompts] = useState<JournalPrompt[]>([]);
   const [moodEntries, setMoodEntries] = useState<MoodEntry[]>([]);
@@ -60,7 +62,12 @@ export default function MentalHealthHubScreen() {
   const [moodStreak, setMoodStreak] = useState(0);
   const [quickJournalText, setQuickJournalText] = useState('');
   const [loading, setLoading] = useState(true);
-  const [showProphetModal, setShowProphetModal] = useState(false);
+  const [showJournalModal, setShowJournalModal] = useState(false);
+  const [showNewEntry, setShowNewEntry] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
+  const [newEntryTitle, setNewEntryTitle] = useState('');
+  const [newEntryContent, setNewEntryContent] = useState('');
+  const [selectedMood, setSelectedMood] = useState('');
   
   // Animation values
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
@@ -71,7 +78,6 @@ export default function MentalHealthHubScreen() {
     try {
       await Promise.all([
         loadJournalEntries(),
-        loadProphetStories(),
         loadDuas(),
         loadPrompts(),
         loadMoodData(),
@@ -106,21 +112,11 @@ export default function MentalHealthHubScreen() {
     if (!user) return;
     const { data } = await supabase
       .from('journal_entries')
-      .select('id, title, content, created_at')
+      .select('id, title, content, mood, created_at')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
-      .limit(3);
+      .limit(50);
     if (data) setJournalEntries(data);
-  };
-
-  const loadProphetStories = async () => {
-    const { data } = await supabase
-      .from('prophet_stories')
-      .select('id, title, mental_health_connection, category')
-      .eq('is_active', true)
-      .order('order_index', { ascending: true })
-      .limit(4);
-    if (data) setProphetStories(data);
   };
 
   const loadDuas = async () => {
@@ -217,6 +213,78 @@ export default function MentalHealthHubScreen() {
     }
   };
 
+  const openJournalWindow = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowJournalModal(true);
+    setShowNewEntry(false);
+    setSelectedEntry(null);
+  };
+
+  const closeJournalWindow = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowJournalModal(false);
+    setShowNewEntry(false);
+    setSelectedEntry(null);
+    setNewEntryTitle('');
+    setNewEntryContent('');
+    setSelectedMood('');
+  };
+
+  const openNewEntry = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowNewEntry(true);
+    setSelectedEntry(null);
+    setNewEntryTitle('');
+    setNewEntryContent('');
+    setSelectedMood('');
+  };
+
+  const viewEntry = (entry: JournalEntry) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedEntry(entry);
+    setShowNewEntry(false);
+  };
+
+  const saveNewEntry = async () => {
+    if (!newEntryContent.trim() || !user) return;
+
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      const { error } = await supabase
+        .from('journal_entries')
+        .insert({
+          user_id: user.id,
+          title: newEntryTitle.trim() || 'Untitled Entry',
+          content: newEntryContent.trim(),
+          mood: selectedMood,
+        });
+
+      if (!error) {
+        // Update Iman Tracker - mental health activity
+        if (amanahGoals) {
+          const updatedGoals = {
+            ...amanahGoals,
+            weeklyMentalHealthCompleted: Math.min(
+              amanahGoals.weeklyMentalHealthCompleted + 1,
+              amanahGoals.weeklyMentalHealthGoal
+            ),
+          };
+          await updateAmanahGoals(updatedGoals);
+        }
+        
+        setNewEntryTitle('');
+        setNewEntryContent('');
+        setSelectedMood('');
+        setShowNewEntry(false);
+        loadJournalEntries();
+        loadStats();
+      }
+    } catch (error) {
+      console.error('Error saving entry:', error);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { 
@@ -225,18 +293,20 @@ export default function MentalHealthHubScreen() {
     });
   };
 
+  const formatFullDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   const getMoodEmoji = (mood: string) => {
-    const moodMap: { [key: string]: string } = {
-      'very_happy': '😄',
-      'happy': '😊',
-      'neutral': '😐',
-      'sad': '😔',
-      'very_sad': '😢',
-      'anxious': '😰',
-      'peaceful': '😌',
-      'grateful': '🙏',
-    };
-    return moodMap[mood] || '😊';
+    const moodObj = MOODS.find(m => m.value === mood);
+    return moodObj ? moodObj.emoji : '📝';
   };
 
   return (
@@ -286,8 +356,8 @@ export default function MentalHealthHubScreen() {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{prophetStories.length}</Text>
-              <Text style={styles.statLabel}>Stories</Text>
+              <Text style={styles.statValue}>{duas.length}</Text>
+              <Text style={styles.statLabel}>Duas</Text>
             </View>
           </View>
 
@@ -317,35 +387,33 @@ export default function MentalHealthHubScreen() {
         </LinearGradient>
       </Animated.View>
 
-      {/* Prophet's Mental Health Struggles - Featured Section */}
-      <View style={styles.prophetSection}>
+      {/* Journal Window Button */}
+      <View style={styles.journalWindowSection}>
         <TouchableOpacity
-          style={styles.prophetFeatureCard}
+          style={styles.journalWindowButton}
           activeOpacity={0.8}
-          onPress={() => setShowProphetModal(true)}
+          onPress={openJournalWindow}
         >
           <LinearGradient
-            colors={colors.gradientSunset}
+            colors={colors.gradientPrimary}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.prophetFeatureGradient}
+            style={styles.journalWindowGradient}
           >
-            <View style={styles.prophetFeatureIcon}>
+            <View style={styles.journalWindowIcon}>
               <IconSymbol
-                ios_icon_name="book.closed.fill"
-                android_material_icon_name="auto-stories"
+                ios_icon_name="book.fill"
+                android_material_icon_name="menu-book"
                 size={48}
                 color={colors.card}
               />
             </View>
-            <Text style={styles.prophetFeatureTitle}>
-              Prophet Muhammad&apos;s (ﷺ) Mental Health Journey
+            <Text style={styles.journalWindowTitle}>Open Journal</Text>
+            <Text style={styles.journalWindowSubtitle}>
+              {journalCount} {journalCount === 1 ? 'entry' : 'entries'} • Today&apos;s prompt awaits
             </Text>
-            <Text style={styles.prophetFeatureSubtitle}>
-              Learn how the Prophet (ﷺ) dealt with grief, anxiety, and emotional challenges
-            </Text>
-            <View style={styles.prophetFeatureAction}>
-              <Text style={styles.prophetFeatureActionText}>Explore Stories</Text>
+            <View style={styles.journalWindowAction}>
+              <Text style={styles.journalWindowActionText}>Start Writing</Text>
               <IconSymbol
                 ios_icon_name="arrow.right.circle.fill"
                 android_material_icon_name="arrow-forward"
@@ -413,98 +481,6 @@ export default function MentalHealthHubScreen() {
         </View>
       </View>
 
-      {/* Today's Prompt */}
-      {prompts.length > 0 && (
-        <View style={styles.promptSection}>
-          <TouchableOpacity
-            style={styles.promptCard}
-            activeOpacity={0.8}
-            onPress={() => router.push('/(tabs)/(wellness)/journal-prompts' as any)}
-          >
-            <LinearGradient
-              colors={colors.gradientInfo}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.promptGradient}
-            >
-              <View style={styles.promptBadge}>
-                <IconSymbol
-                  ios_icon_name="sparkles"
-                  android_material_icon_name="auto-awesome"
-                  size={16}
-                  color={colors.card}
-                />
-                <Text style={styles.promptBadgeText}>TODAY&apos;S PROMPT</Text>
-              </View>
-              <Text style={styles.promptText}>{prompts[0].prompt_text}</Text>
-              <View style={styles.promptAction}>
-                <Text style={styles.promptActionText}>Start Writing</Text>
-                <IconSymbol
-                  ios_icon_name="arrow.right"
-                  android_material_icon_name="arrow-forward"
-                  size={20}
-                  color={colors.card}
-                />
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Recent Journal Entries */}
-      {journalEntries.length > 0 && (
-        <View style={styles.journalSection}>
-          <View style={styles.sectionHeader}>
-            <IconSymbol
-              ios_icon_name="book.fill"
-              android_material_icon_name="menu-book"
-              size={28}
-              color={colors.primary}
-            />
-            <Text style={styles.sectionTitle}>My Journal</Text>
-            <TouchableOpacity
-              onPress={() => router.push('/(tabs)/(wellness)/journal' as any)}
-              style={styles.seeAllButton}
-            >
-              <Text style={styles.seeAllText}>See All</Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron-right"
-                size={18}
-                color={colors.primary}
-              />
-            </TouchableOpacity>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalScroll}
-          >
-            {journalEntries.map((entry, index) => (
-              <React.Fragment key={index}>
-                <TouchableOpacity
-                  style={styles.journalCard}
-                  activeOpacity={0.8}
-                  onPress={() => router.push('/(tabs)/(wellness)/journal' as any)}
-                >
-                  <View style={styles.journalCardHeader}>
-                    <Text style={styles.journalCardTitle} numberOfLines={1}>
-                      {entry.title}
-                    </Text>
-                    <Text style={styles.journalCardDate}>
-                      {formatDate(entry.created_at)}
-                    </Text>
-                  </View>
-                  <Text style={styles.journalCardContent} numberOfLines={4}>
-                    {entry.content}
-                  </Text>
-                </TouchableOpacity>
-              </React.Fragment>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
       {/* Mood Tracker */}
       {moodEntries.length > 0 && (
         <View style={styles.moodSection}>
@@ -536,70 +512,6 @@ export default function MentalHealthHubScreen() {
                   <Text style={styles.moodEmoji}>{getMoodEmoji(entry.mood)}</Text>
                   <Text style={styles.moodDate}>{formatDate(entry.date)}</Text>
                 </View>
-              </React.Fragment>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* Prophet Stories */}
-      {prophetStories.length > 0 && (
-        <View style={styles.storiesSection}>
-          <View style={styles.sectionHeader}>
-            <IconSymbol
-              ios_icon_name="book.closed.fill"
-              android_material_icon_name="auto-stories"
-              size={28}
-              color={colors.primary}
-            />
-            <Text style={styles.sectionTitle}>Prophet Stories</Text>
-            <TouchableOpacity
-              onPress={() => router.push('/(tabs)/(wellness)/prophet-stories' as any)}
-              style={styles.seeAllButton}
-            >
-              <Text style={styles.seeAllText}>See All</Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron-right"
-                size={18}
-                color={colors.primary}
-              />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.storiesGrid}>
-            {prophetStories.map((story, index) => (
-              <React.Fragment key={index}>
-                <TouchableOpacity
-                  style={styles.storyCard}
-                  activeOpacity={0.8}
-                  onPress={() => router.push({
-                    pathname: '/(tabs)/(wellness)/prophet-stories' as any,
-                    params: { storyId: story.id }
-                  })}
-                >
-                  <LinearGradient
-                    colors={colors.gradientSunset}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.storyGradient}
-                  >
-                    <View style={styles.storyIconContainer}>
-                      <IconSymbol
-                        ios_icon_name="book.closed.fill"
-                        android_material_icon_name="auto-stories"
-                        size={32}
-                        color={colors.card}
-                      />
-                    </View>
-                    <Text style={styles.storyCategory}>{story.category}</Text>
-                    <Text style={styles.storyTitle} numberOfLines={2}>
-                      {story.title}
-                    </Text>
-                    <Text style={styles.storyPreview} numberOfLines={3}>
-                      {story.mental_health_connection}
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
               </React.Fragment>
             ))}
           </View>
@@ -793,131 +705,206 @@ export default function MentalHealthHubScreen() {
         </Text>
       </View>
 
-      {/* Prophet Modal */}
+      {/* Journal Modal Window */}
       <Modal
-        visible={showProphetModal}
+        visible={showJournalModal}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowProphetModal(false)}
+        onRequestClose={closeJournalWindow}
       >
         <SafeAreaView style={styles.modalContainer} edges={['top']}>
-          <ScrollView
-            style={styles.modalScroll}
-            contentContainerStyle={styles.modalContent}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.modalHeader}>
-              <TouchableOpacity
-                onPress={() => setShowProphetModal(false)}
-                style={styles.closeButton}
-              >
-                <IconSymbol
-                  ios_icon_name="xmark"
-                  android_material_icon_name="close"
-                  size={24}
-                  color={colors.text}
-                />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalTitleSection}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity
+              onPress={closeJournalWindow}
+              style={styles.closeButton}
+            >
+              <IconSymbol
+                ios_icon_name="xmark"
+                android_material_icon_name="close"
+                size={24}
+                color={colors.text}
+              />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>My Journal</Text>
+            <TouchableOpacity
+              style={styles.newEntryIconButton}
+              onPress={openNewEntry}
+            >
               <LinearGradient
-                colors={colors.gradientSunset}
+                colors={colors.gradientPrimary}
                 start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.modalTitleGradient}
+                end={{ x: 1, y: 0 }}
+                style={styles.newEntryIconGradient}
               >
                 <IconSymbol
-                  ios_icon_name="book.closed.fill"
-                  android_material_icon_name="auto-stories"
-                  size={64}
+                  ios_icon_name="plus"
+                  android_material_icon_name="add"
+                  size={24}
                   color={colors.card}
                 />
-                <Text style={styles.modalTitle}>
-                  Prophet Muhammad&apos;s (ﷺ) Mental Health Journey
-                </Text>
               </LinearGradient>
-            </View>
+            </TouchableOpacity>
+          </View>
 
-            <View style={styles.modalIntro}>
-              <Text style={styles.modalIntroText}>
-                The Prophet Muhammad (ﷺ) faced immense emotional and mental challenges throughout his life. 
-                His experiences offer profound guidance for dealing with grief, anxiety, depression, and stress.
-              </Text>
-            </View>
-
-            <View style={styles.modalSection}>
-              <Text style={styles.modalSectionTitle}>Grief & Loss</Text>
-              <Text style={styles.modalSectionText}>
-                The Prophet (ﷺ) experienced profound grief when he lost his beloved wife Khadijah (RA) and his uncle Abu Talib 
-                in the same year, known as the &quot;Year of Sorrow.&quot; He openly wept and mourned, showing us that expressing 
-                grief is natural and healthy. He taught us that it&apos;s okay to cry and feel sadness, but to always maintain 
-                hope in Allah&apos;s mercy.
-              </Text>
-            </View>
-
-            <View style={styles.modalSection}>
-              <Text style={styles.modalSectionTitle}>Anxiety & Stress</Text>
-              <Text style={styles.modalSectionText}>
-                During times of extreme stress, such as the Battle of Ahzab when the Muslims were surrounded, the Prophet (ﷺ) 
-                turned to prayer and dhikr. He would seek solace in the Cave of Hira, spending time in reflection and connection 
-                with Allah. This teaches us the importance of spiritual practices in managing anxiety.
-              </Text>
-            </View>
-
-            <View style={styles.modalSection}>
-              <Text style={styles.modalSectionTitle}>Depression & Sadness</Text>
-              <Text style={styles.modalSectionText}>
-                When the Prophet (ﷺ) felt overwhelmed, he would say: &quot;O Allah, I seek refuge in You from anxiety and sorrow, 
-                weakness and laziness, miserliness and cowardice, the burden of debts and from being overpowered by men.&quot; 
-                This dua acknowledges the reality of these feelings while seeking divine help.
-              </Text>
-            </View>
-
-            <View style={styles.modalSection}>
-              <Text style={styles.modalSectionTitle}>Self-Care & Balance</Text>
-              <Text style={styles.modalSectionText}>
-                The Prophet (ﷺ) emphasized the importance of taking care of one&apos;s body and mind. He said: &quot;Your body 
-                has a right over you, your eyes have a right over you, and your spouse has a right over you.&quot; He practiced 
-                moderation in all things and encouraged rest, healthy eating, and physical activity.
-              </Text>
-            </View>
-
-            <View style={styles.modalSection}>
-              <Text style={styles.modalSectionTitle}>Seeking Support</Text>
-              <Text style={styles.modalSectionText}>
-                The Prophet (ﷺ) didn&apos;t face his challenges alone. He confided in his companions, sought their counsel, 
-                and accepted their support. This teaches us that seeking help from others is a sign of strength, not weakness.
-              </Text>
-            </View>
-
-            <View style={styles.modalCTA}>
-              <TouchableOpacity
-                style={styles.modalCTAButton}
-                onPress={() => {
-                  setShowProphetModal(false);
-                  router.push('/(tabs)/(wellness)/prophet-stories' as any);
-                }}
-                activeOpacity={0.8}
+          {/* Today's Suggested Prompt */}
+          {!showNewEntry && !selectedEntry && prompts.length > 0 && (
+            <View style={styles.todayPromptSection}>
+              <LinearGradient
+                colors={colors.gradientInfo}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.todayPromptGradient}
               >
-                <LinearGradient
-                  colors={colors.gradientSunset}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.modalCTAGradient}
+                <View style={styles.todayPromptBadge}>
+                  <IconSymbol
+                    ios_icon_name="sparkles"
+                    android_material_icon_name="auto-awesome"
+                    size={16}
+                    color={colors.card}
+                  />
+                  <Text style={styles.todayPromptBadgeText}>TODAY&apos;S PROMPT</Text>
+                </View>
+                <Text style={styles.todayPromptText}>{prompts[0].prompt_text}</Text>
+                <TouchableOpacity
+                  style={styles.todayPromptButton}
+                  onPress={openNewEntry}
+                  activeOpacity={0.8}
                 >
-                  <Text style={styles.modalCTAText}>Explore More Stories</Text>
+                  <Text style={styles.todayPromptButtonText}>Start Writing</Text>
                   <IconSymbol
                     ios_icon_name="arrow.right"
                     android_material_icon_name="arrow-forward"
-                    size={24}
+                    size={20}
                     color={colors.card}
                   />
-                </LinearGradient>
-              </TouchableOpacity>
+                </TouchableOpacity>
+              </LinearGradient>
             </View>
+          )}
 
-            <View style={styles.bottomPadding} />
+          {/* Previous Entries Bar */}
+          <View style={styles.entriesBar}>
+            <Text style={styles.entriesBarTitle}>Previous Entries</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.entriesBarScroll}
+            >
+              {journalEntries.map((entry, index) => (
+                <React.Fragment key={index}>
+                  <TouchableOpacity
+                    style={[
+                      styles.entryBarItem,
+                      selectedEntry?.id === entry.id && styles.entryBarItemActive,
+                    ]}
+                    onPress={() => viewEntry(entry)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.entryBarEmoji}>{getMoodEmoji(entry.mood)}</Text>
+                    <Text style={styles.entryBarTitle} numberOfLines={1}>
+                      {entry.title}
+                    </Text>
+                    <Text style={styles.entryBarDate}>
+                      {formatDate(entry.created_at)}
+                    </Text>
+                  </TouchableOpacity>
+                </React.Fragment>
+              ))}
+              {journalEntries.length === 0 && (
+                <Text style={styles.noEntriesText}>No entries yet. Start writing!</Text>
+              )}
+            </ScrollView>
+          </View>
+
+          {/* Content Area */}
+          <ScrollView
+            style={styles.contentScroll}
+            contentContainerStyle={styles.modalContentContainer}
+            showsVerticalScrollIndicator={false}
+          >
+            {showNewEntry ? (
+              // New Entry Form
+              <View style={styles.newEntryForm}>
+                <Text style={styles.formSectionTitle}>How are you feeling?</Text>
+                <View style={styles.moodGrid}>
+                  {MOODS.map((mood, index) => (
+                    <React.Fragment key={index}>
+                      <TouchableOpacity
+                        style={[
+                          styles.moodButton,
+                          selectedMood === mood.value && styles.moodButtonSelected,
+                        ]}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setSelectedMood(mood.value);
+                        }}
+                      >
+                        <Text style={styles.moodEmoji2}>{mood.emoji}</Text>
+                        <Text style={styles.moodLabel}>{mood.label}</Text>
+                      </TouchableOpacity>
+                    </React.Fragment>
+                  ))}
+                </View>
+
+                <Text style={styles.formSectionTitle}>Title (Optional)</Text>
+                <TextInput
+                  style={styles.titleInput}
+                  placeholder="Give your entry a title..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={newEntryTitle}
+                  onChangeText={setNewEntryTitle}
+                />
+
+                <Text style={styles.formSectionTitle}>Your Thoughts</Text>
+                <TextInput
+                  style={styles.contentInput}
+                  placeholder="Write your thoughts, feelings, and reflections..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={newEntryContent}
+                  onChangeText={setNewEntryContent}
+                  multiline
+                  textAlignVertical="top"
+                />
+
+                <TouchableOpacity
+                  style={styles.saveButton}
+                  onPress={saveNewEntry}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={colors.gradientPrimary}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.saveButtonGradient}
+                  >
+                    <IconSymbol
+                      ios_icon_name="checkmark.circle.fill"
+                      android_material_icon_name="check-circle"
+                      size={24}
+                      color={colors.card}
+                    />
+                    <Text style={styles.saveButtonText}>Save Entry</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <Text style={styles.imanTrackerHint}>
+                  💫 Journaling counts toward your mental health goals in the Iman Tracker
+                </Text>
+              </View>
+            ) : selectedEntry ? (
+              // View Selected Entry
+              <View style={styles.entryView}>
+                <View style={styles.entryViewHeader}>
+                  <Text style={styles.entryViewMood}>{getMoodEmoji(selectedEntry.mood)}</Text>
+                  <View style={styles.entryViewHeaderText}>
+                    <Text style={styles.entryViewTitle}>{selectedEntry.title}</Text>
+                    <Text style={styles.entryViewDate}>{formatFullDate(selectedEntry.created_at)}</Text>
+                  </View>
+                </View>
+                <View style={styles.entryViewDivider} />
+                <Text style={styles.entryViewContent}>{selectedEntry.content}</Text>
+              </View>
+            ) : null}
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -1003,20 +990,20 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.card,
   },
-  prophetSection: {
+  journalWindowSection: {
     marginHorizontal: spacing.xl,
     marginBottom: spacing.xxl,
   },
-  prophetFeatureCard: {
+  journalWindowButton: {
     borderRadius: borderRadius.xl,
     overflow: 'hidden',
     ...shadows.large,
   },
-  prophetFeatureGradient: {
+  journalWindowGradient: {
     padding: spacing.xxl,
     alignItems: 'center',
   },
-  prophetFeatureIcon: {
+  journalWindowIcon: {
     width: 96,
     height: 96,
     borderRadius: 48,
@@ -1025,21 +1012,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.lg,
   },
-  prophetFeatureTitle: {
+  journalWindowTitle: {
     ...typography.h2,
     color: colors.card,
-    textAlign: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
-  prophetFeatureSubtitle: {
+  journalWindowSubtitle: {
     ...typography.body,
     color: colors.card,
     opacity: 0.95,
     textAlign: 'center',
     marginBottom: spacing.lg,
-    lineHeight: 24,
   },
-  prophetFeatureAction: {
+  journalWindowAction: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -1048,7 +1033,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     borderRadius: borderRadius.lg,
   },
-  prophetFeatureActionText: {
+  journalWindowActionText: {
     ...typography.h4,
     color: colors.card,
   },
@@ -1125,85 +1110,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
-  promptSection: {
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.xxl,
-  },
-  promptCard: {
-    borderRadius: borderRadius.xl,
-    overflow: 'hidden',
-    ...shadows.large,
-  },
-  promptGradient: {
-    padding: spacing.xl,
-  },
-  promptBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.md,
-  },
-  promptBadgeText: {
-    ...typography.smallBold,
-    color: colors.card,
-  },
-  promptText: {
-    ...typography.h3,
-    color: colors.card,
-    marginBottom: spacing.lg,
-    lineHeight: 32,
-  },
-  promptAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  promptActionText: {
-    ...typography.bodyBold,
-    color: colors.card,
-  },
-  journalSection: {
-    marginBottom: spacing.xxl,
-  },
-  horizontalScroll: {
-    paddingHorizontal: spacing.xl,
-    gap: spacing.md,
-  },
-  journalCard: {
-    width: SCREEN_WIDTH * 0.7,
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.medium,
-  },
-  journalCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  journalCardTitle: {
-    ...typography.h4,
-    color: colors.text,
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  journalCardDate: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
-  journalCardContent: {
-    ...typography.body,
-    color: colors.textSecondary,
-    lineHeight: 22,
-  },
   moodSection: {
     marginHorizontal: spacing.xl,
     marginBottom: spacing.xxl,
@@ -1230,52 +1136,6 @@ const styles = StyleSheet.create({
   moodDate: {
     ...typography.small,
     color: colors.textSecondary,
-  },
-  storiesSection: {
-    marginBottom: spacing.xxl,
-  },
-  storiesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: spacing.xl,
-    gap: spacing.md,
-  },
-  storyCard: {
-    width: CARD_WIDTH,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    ...shadows.medium,
-  },
-  storyGradient: {
-    padding: spacing.lg,
-    minHeight: 200,
-  },
-  storyIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  storyCategory: {
-    ...typography.smallBold,
-    color: colors.card,
-    opacity: 0.8,
-    marginBottom: spacing.xs,
-    textTransform: 'uppercase',
-  },
-  storyTitle: {
-    ...typography.h4,
-    color: colors.card,
-    marginBottom: spacing.sm,
-  },
-  storyPreview: {
-    ...typography.caption,
-    color: colors.card,
-    opacity: 0.9,
-    lineHeight: 20,
   },
   duasSection: {
     marginBottom: spacing.xxl,
@@ -1421,17 +1281,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  modalScroll: {
-    flex: 1,
-  },
-  modalContent: {
-    paddingTop: spacing.lg,
-    paddingHorizontal: spacing.xl,
-  },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   closeButton: {
     width: 40,
@@ -1442,74 +1299,237 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.small,
   },
-  modalTitleSection: {
-    marginBottom: spacing.xxl,
+  modalTitle: {
+    ...typography.h3,
+    color: colors.text,
+  },
+  newEntryIconButton: {
+    borderRadius: borderRadius.round,
+    overflow: 'hidden',
+    ...shadows.medium,
+  },
+  newEntryIconGradient: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  todayPromptSection: {
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
     borderRadius: borderRadius.xl,
     overflow: 'hidden',
     ...shadows.large,
   },
-  modalTitleGradient: {
-    padding: spacing.xxxl,
+  todayPromptGradient: {
+    padding: spacing.xl,
+  },
+  todayPromptBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  modalTitle: {
-    ...typography.h2,
-    color: colors.card,
-    textAlign: 'center',
-    marginTop: spacing.lg,
-  },
-  modalIntro: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.xxl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.small,
-  },
-  modalIntroText: {
-    ...typography.body,
-    color: colors.text,
-    lineHeight: 24,
-  },
-  modalSection: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.small,
-  },
-  modalSectionTitle: {
-    ...typography.h4,
-    color: colors.primary,
+    gap: spacing.xs,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
     marginBottom: spacing.md,
   },
-  modalSectionText: {
+  todayPromptBadgeText: {
+    ...typography.smallBold,
+    color: colors.card,
+  },
+  todayPromptText: {
+    ...typography.h3,
+    color: colors.card,
+    marginBottom: spacing.lg,
+    lineHeight: 32,
+  },
+  todayPromptButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+  },
+  todayPromptButtonText: {
+    ...typography.bodyBold,
+    color: colors.card,
+  },
+  entriesBar: {
+    backgroundColor: colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingVertical: spacing.md,
+  },
+  entriesBarTitle: {
+    ...typography.bodyBold,
+    color: colors.text,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  entriesBarScroll: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+  },
+  entryBarItem: {
+    backgroundColor: colors.highlight,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    minWidth: 100,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  entryBarItemActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '20',
+  },
+  entryBarEmoji: {
+    fontSize: 24,
+    marginBottom: spacing.xs,
+  },
+  entryBarTitle: {
+    ...typography.small,
+    color: colors.text,
+    fontWeight: '600',
+    marginBottom: 2,
+    textAlign: 'center',
+  },
+  entryBarDate: {
+    ...typography.small,
+    color: colors.textSecondary,
+    fontSize: 10,
+  },
+  noEntriesText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    paddingVertical: spacing.md,
+  },
+  contentScroll: {
+    flex: 1,
+  },
+  modalContentContainer: {
+    padding: spacing.xl,
+  },
+  newEntryForm: {
+    gap: spacing.lg,
+  },
+  formSectionTitle: {
+    ...typography.h4,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  moodGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  moodButton: {
+    width: '30%',
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  moodButtonSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.highlight,
+  },
+  moodEmoji2: {
+    fontSize: 32,
+    marginBottom: spacing.xs,
+  },
+  moodLabel: {
+    ...typography.caption,
+    color: colors.text,
+  },
+  titleInput: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     ...typography.body,
     color: colors.text,
-    lineHeight: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  modalCTA: {
-    marginTop: spacing.lg,
-    marginBottom: spacing.xxl,
+  contentInput: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    ...typography.body,
+    color: colors.text,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minHeight: 300,
   },
-  modalCTAButton: {
+  saveButton: {
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
     ...shadows.large,
   },
-  modalCTAGradient: {
+  saveButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
     paddingVertical: spacing.lg,
   },
-  modalCTAText: {
+  saveButtonText: {
     ...typography.h4,
     color: colors.card,
+  },
+  imanTrackerHint: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  entryView: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.small,
+  },
+  entryViewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  entryViewMood: {
+    fontSize: 48,
+  },
+  entryViewHeaderText: {
+    flex: 1,
+  },
+  entryViewTitle: {
+    ...typography.h3,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  entryViewDate: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  entryViewDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginBottom: spacing.lg,
+  },
+  entryViewContent: {
+    ...typography.body,
+    color: colors.text,
+    lineHeight: 26,
   },
   bottomPadding: {
     height: 120,
