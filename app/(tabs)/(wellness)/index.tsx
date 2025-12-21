@@ -1,5 +1,5 @@
 
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
@@ -13,9 +13,12 @@ const HEADER_MAX_HEIGHT = 280;
 const HEADER_MIN_HEIGHT = 80;
 const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
 
+type WellnessTab = 'mental' | 'physical';
+
 export default function WellnessScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const { amanahGoals, sectionScores } = useImanTracker();
+  const [activeTab, setActiveTab] = useState<WellnessTab>('mental');
 
   // Calculate Amanah completion percentage
   const calculateAmanahCompletion = () => {
@@ -84,6 +87,11 @@ export default function WellnessScreen() {
     outputRange: [1, 0.6],
     extrapolate: 'clamp',
   });
+
+  const handleTabChange = (tab: WellnessTab) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setActiveTab(tab);
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -155,6 +163,75 @@ export default function WellnessScreen() {
         </LinearGradient>
       </Animated.View>
 
+      {/* Tab Switcher */}
+      <View style={styles.tabSwitcher}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'mental' && styles.tabActive]}
+          onPress={() => handleTabChange('mental')}
+          activeOpacity={0.7}
+        >
+          {activeTab === 'mental' ? (
+            <LinearGradient
+              colors={colors.gradientPrimary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.tabGradient}
+            >
+              <IconSymbol
+                ios_icon_name="brain.head.profile"
+                android_material_icon_name="psychology"
+                size={20}
+                color={colors.card}
+              />
+              <Text style={styles.tabTextActive}>Mental Wellness</Text>
+            </LinearGradient>
+          ) : (
+            <View style={styles.tabContent}>
+              <IconSymbol
+                ios_icon_name="brain.head.profile"
+                android_material_icon_name="psychology"
+                size={20}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.tabText}>Mental Wellness</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'physical' && styles.tabActive]}
+          onPress={() => handleTabChange('physical')}
+          activeOpacity={0.7}
+        >
+          {activeTab === 'physical' ? (
+            <LinearGradient
+              colors={colors.gradientWarning}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.tabGradient}
+            >
+              <IconSymbol
+                ios_icon_name="figure.run"
+                android_material_icon_name="directions-run"
+                size={20}
+                color={colors.card}
+              />
+              <Text style={styles.tabTextActive}>Physical Wellness</Text>
+            </LinearGradient>
+          ) : (
+            <View style={styles.tabContent}>
+              <IconSymbol
+                ios_icon_name="figure.run"
+                android_material_icon_name="directions-run"
+                size={20}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.tabText}>Physical Wellness</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
       {/* Scrollable Content */}
       <Animated.ScrollView
         style={styles.scrollView}
@@ -166,285 +243,215 @@ export default function WellnessScreen() {
           { useNativeDriver: false }
         )}
       >
-        {/* Mental Wellness Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <IconSymbol
-              ios_icon_name="brain.head.profile"
-              android_material_icon_name="psychology"
-              size={32}
-              color={colors.primary}
-            />
-            <Text style={styles.sectionTitle}>Mental Wellness</Text>
+        {activeTab === 'mental' ? (
+          <View style={styles.section}>
+            <View style={styles.cardsGrid}>
+              <TouchableOpacity
+                style={styles.card}
+                activeOpacity={0.8}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/(tabs)/(wellness)/journal' as any);
+                }}
+              >
+                <LinearGradient
+                  colors={colors.gradientPrimary}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.cardGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="book.fill"
+                    android_material_icon_name="menu-book"
+                    size={36}
+                    color={colors.card}
+                  />
+                  <Text style={styles.cardTitle}>Journal</Text>
+                  <Text style={styles.cardSubtitle}>Express your thoughts</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.card}
+                activeOpacity={0.8}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/(tabs)/(wellness)/meditation' as any);
+                }}
+              >
+                <LinearGradient
+                  colors={colors.gradientTeal}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.cardGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="leaf.fill"
+                    android_material_icon_name="spa"
+                    size={36}
+                    color={colors.card}
+                  />
+                  <Text style={styles.cardTitle}>Meditation</Text>
+                  <Text style={styles.cardSubtitle}>Find inner peace</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.card}
+                activeOpacity={0.8}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/(tabs)/(wellness)/mental-duas' as any);
+                }}
+              >
+                <LinearGradient
+                  colors={colors.gradientPurple}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.cardGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="hands.sparkles.fill"
+                    android_material_icon_name="self-improvement"
+                    size={36}
+                    color={colors.card}
+                  />
+                  <Text style={styles.cardTitle}>Healing Duas</Text>
+                  <Text style={styles.cardSubtitle}>Spiritual comfort</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.card}
+                activeOpacity={0.8}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/(tabs)/(wellness)/emotional-support' as any);
+                }}
+              >
+                <LinearGradient
+                  colors={colors.gradientAccent}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.cardGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="heart.fill"
+                    android_material_icon_name="favorite"
+                    size={36}
+                    color={colors.card}
+                  />
+                  <Text style={styles.cardTitle}>Support</Text>
+                  <Text style={styles.cardSubtitle}>Get help & guidance</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.card}
+                activeOpacity={0.8}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/(tabs)/(wellness)/prophet-stories' as any);
+                }}
+              >
+                <LinearGradient
+                  colors={colors.gradientInfo}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.cardGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="book.pages.fill"
+                    android_material_icon_name="auto-stories"
+                    size={36}
+                    color={colors.card}
+                  />
+                  <Text style={styles.cardTitle}>Prophet Stories</Text>
+                  <Text style={styles.cardSubtitle}>Learn & reflect</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
           </View>
-
-          <View style={styles.cardsGrid}>
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.8}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/(tabs)/(wellness)/journal' as any);
-              }}
-            >
-              <LinearGradient
-                colors={colors.gradientPrimary}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.cardGradient}
+        ) : (
+          <View style={styles.section}>
+            <View style={styles.cardsGrid}>
+              <TouchableOpacity
+                style={styles.card}
+                activeOpacity={0.8}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/(tabs)/(wellness)/activity-tracker' as any);
+                }}
               >
-                <IconSymbol
-                  ios_icon_name="book.fill"
-                  android_material_icon_name="menu-book"
-                  size={36}
-                  color={colors.card}
-                />
-                <Text style={styles.cardTitle}>Journal</Text>
-                <Text style={styles.cardSubtitle}>Express your thoughts</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={colors.gradientWarning}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.cardGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="figure.mixed.cardio"
+                    android_material_icon_name="fitness-center"
+                    size={36}
+                    color={colors.card}
+                  />
+                  <Text style={styles.cardTitle}>Activity Tracker</Text>
+                  <Text style={styles.cardSubtitle}>Log your workouts</Text>
+                </LinearGradient>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.8}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/(tabs)/(wellness)/mood-tracker' as any);
-              }}
-            >
-              <LinearGradient
-                colors={colors.gradientSecondary}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.cardGradient}
+              <TouchableOpacity
+                style={styles.card}
+                activeOpacity={0.8}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/(tabs)/(wellness)/sleep-tracker' as any);
+                }}
               >
-                <IconSymbol
-                  ios_icon_name="face.smiling"
-                  android_material_icon_name="mood"
-                  size={36}
-                  color={colors.card}
-                />
-                <Text style={styles.cardTitle}>Mood Tracker</Text>
-                <Text style={styles.cardSubtitle}>Track your emotions</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={colors.gradientSecondary}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.cardGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="moon.stars.fill"
+                    android_material_icon_name="bedtime"
+                    size={36}
+                    color={colors.card}
+                  />
+                  <Text style={styles.cardTitle}>Sleep Tracker</Text>
+                  <Text style={styles.cardSubtitle}>Monitor your rest</Text>
+                </LinearGradient>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.8}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/(tabs)/(wellness)/meditation' as any);
-              }}
-            >
-              <LinearGradient
-                colors={colors.gradientTeal}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.cardGradient}
+              <TouchableOpacity
+                style={styles.card}
+                activeOpacity={0.8}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/(tabs)/(wellness)/physical-goals' as any);
+                }}
               >
-                <IconSymbol
-                  ios_icon_name="leaf.fill"
-                  android_material_icon_name="spa"
-                  size={36}
-                  color={colors.card}
-                />
-                <Text style={styles.cardTitle}>Meditation</Text>
-                <Text style={styles.cardSubtitle}>Find inner peace</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.8}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/(tabs)/(wellness)/mental-duas' as any);
-              }}
-            >
-              <LinearGradient
-                colors={colors.gradientPurple}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.cardGradient}
-              >
-                <IconSymbol
-                  ios_icon_name="hands.sparkles.fill"
-                  android_material_icon_name="self-improvement"
-                  size={36}
-                  color={colors.card}
-                />
-                <Text style={styles.cardTitle}>Healing Duas</Text>
-                <Text style={styles.cardSubtitle}>Spiritual comfort</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.8}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/(tabs)/(wellness)/emotional-support' as any);
-              }}
-            >
-              <LinearGradient
-                colors={colors.gradientAccent}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.cardGradient}
-              >
-                <IconSymbol
-                  ios_icon_name="heart.fill"
-                  android_material_icon_name="favorite"
-                  size={36}
-                  color={colors.card}
-                />
-                <Text style={styles.cardTitle}>Support</Text>
-                <Text style={styles.cardSubtitle}>Get help & guidance</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.8}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/(tabs)/(wellness)/prophet-stories' as any);
-              }}
-            >
-              <LinearGradient
-                colors={colors.gradientInfo}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.cardGradient}
-              >
-                <IconSymbol
-                  ios_icon_name="book.pages.fill"
-                  android_material_icon_name="auto-stories"
-                  size={36}
-                  color={colors.card}
-                />
-                <Text style={styles.cardTitle}>Prophet Stories</Text>
-                <Text style={styles.cardSubtitle}>Learn & reflect</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={colors.gradientInfo}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.cardGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="target"
+                    android_material_icon_name="track-changes"
+                    size={36}
+                    color={colors.card}
+                  />
+                  <Text style={styles.cardTitle}>Goals</Text>
+                  <Text style={styles.cardSubtitle}>Set & achieve</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-
-        {/* Physical Wellness Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <IconSymbol
-              ios_icon_name="figure.run"
-              android_material_icon_name="directions-run"
-              size={32}
-              color={colors.warning}
-            />
-            <Text style={styles.sectionTitle}>Physical Wellness</Text>
-          </View>
-
-          <View style={styles.cardsGrid}>
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.8}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/(tabs)/(wellness)/activity-tracker' as any);
-              }}
-            >
-              <LinearGradient
-                colors={colors.gradientWarning}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.cardGradient}
-              >
-                <IconSymbol
-                  ios_icon_name="figure.mixed.cardio"
-                  android_material_icon_name="fitness-center"
-                  size={36}
-                  color={colors.card}
-                />
-                <Text style={styles.cardTitle}>Activity Tracker</Text>
-                <Text style={styles.cardSubtitle}>Log your workouts</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.8}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/(tabs)/(wellness)/sleep-tracker' as any);
-              }}
-            >
-              <LinearGradient
-                colors={colors.gradientSecondary}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.cardGradient}
-              >
-                <IconSymbol
-                  ios_icon_name="moon.stars.fill"
-                  android_material_icon_name="bedtime"
-                  size={36}
-                  color={colors.card}
-                />
-                <Text style={styles.cardTitle}>Sleep Tracker</Text>
-                <Text style={styles.cardSubtitle}>Monitor your rest</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.8}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/(tabs)/(wellness)/nutrition-tracker' as any);
-              }}
-            >
-              <LinearGradient
-                colors={colors.gradientSuccess}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.cardGradient}
-              >
-                <IconSymbol
-                  ios_icon_name="fork.knife"
-                  android_material_icon_name="restaurant"
-                  size={36}
-                  color={colors.card}
-                />
-                <Text style={styles.cardTitle}>Nutrition</Text>
-                <Text style={styles.cardSubtitle}>Track your meals</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.8}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/(tabs)/(wellness)/physical-goals' as any);
-              }}
-            >
-              <LinearGradient
-                colors={colors.gradientInfo}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.cardGradient}
-              >
-                <IconSymbol
-                  ios_icon_name="target"
-                  android_material_icon_name="track-changes"
-                  size={36}
-                  color={colors.card}
-                />
-                <Text style={styles.cardTitle}>Goals</Text>
-                <Text style={styles.cardSubtitle}>Set & achieve</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </View>
+        )}
 
         {/* Crisis Support Banner */}
         <TouchableOpacity
@@ -645,25 +652,54 @@ const styles = StyleSheet.create({
     color: colors.card,
     opacity: 0.8,
   },
+  tabSwitcher: {
+    flexDirection: 'row',
+    marginTop: HEADER_MAX_HEIGHT + spacing.lg + spacing.xl,
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.lg,
+    gap: spacing.md,
+  },
+  tab: {
+    flex: 1,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  tabActive: {
+    borderColor: 'transparent',
+  },
+  tabGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+  },
+  tabContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.card,
+  },
+  tabText: {
+    ...typography.bodyBold,
+    color: colors.textSecondary,
+  },
+  tabTextActive: {
+    ...typography.bodyBold,
+    color: colors.card,
+  },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
-    paddingTop: HEADER_MAX_HEIGHT + spacing.lg + spacing.xl,
     paddingHorizontal: spacing.xl,
   },
   section: {
     marginBottom: spacing.xxl,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  sectionTitle: {
-    ...typography.h2,
-    color: colors.text,
   },
   cardsGrid: {
     flexDirection: 'row',

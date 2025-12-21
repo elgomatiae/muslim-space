@@ -1,86 +1,45 @@
 
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/contexts/AuthContext";
 import * as Haptics from 'expo-haptics';
-
-const WORKOUT_TYPES = [
-  { value: 'general', label: 'General Fitness', icon: { ios: 'figure.mixed.cardio', android: 'fitness-center' } },
-  { value: 'cardio', label: 'Cardio', icon: { ios: 'figure.run', android: 'directions-run' } },
-  { value: 'strength', label: 'Strength Training', icon: { ios: 'dumbbell.fill', android: 'fitness-center' } },
-  { value: 'yoga', label: 'Yoga', icon: { ios: 'figure.yoga', android: 'self-improvement' } },
-  { value: 'walking', label: 'Walking', icon: { ios: 'figure.walk', android: 'directions-walk' } },
-  { value: 'running', label: 'Running', icon: { ios: 'figure.run', android: 'directions-run' } },
-  { value: 'sports', label: 'Sports', icon: { ios: 'sportscourt.fill', android: 'sports' } },
-];
+import { useImanTracker } from "@/contexts/ImanTrackerContext";
 
 export default function PhysicalGoalsScreen() {
-  const { user } = useAuth();
-  const [dailyStepsGoal, setDailyStepsGoal] = useState('10000');
-  const [dailyExerciseGoal, setDailyExerciseGoal] = useState('30');
-  const [dailyWaterGoal, setDailyWaterGoal] = useState('8');
-  const [weeklyWorkoutsGoal, setWeeklyWorkoutsGoal] = useState('3');
-  const [selectedWorkoutType, setSelectedWorkoutType] = useState('general');
+  const { amanahGoals, updateAmanahGoals } = useImanTracker();
   const [loading, setLoading] = useState(true);
 
-  const loadGoals = useCallback(async () => {
-    if (!user) return;
-    
-    const { data } = await supabase
-      .from('physical_wellness_goals')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
-
-    if (data) {
-      setDailyStepsGoal(data.daily_steps_goal.toString());
-      setDailyExerciseGoal(data.daily_exercise_minutes_goal.toString());
-      setDailyWaterGoal(data.daily_water_glasses_goal.toString());
-      setWeeklyWorkoutsGoal(data.weekly_workout_sessions_goal.toString());
-      setSelectedWorkoutType(data.workout_type || 'general');
-    }
-    setLoading(false);
-  }, [user]);
-
   useEffect(() => {
-    loadGoals();
-  }, [loadGoals]);
-
-  const saveGoals = async () => {
-    if (!user) return;
-    
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    
-    const { error } = await supabase
-      .from('physical_wellness_goals')
-      .upsert({
-        user_id: user.id,
-        daily_steps_goal: parseInt(dailyStepsGoal) || 10000,
-        daily_exercise_minutes_goal: parseInt(dailyExerciseGoal) || 30,
-        daily_water_glasses_goal: parseInt(dailyWaterGoal) || 8,
-        weekly_workout_sessions_goal: parseInt(weeklyWorkoutsGoal) || 3,
-        workout_type: selectedWorkoutType,
-        updated_at: new Date().toISOString(),
-      });
-
-    // Also update iman_tracker_goals
-    await supabase
-      .from('iman_tracker_goals')
-      .upsert({
-        user_id: user.id,
-        amanah_workout_type: selectedWorkoutType,
-        updated_at: new Date().toISOString(),
-      });
-
-    if (!error) {
-      router.back();
+    if (amanahGoals) {
+      setLoading(false);
     }
+  }, [amanahGoals]);
+
+  const navigateToGoalsSettings = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push({
+      pathname: '/(tabs)/(iman)/goals-settings',
+      params: { section: 'amanah' }
+    } as any);
+  };
+
+  if (loading || !amanahGoals) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading goals...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const calculateProgress = (completed: number, goal: number) => {
+    if (goal === 0) return 0;
+    return Math.min(Math.round((completed / goal) * 100), 100);
   };
 
   return (
@@ -99,151 +58,244 @@ export default function PhysicalGoalsScreen() {
           <View style={styles.placeholder} />
         </View>
 
-        <View style={styles.workoutTypeSection}>
-          <View style={styles.sectionHeader}>
-            <IconSymbol
-              ios_icon_name="figure.mixed.cardio"
-              android_material_icon_name="fitness-center"
-              size={28}
-              color={colors.accent}
-            />
-            <Text style={styles.sectionTitle}>Workout Type Preference</Text>
-          </View>
-          <Text style={styles.sectionDescription}>
-            Select your preferred workout type to better track your fitness journey
+        {/* Info Banner */}
+        <View style={styles.infoBanner}>
+          <IconSymbol
+            ios_icon_name="link.circle.fill"
+            android_material_icon_name="link"
+            size={24}
+            color={colors.info}
+          />
+          <Text style={styles.infoBannerText}>
+            These goals are synced with your Iman Tracker. Changes here will update your Amanah ring progress.
           </Text>
-          <View style={styles.workoutTypesGrid}>
-            {WORKOUT_TYPES.map((type, index) => (
-              <React.Fragment key={index}>
-                <TouchableOpacity
+        </View>
+
+        {/* Exercise Goal */}
+        {amanahGoals.dailyExerciseGoal > 0 && (
+          <View style={styles.goalCard}>
+            <View style={styles.goalHeader}>
+              <View style={styles.goalIconContainer}>
+                <IconSymbol
+                  ios_icon_name="figure.mixed.cardio"
+                  android_material_icon_name="fitness-center"
+                  size={28}
+                  color={colors.warning}
+                />
+              </View>
+              <View style={styles.goalInfo}>
+                <Text style={styles.goalTitle}>Daily Exercise</Text>
+                <Text style={styles.goalSubtitle}>
+                  {amanahGoals.dailyExerciseCompleted} / {amanahGoals.dailyExerciseGoal} minutes
+                </Text>
+              </View>
+            </View>
+            <View style={styles.progressBarContainer}>
+              <View style={styles.progressBarBackground}>
+                <LinearGradient
+                  colors={colors.gradientWarning}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
                   style={[
-                    styles.workoutTypeCard,
-                    selectedWorkoutType === type.value && styles.workoutTypeCardActive,
+                    styles.progressBarFill,
+                    { width: `${calculateProgress(amanahGoals.dailyExerciseCompleted, amanahGoals.dailyExerciseGoal)}%` }
                   ]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setSelectedWorkoutType(type.value);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <IconSymbol
-                    ios_icon_name={type.icon.ios}
-                    android_material_icon_name={type.icon.android}
-                    size={32}
-                    color={selectedWorkoutType === type.value ? colors.accent : colors.textSecondary}
-                  />
-                  <Text style={[
-                    styles.workoutTypeLabel,
-                    selectedWorkoutType === type.value && styles.workoutTypeLabelActive,
-                  ]}>
-                    {type.label}
-                  </Text>
-                </TouchableOpacity>
-              </React.Fragment>
-            ))}
+                />
+              </View>
+              <Text style={styles.progressText}>
+                {calculateProgress(amanahGoals.dailyExerciseCompleted, amanahGoals.dailyExerciseGoal)}%
+              </Text>
+            </View>
           </View>
-        </View>
+        )}
 
-        <View style={styles.goalCard}>
-          <View style={styles.goalHeader}>
-            <IconSymbol
-              ios_icon_name="figure.walk"
-              android_material_icon_name="directions-walk"
-              size={28}
-              color={colors.primary}
-            />
-            <Text style={styles.goalTitle}>Daily Steps</Text>
+        {/* Water Goal */}
+        {amanahGoals.dailyWaterGoal > 0 && (
+          <View style={styles.goalCard}>
+            <View style={styles.goalHeader}>
+              <View style={styles.goalIconContainer}>
+                <IconSymbol
+                  ios_icon_name="drop.fill"
+                  android_material_icon_name="water-drop"
+                  size={28}
+                  color={colors.info}
+                />
+              </View>
+              <View style={styles.goalInfo}>
+                <Text style={styles.goalTitle}>Daily Water Intake</Text>
+                <Text style={styles.goalSubtitle}>
+                  {amanahGoals.dailyWaterCompleted} / {amanahGoals.dailyWaterGoal} glasses
+                </Text>
+              </View>
+            </View>
+            <View style={styles.progressBarContainer}>
+              <View style={styles.progressBarBackground}>
+                <LinearGradient
+                  colors={colors.gradientInfo}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[
+                    styles.progressBarFill,
+                    { width: `${calculateProgress(amanahGoals.dailyWaterCompleted, amanahGoals.dailyWaterGoal)}%` }
+                  ]}
+                />
+              </View>
+              <Text style={styles.progressText}>
+                {calculateProgress(amanahGoals.dailyWaterCompleted, amanahGoals.dailyWaterGoal)}%
+              </Text>
+            </View>
           </View>
-          <TextInput
-            style={styles.input}
-            value={dailyStepsGoal}
-            onChangeText={setDailyStepsGoal}
-            keyboardType="number-pad"
-            placeholder="10000"
-            placeholderTextColor={colors.textSecondary}
-          />
-          <Text style={styles.goalDescription}>Recommended: 10,000 steps per day</Text>
-        </View>
+        )}
 
-        <View style={styles.goalCard}>
-          <View style={styles.goalHeader}>
-            <IconSymbol
-              ios_icon_name="figure.mixed.cardio"
-              android_material_icon_name="fitness-center"
-              size={28}
-              color={colors.warning}
-            />
-            <Text style={styles.goalTitle}>Daily Exercise (minutes)</Text>
+        {/* Workout Sessions Goal */}
+        {amanahGoals.weeklyWorkoutGoal > 0 && (
+          <View style={styles.goalCard}>
+            <View style={styles.goalHeader}>
+              <View style={styles.goalIconContainer}>
+                <IconSymbol
+                  ios_icon_name="calendar"
+                  android_material_icon_name="event"
+                  size={28}
+                  color={colors.accent}
+                />
+              </View>
+              <View style={styles.goalInfo}>
+                <Text style={styles.goalTitle}>Weekly Workouts</Text>
+                <Text style={styles.goalSubtitle}>
+                  {amanahGoals.weeklyWorkoutCompleted} / {amanahGoals.weeklyWorkoutGoal} sessions
+                </Text>
+              </View>
+            </View>
+            <View style={styles.progressBarContainer}>
+              <View style={styles.progressBarBackground}>
+                <LinearGradient
+                  colors={colors.gradientAccent}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[
+                    styles.progressBarFill,
+                    { width: `${calculateProgress(amanahGoals.weeklyWorkoutCompleted, amanahGoals.weeklyWorkoutGoal)}%` }
+                  ]}
+                />
+              </View>
+              <Text style={styles.progressText}>
+                {calculateProgress(amanahGoals.weeklyWorkoutCompleted, amanahGoals.weeklyWorkoutGoal)}%
+              </Text>
+            </View>
           </View>
-          <TextInput
-            style={styles.input}
-            value={dailyExerciseGoal}
-            onChangeText={setDailyExerciseGoal}
-            keyboardType="number-pad"
-            placeholder="30"
-            placeholderTextColor={colors.textSecondary}
-          />
-          <Text style={styles.goalDescription}>Recommended: 30 minutes per day</Text>
-        </View>
+        )}
 
-        <View style={styles.goalCard}>
-          <View style={styles.goalHeader}>
-            <IconSymbol
-              ios_icon_name="drop.fill"
-              android_material_icon_name="water-drop"
-              size={28}
-              color={colors.info}
-            />
-            <Text style={styles.goalTitle}>Daily Water (glasses)</Text>
+        {/* Sleep Goal */}
+        {amanahGoals.dailySleepGoal > 0 && (
+          <View style={styles.goalCard}>
+            <View style={styles.goalHeader}>
+              <View style={styles.goalIconContainer}>
+                <IconSymbol
+                  ios_icon_name="moon.stars.fill"
+                  android_material_icon_name="bedtime"
+                  size={28}
+                  color={colors.secondary}
+                />
+              </View>
+              <View style={styles.goalInfo}>
+                <Text style={styles.goalTitle}>Daily Sleep</Text>
+                <Text style={styles.goalSubtitle}>
+                  {amanahGoals.dailySleepCompleted} / {amanahGoals.dailySleepGoal} hours
+                </Text>
+              </View>
+            </View>
+            <View style={styles.progressBarContainer}>
+              <View style={styles.progressBarBackground}>
+                <LinearGradient
+                  colors={colors.gradientSecondary}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[
+                    styles.progressBarFill,
+                    { width: `${calculateProgress(amanahGoals.dailySleepCompleted, amanahGoals.dailySleepGoal)}%` }
+                  ]}
+                />
+              </View>
+              <Text style={styles.progressText}>
+                {calculateProgress(amanahGoals.dailySleepCompleted, amanahGoals.dailySleepGoal)}%
+              </Text>
+            </View>
           </View>
-          <TextInput
-            style={styles.input}
-            value={dailyWaterGoal}
-            onChangeText={setDailyWaterGoal}
-            keyboardType="number-pad"
-            placeholder="8"
-            placeholderTextColor={colors.textSecondary}
-          />
-          <Text style={styles.goalDescription}>Recommended: 8 glasses (250ml each)</Text>
-        </View>
+        )}
 
-        <View style={styles.goalCard}>
-          <View style={styles.goalHeader}>
-            <IconSymbol
-              ios_icon_name="calendar"
-              android_material_icon_name="event"
-              size={28}
-              color={colors.accent}
-            />
-            <Text style={styles.goalTitle}>Weekly Workouts</Text>
+        {/* Mental Health Goal */}
+        {amanahGoals.weeklyMentalHealthGoal > 0 && (
+          <View style={styles.goalCard}>
+            <View style={styles.goalHeader}>
+              <View style={styles.goalIconContainer}>
+                <IconSymbol
+                  ios_icon_name="brain.head.profile"
+                  android_material_icon_name="psychology"
+                  size={28}
+                  color={colors.primary}
+                />
+              </View>
+              <View style={styles.goalInfo}>
+                <Text style={styles.goalTitle}>Weekly Meditation</Text>
+                <Text style={styles.goalSubtitle}>
+                  {amanahGoals.weeklyMentalHealthCompleted} / {amanahGoals.weeklyMentalHealthGoal} sessions
+                </Text>
+              </View>
+            </View>
+            <View style={styles.progressBarContainer}>
+              <View style={styles.progressBarBackground}>
+                <LinearGradient
+                  colors={colors.gradientPrimary}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[
+                    styles.progressBarFill,
+                    { width: `${calculateProgress(amanahGoals.weeklyMentalHealthCompleted, amanahGoals.weeklyMentalHealthGoal)}%` }
+                  ]}
+                />
+              </View>
+              <Text style={styles.progressText}>
+                {calculateProgress(amanahGoals.weeklyMentalHealthCompleted, amanahGoals.weeklyMentalHealthGoal)}%
+              </Text>
+            </View>
           </View>
-          <TextInput
-            style={styles.input}
-            value={weeklyWorkoutsGoal}
-            onChangeText={setWeeklyWorkoutsGoal}
-            keyboardType="number-pad"
-            placeholder="3"
-            placeholderTextColor={colors.textSecondary}
-          />
-          <Text style={styles.goalDescription}>Recommended: 3-5 sessions per week</Text>
-        </View>
+        )}
 
-        <TouchableOpacity style={styles.saveButton} onPress={saveGoals} activeOpacity={0.8}>
+        {/* Edit Goals Button */}
+        <TouchableOpacity 
+          style={styles.editButton} 
+          onPress={navigateToGoalsSettings}
+          activeOpacity={0.8}
+        >
           <LinearGradient
             colors={colors.gradientPrimary}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
-            style={styles.saveButtonGradient}
+            style={styles.editButtonGradient}
           >
             <IconSymbol
-              ios_icon_name="checkmark.circle.fill"
-              android_material_icon_name="check-circle"
+              ios_icon_name="slider.horizontal.3"
+              android_material_icon_name="tune"
               size={24}
               color={colors.card}
             />
-            <Text style={styles.saveButtonText}>Save Goals</Text>
+            <Text style={styles.editButtonText}>Customize Goals</Text>
           </LinearGradient>
         </TouchableOpacity>
+
+        {/* Info Card */}
+        <View style={styles.infoCard}>
+          <IconSymbol
+            ios_icon_name="info.circle.fill"
+            android_material_icon_name="info"
+            size={20}
+            color={colors.primary}
+          />
+          <Text style={styles.infoCardText}>
+            Your physical wellness goals contribute to your Amanah (Well-Being) ring in the Iman Tracker. 
+            Completing these goals helps maintain balance in your spiritual and physical health.
+          </Text>
+        </View>
 
         <View style={styles.bottomPadding} />
       </ScrollView>
@@ -255,6 +307,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    ...typography.body,
+    color: colors.textSecondary,
   },
   scrollView: {
     flex: 1,
@@ -281,56 +342,22 @@ const styles = StyleSheet.create({
   placeholder: {
     width: 40,
   },
-  workoutTypeSection: {
-    backgroundColor: colors.accent + '10',
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.info + '10',
+    padding: spacing.md,
     borderRadius: borderRadius.lg,
-    padding: spacing.lg,
     marginBottom: spacing.xl,
     borderWidth: 1,
-    borderColor: colors.accent + '30',
+    borderColor: colors.info + '30',
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  sectionTitle: {
-    ...typography.h4,
-    color: colors.text,
-  },
-  sectionDescription: {
+  infoBannerText: {
     ...typography.caption,
-    color: colors.textSecondary,
-    marginBottom: spacing.md,
-  },
-  workoutTypesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  workoutTypeCard: {
-    width: '31%',
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.border,
-  },
-  workoutTypeCardActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accent + '20',
-  },
-  workoutTypeLabel: {
-    ...typography.small,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    textAlign: 'center',
-  },
-  workoutTypeLabelActive: {
-    color: colors.accent,
-    fontWeight: '700',
+    color: colors.text,
+    flex: 1,
+    lineHeight: 20,
   },
   goalCard: {
     backgroundColor: colors.card,
@@ -344,43 +371,84 @@ const styles = StyleSheet.create({
   goalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
     marginBottom: spacing.md,
+    gap: spacing.md,
+  },
+  goalIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.highlight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  goalInfo: {
+    flex: 1,
   },
   goalTitle: {
     ...typography.h4,
     color: colors.text,
+    marginBottom: spacing.xs,
   },
-  input: {
-    ...typography.h2,
-    color: colors.text,
-    backgroundColor: colors.highlight,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    textAlign: 'center',
-  },
-  goalDescription: {
-    ...typography.caption,
+  goalSubtitle: {
+    ...typography.body,
     color: colors.textSecondary,
-    textAlign: 'center',
   },
-  saveButton: {
+  progressBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  progressBarBackground: {
+    flex: 1,
+    height: 12,
+    backgroundColor: colors.highlight,
+    borderRadius: borderRadius.sm,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: borderRadius.sm,
+  },
+  progressText: {
+    ...typography.bodyBold,
+    color: colors.text,
+    minWidth: 45,
+    textAlign: 'right',
+  },
+  editButton: {
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
     marginTop: spacing.lg,
+    marginBottom: spacing.xl,
     ...shadows.large,
   },
-  saveButtonGradient: {
+  editButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.lg,
   },
-  saveButtonText: {
+  editButtonText: {
     ...typography.h4,
     color: colors.card,
+  },
+  infoCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    flexDirection: 'row',
+    gap: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.small,
+  },
+  infoCardText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    flex: 1,
+    lineHeight: 20,
   },
   bottomPadding: {
     height: 100,
