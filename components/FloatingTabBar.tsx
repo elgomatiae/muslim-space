@@ -59,19 +59,22 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
 
   // Improved active tab detection with better path matching
   const activeTabIndex = React.useMemo(() => {
+    console.log('Current pathname:', pathname);
+    
     // Find the best matching tab based on the current pathname
     let bestMatch = -1;
     let bestMatchScore = 0;
 
     tabs.forEach((tab, index) => {
       let score = 0;
+      const tabRoute = tab.route as string;
 
       // Exact route match gets highest score
-      if (pathname === tab.route) {
+      if (pathname === tabRoute) {
         score = 100;
       }
       // Check if pathname starts with tab route (for nested routes)
-      else if (pathname.startsWith(tab.route as string)) {
+      else if (pathname.startsWith(tabRoute)) {
         score = 80;
       }
       // Check if pathname contains the tab name
@@ -79,9 +82,11 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
         score = 60;
       }
       // Check for partial matches in the route
-      else if (tab.route.includes('/(tabs)/') && pathname.includes(tab.route.split('/(tabs)/')[1])) {
+      else if (tabRoute.includes('/(tabs)/') && pathname.includes(tabRoute.split('/(tabs)/')[1])) {
         score = 40;
       }
+
+      console.log(`Tab ${tab.name} (${tabRoute}) score: ${score}`);
 
       if (score > bestMatchScore) {
         bestMatchScore = score;
@@ -89,6 +94,7 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
       }
     });
 
+    console.log('Active tab index:', bestMatch);
     // Default to first tab if no match found
     return bestMatch >= 0 ? bestMatch : 0;
   }, [pathname, tabs]);
@@ -144,15 +150,6 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
       <BlurView intensity={80} tint="light" style={styles.blurContainer}>
         <View style={styles.container}>
-          {/* TOP INDICATOR LINE - ENHANCED FOR VISIBILITY */}
-          <Animated.View style={[styles.indicator, indicatorStyle]}>
-            <LinearGradient
-              colors={colors.gradientOcean}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.indicatorGradient}
-            />
-          </Animated.View>
           <View style={styles.tabsContainer}>
             {tabs.map((tab, index) => {
               const isActive = activeTabIndex === index;
@@ -314,27 +311,14 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  indicator: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    height: 5,
-    borderRadius: 2.5,
-    overflow: 'hidden',
-    zIndex: 10,
-  },
-  indicatorGradient: {
-    width: '100%',
-    height: '100%',
-  },
   tabsContainer: {
     flexDirection: 'row',
-    height: 90,
+    height: 110,
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: 8,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: 16,
+    paddingBottom: 12,
   },
   tab: {
     flex: 1,
@@ -376,12 +360,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 4,
-    marginTop: -32, // Elevate the center tab MORE
+    marginTop: -40,
   },
   centerTab: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     marginBottom: 6,
     ...Platform.select({
       ios: {
@@ -401,7 +385,7 @@ const styles = StyleSheet.create({
   centerTabGradient: {
     width: '100%',
     height: '100%',
-    borderRadius: 36,
+    borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 4,
