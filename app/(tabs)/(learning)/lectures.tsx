@@ -253,6 +253,63 @@ export default function LecturesScreen() {
     router.push('/(tabs)/(learning)/playlist-import?type=lecture');
   };
 
+  const handleRecategorizeGeneralKnowledge = async () => {
+    try {
+      setIsCategorizing(true);
+      console.log('Starting recategorization of General Knowledge lectures...');
+      
+      Alert.alert(
+        'Recategorize Lectures',
+        'This will use AI to recategorize all "General Knowledge" lectures into more specific categories. This may take a few minutes. Continue?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => setIsCategorizing(false),
+          },
+          {
+            text: 'Continue',
+            onPress: async () => {
+              try {
+                const response = await fetch(
+                  `${supabase.supabaseUrl}/functions/v1/recategorize-general-knowledge`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                  }
+                );
+
+                const result = await response.json();
+                
+                if (result.success) {
+                  console.log('Recategorization completed:', result.message);
+                  Alert.alert(
+                    'Success',
+                    `${result.message}\n\nNew categories created:\n${result.categoryDistribution?.map((c: any) => `• ${c.category}: ${c.count} lectures`).join('\n')}`,
+                    [{ text: 'OK', onPress: () => loadData() }]
+                  );
+                } else {
+                  console.error('Recategorization failed:', result.error);
+                  Alert.alert('Error', result.error || 'Failed to recategorize lectures.');
+                }
+              } catch (error) {
+                console.error('Error during recategorization:', error);
+                Alert.alert('Error', 'An error occurred during recategorization. Please try again.');
+              } finally {
+                setIsCategorizing(false);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Error triggering recategorization:', error);
+      setIsCategorizing(false);
+    }
+  };
+
   const handleClearSearch = () => {
     setSearchQuery('');
     setSearchResults([]);
@@ -377,6 +434,19 @@ export default function LecturesScreen() {
             </Text>
           </View>
           <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.importButton}
+              onPress={handleRecategorizeGeneralKnowledge}
+              activeOpacity={0.7}
+              disabled={isCategorizing}
+            >
+              <IconSymbol
+                ios_icon_name="sparkles"
+                android_material_icon_name="auto-awesome"
+                size={20}
+                color={isCategorizing ? colors.textSecondary : colors.primary}
+              />
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.importButton}
               onPress={handleImportPlaylist}
