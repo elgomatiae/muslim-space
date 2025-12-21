@@ -217,17 +217,23 @@ export default function ProfileScreen() {
   };
 
   const handleNotifications = () => {
-    console.log('Notification button pressed - navigating to notification settings');
+    console.log('=== NOTIFICATION NAVIGATION START ===');
+    console.log('Current route:', router);
+    
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
+    
     try {
-      router.push('/(tabs)/notification-settings');
-      console.log('Navigation to notification-settings executed successfully');
+      console.log('Attempting to navigate to notification-settings');
+      router.push('/notification-settings');
+      console.log('Navigation command executed successfully');
     } catch (error) {
       console.error('Navigation error:', error);
-      Alert.alert('Error', 'Failed to open notification settings. Please try again.');
+      Alert.alert('Navigation Error', 'Failed to open notification settings. Please try again.');
     }
+    
+    console.log('=== NOTIFICATION NAVIGATION END ===');
   };
 
   const handlePrayerSettings = () => {

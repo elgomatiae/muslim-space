@@ -60,6 +60,14 @@ export default function TabLayout() {
           <Stack.Screen name="(wellness)" />
           <Stack.Screen name="profile" />
           <Stack.Screen 
+            name="notification-settings"
+            options={{
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen 
             name="admin-panel"
             options={{
               presentation: 'modal',

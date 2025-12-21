@@ -38,6 +38,13 @@ export default function TabLayout() {
         <Label>Profile</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Screen 
+        key="notification-settings" 
+        name="notification-settings"
+        options={{
+          href: null,
+        }}
+      />
+      <NativeTabs.Screen 
         key="admin-panel" 
         name="admin-panel"
         options={{
