@@ -9,6 +9,8 @@ import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useImanTracker } from '@/contexts/ImanTrackerContext';
 import { IbadahGoals, IlmGoals, AmanahGoals } from '@/utils/imanScoreCalculator';
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 
 type SectionType = 'ibadah' | 'ilm' | 'amanah';
 
@@ -27,20 +29,68 @@ interface GoalConfig {
   isRequired?: boolean;
 }
 
+const WORKOUT_TYPES = [
+  { value: 'general', label: 'General Fitness', icon: { ios: 'figure.mixed.cardio', android: 'fitness-center' } },
+  { value: 'cardio', label: 'Cardio', icon: { ios: 'figure.run', android: 'directions-run' } },
+  { value: 'strength', label: 'Strength Training', icon: { ios: 'dumbbell.fill', android: 'fitness-center' } },
+  { value: 'yoga', label: 'Yoga', icon: { ios: 'figure.yoga', android: 'self-improvement' } },
+  { value: 'walking', label: 'Walking', icon: { ios: 'figure.walk', android: 'directions-walk' } },
+  { value: 'running', label: 'Running', icon: { ios: 'figure.run', android: 'directions-run' } },
+  { value: 'sports', label: 'Sports', icon: { ios: 'sportscourt.fill', android: 'sports' } },
+];
+
 export default function GoalsSettingsScreen() {
   const params = useLocalSearchParams();
+  const { user } = useAuth();
   const { ibadahGoals, ilmGoals, amanahGoals, updateIbadahGoals, updateIlmGoals, updateAmanahGoals } = useImanTracker();
   
   const [activeSection, setActiveSection] = useState<SectionType>((params.section as SectionType) || 'ibadah');
   const [localIbadahGoals, setLocalIbadahGoals] = useState<IbadahGoals | null>(null);
   const [localIlmGoals, setLocalIlmGoals] = useState<IlmGoals | null>(null);
   const [localAmanahGoals, setLocalAmanahGoals] = useState<AmanahGoals | null>(null);
+  const [selectedWorkoutType, setSelectedWorkoutType] = useState('general');
 
   useEffect(() => {
     if (ibadahGoals) setLocalIbadahGoals({ ...ibadahGoals });
     if (ilmGoals) setLocalIlmGoals({ ...ilmGoals });
     if (amanahGoals) setLocalAmanahGoals({ ...amanahGoals });
+    loadWorkoutType();
   }, [ibadahGoals, ilmGoals, amanahGoals]);
+
+  const loadWorkoutType = async () => {
+    if (!user) return;
+    
+    const { data } = await supabase
+      .from('physical_wellness_goals')
+      .select('workout_type')
+      .eq('user_id', user.id)
+      .single();
+    
+    if (data?.workout_type) {
+      setSelectedWorkoutType(data.workout_type);
+    }
+  };
+
+  const saveWorkoutType = async (type: string) => {
+    if (!user) return;
+    
+    await supabase
+      .from('physical_wellness_goals')
+      .upsert({
+        user_id: user.id,
+        workout_type: type,
+        updated_at: new Date().toISOString(),
+      });
+    
+    // Also update iman_tracker_goals
+    await supabase
+      .from('iman_tracker_goals')
+      .upsert({
+        user_id: user.id,
+        amanah_workout_type: type,
+        updated_at: new Date().toISOString(),
+      });
+  };
 
   const ibadahGoalConfigs: GoalConfig[] = [
     {
@@ -391,6 +441,9 @@ export default function GoalsSettingsScreen() {
       if (localIlmGoals) await updateIlmGoals(localIlmGoals);
       if (localAmanahGoals) await updateAmanahGoals(localAmanahGoals);
       
+      // Save workout type
+      await saveWorkoutType(selectedWorkoutType);
+      
       Alert.alert('Success', 'Your goals have been saved!', [
         { text: 'OK', onPress: () => router.back() }
       ]);
@@ -638,6 +691,53 @@ export default function GoalsSettingsScreen() {
           </View>
         )}
 
+        {activeSection === 'amanah' && (
+          <View style={styles.workoutTypeSection}>
+            <View style={styles.workoutTypeHeader}>
+              <IconSymbol
+                ios_icon_name="figure.mixed.cardio"
+                android_material_icon_name="fitness-center"
+                size={24}
+                color={colors.accent}
+              />
+              <Text style={styles.workoutTypeTitle}>Workout Type Preference</Text>
+            </View>
+            <Text style={styles.workoutTypeDescription}>
+              Select your preferred workout type. This will help track your physical wellness goals.
+            </Text>
+            <View style={styles.workoutTypesGrid}>
+              {WORKOUT_TYPES.map((type, index) => (
+                <React.Fragment key={index}>
+                  <TouchableOpacity
+                    style={[
+                      styles.workoutTypeCard,
+                      selectedWorkoutType === type.value && styles.workoutTypeCardActive,
+                    ]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setSelectedWorkoutType(type.value);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <IconSymbol
+                      ios_icon_name={type.icon.ios}
+                      android_material_icon_name={type.icon.android}
+                      size={32}
+                      color={selectedWorkoutType === type.value ? colors.accent : colors.textSecondary}
+                    />
+                    <Text style={[
+                      styles.workoutTypeLabel,
+                      selectedWorkoutType === type.value && styles.workoutTypeLabelActive,
+                    ]}>
+                      {type.label}
+                    </Text>
+                  </TouchableOpacity>
+                </React.Fragment>
+              ))}
+            </View>
+          </View>
+        )}
+
         <View style={styles.goalsSection}>
           <Text style={styles.goalsSectionTitle}>
             {activeSection === 'ibadah' ? 'Optional Worship Goals' : 'Goals'}
@@ -796,6 +896,58 @@ const styles = StyleSheet.create({
     ...typography.small,
     color: colors.text,
     fontWeight: '600',
+  },
+  workoutTypeSection: {
+    backgroundColor: colors.accent + '10',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.accent + '30',
+  },
+  workoutTypeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  workoutTypeTitle: {
+    ...typography.bodyBold,
+    color: colors.text,
+    fontSize: 16,
+  },
+  workoutTypeDescription: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
+  },
+  workoutTypesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  workoutTypeCard: {
+    width: '31%',
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  workoutTypeCardActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accent + '20',
+  },
+  workoutTypeLabel: {
+    ...typography.small,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    textAlign: 'center',
+  },
+  workoutTypeLabelActive: {
+    color: colors.accent,
+    fontWeight: '700',
   },
   goalsSection: {
     marginBottom: spacing.xl,

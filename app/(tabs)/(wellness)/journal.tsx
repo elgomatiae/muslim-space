@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
@@ -8,6 +8,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useImanTracker } from "@/contexts/ImanTrackerContext";
+import * as Haptics from 'expo-haptics';
 
 interface JournalEntry {
   id: string;
@@ -28,9 +30,12 @@ const MOODS = [
 
 export default function JournalScreen() {
   const { user } = useAuth();
+  const { amanahGoals, updateAmanahGoals } = useImanTracker();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showJournalModal, setShowJournalModal] = useState(false);
   const [showNewEntry, setShowNewEntry] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [selectedMood, setSelectedMood] = useState('');
@@ -40,12 +45,15 @@ export default function JournalScreen() {
   }, []);
 
   const loadEntries = async () => {
+    if (!user) return;
+    
     try {
       const { data, error } = await supabase
         .from('journal_entries')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(50);
 
       if (error) {
         console.error('Error loading entries:', error);
@@ -71,6 +79,8 @@ export default function JournalScreen() {
     }
 
     try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
       const { error } = await supabase
         .from('journal_entries')
         .insert({
@@ -85,6 +95,19 @@ export default function JournalScreen() {
         Alert.alert('Error', 'Failed to save entry');
       } else {
         Alert.alert('Success', 'Your journal entry has been saved');
+        
+        // Update Iman Tracker - mental health activity
+        if (amanahGoals) {
+          const updatedGoals = {
+            ...amanahGoals,
+            weeklyMentalHealthCompleted: Math.min(
+              amanahGoals.weeklyMentalHealthCompleted + 1,
+              amanahGoals.weeklyMentalHealthGoal
+            ),
+          };
+          await updateAmanahGoals(updatedGoals);
+        }
+        
         setTitle('');
         setContent('');
         setSelectedMood('');
@@ -113,195 +136,263 @@ export default function JournalScreen() {
     return moodObj ? moodObj.emoji : '📝';
   };
 
-  if (showNewEntry) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
+  const openJournalWindow = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowJournalModal(true);
+  };
+
+  const closeJournalWindow = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowJournalModal(false);
+    setShowNewEntry(false);
+    setSelectedEntry(null);
+  };
+
+  const openNewEntry = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowNewEntry(true);
+    setSelectedEntry(null);
+    setTitle('');
+    setContent('');
+    setSelectedMood('');
+  };
+
+  const viewEntry = (entry: JournalEntry) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedEntry(entry);
+    setShowNewEntry(false);
+  };
+
+  // Main screen - button to open journal
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.mainContent}>
+        <TouchableOpacity
+          style={styles.openJournalButton}
+          onPress={openJournalWindow}
+          activeOpacity={0.8}
         >
-          {/* Header */}
-          <View style={styles.newEntryHeader}>
+          <LinearGradient
+            colors={colors.gradientPrimary}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.openJournalGradient}
+          >
+            <IconSymbol
+              ios_icon_name="book.fill"
+              android_material_icon_name="menu-book"
+              size={64}
+              color={colors.card}
+            />
+            <Text style={styles.openJournalTitle}>Open Journal</Text>
+            <Text style={styles.openJournalSubtitle}>
+              {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
+            </Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+
+      {/* Journal Modal Window */}
+      <Modal
+        visible={showJournalModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={closeJournalWindow}
+      >
+        <SafeAreaView style={styles.modalContainer} edges={['top']}>
+          <View style={styles.modalHeader}>
             <TouchableOpacity
-              onPress={() => setShowNewEntry(false)}
-              style={styles.backButton}
+              onPress={closeJournalWindow}
+              style={styles.closeButton}
             >
               <IconSymbol
-                ios_icon_name="chevron.left"
-                android_material_icon_name="chevron-left"
+                ios_icon_name="xmark"
+                android_material_icon_name="close"
                 size={24}
                 color={colors.text}
               />
-              <Text style={styles.backText}>Back</Text>
             </TouchableOpacity>
-            <Text style={styles.header}>New Entry</Text>
+            <Text style={styles.modalTitle}>My Journal</Text>
             <TouchableOpacity
-              onPress={saveEntry}
-              style={styles.saveButton}
+              style={styles.newEntryIconButton}
+              onPress={openNewEntry}
             >
-              <Text style={styles.saveText}>Save</Text>
+              <LinearGradient
+                colors={colors.gradientPrimary}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.newEntryIconGradient}
+              >
+                <IconSymbol
+                  ios_icon_name="plus"
+                  android_material_icon_name="add"
+                  size={24}
+                  color={colors.card}
+                />
+              </LinearGradient>
             </TouchableOpacity>
           </View>
 
-          {/* Mood Selector */}
-          <View style={styles.moodSection}>
-            <Text style={styles.sectionTitle}>How are you feeling?</Text>
-            <View style={styles.moodGrid}>
-              {MOODS.map((mood, index) => (
+          {/* Previous Entries Bar */}
+          <View style={styles.entriesBar}>
+            <Text style={styles.entriesBarTitle}>Previous Entries</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.entriesBarScroll}
+            >
+              {entries.map((entry, index) => (
                 <React.Fragment key={index}>
                   <TouchableOpacity
                     style={[
-                      styles.moodButton,
-                      selectedMood === mood.value && styles.moodButtonSelected,
+                      styles.entryBarItem,
+                      selectedEntry?.id === entry.id && styles.entryBarItemActive,
                     ]}
-                    onPress={() => setSelectedMood(mood.value)}
+                    onPress={() => viewEntry(entry)}
+                    activeOpacity={0.7}
                   >
-                    <Text style={styles.moodEmoji}>{mood.emoji}</Text>
-                    <Text style={styles.moodLabel}>{mood.label}</Text>
+                    <Text style={styles.entryBarEmoji}>{getMoodEmoji(entry.mood)}</Text>
+                    <Text style={styles.entryBarTitle} numberOfLines={1}>
+                      {entry.title}
+                    </Text>
+                    <Text style={styles.entryBarDate}>
+                      {new Date(entry.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </Text>
                   </TouchableOpacity>
                 </React.Fragment>
               ))}
-            </View>
+              {entries.length === 0 && (
+                <Text style={styles.noEntriesText}>No entries yet. Start writing!</Text>
+              )}
+            </ScrollView>
           </View>
 
-          {/* Title Input */}
-          <View style={styles.inputSection}>
-            <Text style={styles.inputLabel}>Title (Optional)</Text>
-            <TextInput
-              style={styles.titleInput}
-              placeholder="Give your entry a title..."
-              placeholderTextColor={colors.textSecondary}
-              value={title}
-              onChangeText={setTitle}
-            />
-          </View>
-
-          {/* Content Input */}
-          <View style={styles.inputSection}>
-            <Text style={styles.inputLabel}>Your Thoughts</Text>
-            <TextInput
-              style={styles.contentInput}
-              placeholder="Write your thoughts, feelings, and reflections..."
-              placeholderTextColor={colors.textSecondary}
-              value={content}
-              onChangeText={setContent}
-              multiline
-              textAlignVertical="top"
-            />
-          </View>
-
-          <View style={styles.bottomPadding} />
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.headerSection}>
-          <View>
-            <Text style={styles.header}>My Journal</Text>
-            <Text style={styles.subtitle}>Your private space for reflection</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.newEntryButton}
-            onPress={() => setShowNewEntry(true)}
+          {/* Content Area */}
+          <ScrollView
+            style={styles.contentScroll}
+            contentContainerStyle={styles.contentContainer}
+            showsVerticalScrollIndicator={false}
           >
-            <LinearGradient
-              colors={colors.gradientPrimary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.newEntryGradient}
-            >
-              <IconSymbol
-                ios_icon_name="plus"
-                android_material_icon_name="add"
-                size={24}
-                color={colors.card}
-              />
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
+            {showNewEntry ? (
+              // New Entry Form
+              <View style={styles.newEntryForm}>
+                <Text style={styles.formSectionTitle}>How are you feeling?</Text>
+                <View style={styles.moodGrid}>
+                  {MOODS.map((mood, index) => (
+                    <React.Fragment key={index}>
+                      <TouchableOpacity
+                        style={[
+                          styles.moodButton,
+                          selectedMood === mood.value && styles.moodButtonSelected,
+                        ]}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setSelectedMood(mood.value);
+                        }}
+                      >
+                        <Text style={styles.moodEmoji}>{mood.emoji}</Text>
+                        <Text style={styles.moodLabel}>{mood.label}</Text>
+                      </TouchableOpacity>
+                    </React.Fragment>
+                  ))}
+                </View>
 
-        {/* Quick Actions */}
-        <View style={styles.quickActions}>
-          <TouchableOpacity
-            style={styles.quickActionButton}
-            onPress={() => router.push('/journal-prompts' as any)}
-          >
-            <IconSymbol
-              ios_icon_name="lightbulb.fill"
-              android_material_icon_name="lightbulb"
-              size={20}
-              color={colors.primary}
-            />
-            <Text style={styles.quickActionText}>Get Prompt</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.quickActionButton}
-            onPress={() => router.push('/mood-tracker' as any)}
-          >
-            <IconSymbol
-              ios_icon_name="chart.line.uptrend.xyaxis"
-              android_material_icon_name="insights"
-              size={20}
-              color={colors.primary}
-            />
-            <Text style={styles.quickActionText}>Mood Tracker</Text>
-          </TouchableOpacity>
-        </View>
+                <Text style={styles.formSectionTitle}>Title (Optional)</Text>
+                <TextInput
+                  style={styles.titleInput}
+                  placeholder="Give your entry a title..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={title}
+                  onChangeText={setTitle}
+                />
 
-        {/* Entries List */}
-        <View style={styles.entriesContainer}>
-          <Text style={styles.sectionTitle}>Recent Entries</Text>
-          {loading ? (
-            <Text style={styles.emptyText}>Loading...</Text>
-          ) : entries.length === 0 ? (
-            <View style={styles.emptyState}>
-              <IconSymbol
-                ios_icon_name="book.fill"
-                android_material_icon_name="menu-book"
-                size={64}
-                color={colors.textSecondary}
-              />
-              <Text style={styles.emptyText}>No entries yet</Text>
-              <Text style={styles.emptySubtext}>Start journaling to track your thoughts and feelings</Text>
-            </View>
-          ) : (
-            entries.map((entry, index) => (
-              <React.Fragment key={index}>
+                <Text style={styles.formSectionTitle}>Your Thoughts</Text>
+                <TextInput
+                  style={styles.contentInput}
+                  placeholder="Write your thoughts, feelings, and reflections..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={content}
+                  onChangeText={setContent}
+                  multiline
+                  textAlignVertical="top"
+                />
+
                 <TouchableOpacity
-                  style={styles.entryCard}
-                  activeOpacity={0.7}
-                  onPress={() => console.log('View entry:', entry.id)}
+                  style={styles.saveButton}
+                  onPress={saveEntry}
+                  activeOpacity={0.8}
                 >
-                  <View style={styles.entryHeader}>
-                    <Text style={styles.entryMood}>{getMoodEmoji(entry.mood)}</Text>
-                    <View style={styles.entryHeaderText}>
-                      <Text style={styles.entryTitle} numberOfLines={1}>
-                        {entry.title}
-                      </Text>
-                      <Text style={styles.entryDate}>{formatDate(entry.created_at)}</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.entryContent} numberOfLines={3}>
-                    {entry.content}
-                  </Text>
+                  <LinearGradient
+                    colors={colors.gradientPrimary}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.saveButtonGradient}
+                  >
+                    <IconSymbol
+                      ios_icon_name="checkmark.circle.fill"
+                      android_material_icon_name="check-circle"
+                      size={24}
+                      color={colors.card}
+                    />
+                    <Text style={styles.saveButtonText}>Save Entry</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
-              </React.Fragment>
-            ))
-          )}
-        </View>
 
-        <View style={styles.bottomPadding} />
-      </ScrollView>
+                <Text style={styles.imanTrackerHint}>
+                  💫 Journaling counts toward your mental health goals in the Iman Tracker
+                </Text>
+              </View>
+            ) : selectedEntry ? (
+              // View Selected Entry
+              <View style={styles.entryView}>
+                <View style={styles.entryViewHeader}>
+                  <Text style={styles.entryViewMood}>{getMoodEmoji(selectedEntry.mood)}</Text>
+                  <View style={styles.entryViewHeaderText}>
+                    <Text style={styles.entryViewTitle}>{selectedEntry.title}</Text>
+                    <Text style={styles.entryViewDate}>{formatDate(selectedEntry.created_at)}</Text>
+                  </View>
+                </View>
+                <View style={styles.entryViewDivider} />
+                <Text style={styles.entryViewContent}>{selectedEntry.content}</Text>
+              </View>
+            ) : (
+              // Empty State
+              <View style={styles.emptyState}>
+                <IconSymbol
+                  ios_icon_name="book.fill"
+                  android_material_icon_name="menu-book"
+                  size={64}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.emptyStateTitle}>Welcome to Your Journal</Text>
+                <Text style={styles.emptyStateText}>
+                  Select an entry from above or create a new one to start journaling
+                </Text>
+                <TouchableOpacity
+                  style={styles.emptyStateButton}
+                  onPress={openNewEntry}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={colors.gradientPrimary}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.emptyStateButtonGradient}
+                  >
+                    <IconSymbol
+                      ios_icon_name="plus"
+                      android_material_icon_name="add"
+                      size={20}
+                      color={colors.card}
+                    />
+                    <Text style={styles.emptyStateButtonText}>New Entry</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -311,151 +402,140 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  scrollView: {
+  mainContent: {
     flex: 1,
-  },
-  contentContainer: {
-    paddingTop: spacing.lg,
-    paddingHorizontal: spacing.xl,
-  },
-  headerSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.xxl,
+    padding: spacing.xl,
   },
-  header: {
+  openJournalButton: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: borderRadius.xxl,
+    overflow: 'hidden',
+    ...shadows.large,
+  },
+  openJournalGradient: {
+    padding: spacing.xxxl * 2,
+    alignItems: 'center',
+  },
+  openJournalTitle: {
     ...typography.h1,
-    color: colors.text,
+    color: colors.card,
+    marginTop: spacing.lg,
     marginBottom: spacing.xs,
   },
-  subtitle: {
+  openJournalSubtitle: {
     ...typography.body,
-    color: colors.textSecondary,
+    color: colors.card,
+    opacity: 0.9,
   },
-  newEntryButton: {
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.small,
+  },
+  modalTitle: {
+    ...typography.h3,
+    color: colors.text,
+  },
+  newEntryIconButton: {
     borderRadius: borderRadius.round,
     overflow: 'hidden',
     ...shadows.medium,
   },
-  newEntryGradient: {
-    width: 56,
-    height: 56,
+  newEntryIconGradient: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  quickActions: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.xxl,
-  },
-  quickActionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  entriesBar: {
     backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.small,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingVertical: spacing.md,
   },
-  quickActionText: {
+  entriesBarTitle: {
     ...typography.bodyBold,
     color: colors.text,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
   },
-  entriesContainer: {
-    marginBottom: spacing.xxl,
+  entriesBarScroll: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
   },
-  sectionTitle: {
-    ...typography.h3,
-    color: colors.text,
-    marginBottom: spacing.lg,
-  },
-  emptyState: {
+  entryBarItem: {
+    backgroundColor: colors.highlight,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    minWidth: 100,
     alignItems: 'center',
-    paddingVertical: spacing.xxxl * 2,
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
-  emptyText: {
-    ...typography.h4,
-    color: colors.textSecondary,
-    marginTop: spacing.lg,
+  entryBarItemActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '20',
   },
-  emptySubtext: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-    textAlign: 'center',
-  },
-  entryCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.small,
-  },
-  entryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-    gap: spacing.md,
-  },
-  entryMood: {
-    fontSize: 32,
-  },
-  entryHeaderText: {
-    flex: 1,
-  },
-  entryTitle: {
-    ...typography.h4,
-    color: colors.text,
+  entryBarEmoji: {
+    fontSize: 24,
     marginBottom: spacing.xs,
   },
-  entryDate: {
-    ...typography.caption,
+  entryBarTitle: {
+    ...typography.small,
+    color: colors.text,
+    fontWeight: '600',
+    marginBottom: 2,
+    textAlign: 'center',
+  },
+  entryBarDate: {
+    ...typography.small,
     color: colors.textSecondary,
+    fontSize: 10,
   },
-  entryContent: {
+  noEntriesText: {
     ...typography.body,
+    color: colors.textSecondary,
+    paddingVertical: spacing.md,
+  },
+  contentScroll: {
+    flex: 1,
+  },
+  contentContainer: {
+    padding: spacing.xl,
+  },
+  newEntryForm: {
+    gap: spacing.lg,
+  },
+  formSectionTitle: {
+    ...typography.h4,
     color: colors.text,
-    lineHeight: 22,
-  },
-  newEntryHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xxl,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  backText: {
-    ...typography.bodyBold,
-    color: colors.text,
-  },
-  saveButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  saveText: {
-    ...typography.bodyBold,
-    color: colors.card,
-  },
-  moodSection: {
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.sm,
   },
   moodGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.md,
+    marginBottom: spacing.md,
   },
   moodButton: {
     width: '30%',
@@ -478,14 +558,6 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text,
   },
-  inputSection: {
-    marginBottom: spacing.xxl,
-  },
-  inputLabel: {
-    ...typography.bodyBold,
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
   titleInput: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
@@ -505,7 +577,98 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     minHeight: 300,
   },
-  bottomPadding: {
-    height: 120,
+  saveButton: {
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    ...shadows.large,
+  },
+  saveButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.lg,
+  },
+  saveButtonText: {
+    ...typography.h4,
+    color: colors.card,
+  },
+  imanTrackerHint: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  entryView: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.small,
+  },
+  entryViewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  entryViewMood: {
+    fontSize: 48,
+  },
+  entryViewHeaderText: {
+    flex: 1,
+  },
+  entryViewTitle: {
+    ...typography.h3,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  entryViewDate: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  entryViewDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginBottom: spacing.lg,
+  },
+  entryViewContent: {
+    ...typography.body,
+    color: colors.text,
+    lineHeight: 26,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: spacing.xxxl * 2,
+  },
+  emptyStateTitle: {
+    ...typography.h3,
+    color: colors.text,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  emptyStateText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.xl,
+    paddingHorizontal: spacing.xl,
+  },
+  emptyStateButton: {
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    ...shadows.medium,
+  },
+  emptyStateButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+  },
+  emptyStateButtonText: {
+    ...typography.bodyBold,
+    color: colors.card,
   },
 });

@@ -10,12 +10,23 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import * as Haptics from 'expo-haptics';
 
+const WORKOUT_TYPES = [
+  { value: 'general', label: 'General Fitness', icon: { ios: 'figure.mixed.cardio', android: 'fitness-center' } },
+  { value: 'cardio', label: 'Cardio', icon: { ios: 'figure.run', android: 'directions-run' } },
+  { value: 'strength', label: 'Strength Training', icon: { ios: 'dumbbell.fill', android: 'fitness-center' } },
+  { value: 'yoga', label: 'Yoga', icon: { ios: 'figure.yoga', android: 'self-improvement' } },
+  { value: 'walking', label: 'Walking', icon: { ios: 'figure.walk', android: 'directions-walk' } },
+  { value: 'running', label: 'Running', icon: { ios: 'figure.run', android: 'directions-run' } },
+  { value: 'sports', label: 'Sports', icon: { ios: 'sportscourt.fill', android: 'sports' } },
+];
+
 export default function PhysicalGoalsScreen() {
   const { user } = useAuth();
   const [dailyStepsGoal, setDailyStepsGoal] = useState('10000');
   const [dailyExerciseGoal, setDailyExerciseGoal] = useState('30');
   const [dailyWaterGoal, setDailyWaterGoal] = useState('8');
   const [weeklyWorkoutsGoal, setWeeklyWorkoutsGoal] = useState('3');
+  const [selectedWorkoutType, setSelectedWorkoutType] = useState('general');
   const [loading, setLoading] = useState(true);
 
   const loadGoals = useCallback(async () => {
@@ -32,6 +43,7 @@ export default function PhysicalGoalsScreen() {
       setDailyExerciseGoal(data.daily_exercise_minutes_goal.toString());
       setDailyWaterGoal(data.daily_water_glasses_goal.toString());
       setWeeklyWorkoutsGoal(data.weekly_workout_sessions_goal.toString());
+      setSelectedWorkoutType(data.workout_type || 'general');
     }
     setLoading(false);
   }, [user]);
@@ -53,6 +65,16 @@ export default function PhysicalGoalsScreen() {
         daily_exercise_minutes_goal: parseInt(dailyExerciseGoal) || 30,
         daily_water_glasses_goal: parseInt(dailyWaterGoal) || 8,
         weekly_workout_sessions_goal: parseInt(weeklyWorkoutsGoal) || 3,
+        workout_type: selectedWorkoutType,
+        updated_at: new Date().toISOString(),
+      });
+
+    // Also update iman_tracker_goals
+    await supabase
+      .from('iman_tracker_goals')
+      .upsert({
+        user_id: user.id,
+        amanah_workout_type: selectedWorkoutType,
         updated_at: new Date().toISOString(),
       });
 
@@ -75,6 +97,51 @@ export default function PhysicalGoalsScreen() {
           </TouchableOpacity>
           <Text style={styles.title}>Physical Goals</Text>
           <View style={styles.placeholder} />
+        </View>
+
+        <View style={styles.workoutTypeSection}>
+          <View style={styles.sectionHeader}>
+            <IconSymbol
+              ios_icon_name="figure.mixed.cardio"
+              android_material_icon_name="fitness-center"
+              size={28}
+              color={colors.accent}
+            />
+            <Text style={styles.sectionTitle}>Workout Type Preference</Text>
+          </View>
+          <Text style={styles.sectionDescription}>
+            Select your preferred workout type to better track your fitness journey
+          </Text>
+          <View style={styles.workoutTypesGrid}>
+            {WORKOUT_TYPES.map((type, index) => (
+              <React.Fragment key={index}>
+                <TouchableOpacity
+                  style={[
+                    styles.workoutTypeCard,
+                    selectedWorkoutType === type.value && styles.workoutTypeCardActive,
+                  ]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setSelectedWorkoutType(type.value);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <IconSymbol
+                    ios_icon_name={type.icon.ios}
+                    android_material_icon_name={type.icon.android}
+                    size={32}
+                    color={selectedWorkoutType === type.value ? colors.accent : colors.textSecondary}
+                  />
+                  <Text style={[
+                    styles.workoutTypeLabel,
+                    selectedWorkoutType === type.value && styles.workoutTypeLabelActive,
+                  ]}>
+                    {type.label}
+                  </Text>
+                </TouchableOpacity>
+              </React.Fragment>
+            ))}
+          </View>
         </View>
 
         <View style={styles.goalCard}>
@@ -213,6 +280,57 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 40,
+  },
+  workoutTypeSection: {
+    backgroundColor: colors.accent + '10',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.accent + '30',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  sectionTitle: {
+    ...typography.h4,
+    color: colors.text,
+  },
+  sectionDescription: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
+  },
+  workoutTypesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  workoutTypeCard: {
+    width: '31%',
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  workoutTypeCardActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accent + '20',
+  },
+  workoutTypeLabel: {
+    ...typography.small,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    textAlign: 'center',
+  },
+  workoutTypeLabelActive: {
+    color: colors.accent,
+    fontWeight: '700',
   },
   goalCard: {
     backgroundColor: colors.card,

@@ -7,6 +7,7 @@ import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "@/lib/supabase";
 import { useLocalSearchParams } from "expo-router";
+import * as Haptics from 'expo-haptics';
 
 interface ProphetStory {
   id: string;
@@ -19,13 +20,14 @@ interface ProphetStory {
   source: string;
 }
 
-export default function ProphetStoriesScreen() {
+export default function ProphetMentalHealthScreen() {
   const params = useLocalSearchParams();
   const storyId = params.storyId as string | undefined;
 
   const [stories, setStories] = useState<ProphetStory[]>([]);
   const [selectedStory, setSelectedStory] = useState<ProphetStory | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showStoriesModal, setShowStoriesModal] = useState(false);
 
   useEffect(() => {
     loadStories();
@@ -37,6 +39,7 @@ export default function ProphetStoriesScreen() {
       const story = stories.find(s => s.id === storyId);
       if (story) {
         setSelectedStory(story);
+        setShowStoriesModal(true);
       }
     }
   }, [storyId, stories]);
@@ -72,131 +75,131 @@ export default function ProphetStoriesScreen() {
     return colorMap[category] || colors.gradientPrimary;
   };
 
+  const openStoriesWindow = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowStoriesModal(true);
+  };
+
+  const closeStoriesWindow = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowStoriesModal(false);
+    setSelectedStory(null);
+  };
+
+  const viewStory = (story: ProphetStory) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedStory(story);
+  };
+
+  const backToList = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedStory(null);
+  };
+
+  // Main screen - button to open stories
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.headerContainer}>
+      <View style={styles.mainContent}>
+        <TouchableOpacity
+          style={styles.openStoriesButton}
+          onPress={openStoriesWindow}
+          activeOpacity={0.8}
+        >
           <LinearGradient
-            colors={colors.gradientSecondary}
+            colors={colors.gradientSunset}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.headerGradient}
+            style={styles.openStoriesGradient}
           >
             <IconSymbol
               ios_icon_name="book.closed.fill"
               android_material_icon_name="auto-stories"
-              size={48}
+              size={64}
               color={colors.card}
             />
-            <Text style={styles.header}>Prophet Stories</Text>
-            <Text style={styles.subtitle}>Learn from the life of Prophet Muhammad ﷺ</Text>
+            <Text style={styles.openStoriesTitle}>Prophet Muhammad (ﷺ)</Text>
+            <Text style={styles.openStoriesTitle}>and Mental Health</Text>
+            <Text style={styles.openStoriesSubtitle}>
+              {stories.length} stories and analyses
+            </Text>
           </LinearGradient>
-        </View>
+        </TouchableOpacity>
+      </View>
 
-        {/* Info Card */}
-        <View style={styles.infoCard}>
-          <IconSymbol
-            ios_icon_name="info.circle.fill"
-            android_material_icon_name="info"
-            size={24}
-            color={colors.secondary}
-          />
-          <Text style={styles.infoText}>
-            These stories show how the Prophet ﷺ dealt with mental and emotional challenges, offering guidance for our own struggles.
-          </Text>
-        </View>
+      {/* Stories Modal Window */}
+      <Modal
+        visible={showStoriesModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={closeStoriesWindow}
+      >
+        <SafeAreaView style={styles.modalContainer} edges={['top']}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity
+              onPress={selectedStory ? backToList : closeStoriesWindow}
+              style={styles.backButton}
+            >
+              <IconSymbol
+                ios_icon_name={selectedStory ? "chevron.left" : "xmark"}
+                android_material_icon_name={selectedStory ? "arrow-back" : "close"}
+                size={24}
+                color={colors.text}
+              />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>
+              {selectedStory ? 'Story Details' : 'Prophet Muhammad (ﷺ) & Mental Health'}
+            </Text>
+            <View style={styles.placeholder} />
+          </View>
 
-        {/* Stories List */}
-        <View style={styles.storiesContainer}>
-          {loading ? (
-            <Text style={styles.emptyText}>Loading stories...</Text>
-          ) : stories.length === 0 ? (
-            <Text style={styles.emptyText}>No stories available</Text>
-          ) : (
-            stories.map((story, index) => (
-              <React.Fragment key={index}>
-                <TouchableOpacity
-                  style={styles.storyCard}
-                  activeOpacity={0.7}
-                  onPress={() => setSelectedStory(story)}
-                >
-                  <LinearGradient
-                    colors={getCategoryColor(story.category)}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.storyGradient}
-                  >
-                    <View style={styles.storyHeader}>
-                      <View style={styles.storyIconContainer}>
+          {/* Stories Bar */}
+          {!selectedStory && (
+            <View style={styles.storiesBar}>
+              <Text style={styles.storiesBarTitle}>Browse Stories</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.storiesBarScroll}
+              >
+                {stories.map((story, index) => (
+                  <React.Fragment key={index}>
+                    <TouchableOpacity
+                      style={styles.storyBarItem}
+                      onPress={() => viewStory(story)}
+                      activeOpacity={0.7}
+                    >
+                      <LinearGradient
+                        colors={getCategoryColor(story.category)}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.storyBarGradient}
+                      >
                         <IconSymbol
                           ios_icon_name="book.fill"
                           android_material_icon_name="menu-book"
-                          size={28}
+                          size={24}
                           color={colors.card}
                         />
-                      </View>
-                      <View style={styles.storyHeaderText}>
-                        <Text style={styles.storyTitle}>{story.title}</Text>
-                        <Text style={styles.storyCategory}>{story.category.toUpperCase()}</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.storyPreview} numberOfLines={2}>
-                      {story.mental_health_connection}
-                    </Text>
-                    <View style={styles.readMoreContainer}>
-                      <Text style={styles.readMoreText}>Read Story</Text>
-                      <IconSymbol
-                        ios_icon_name="chevron.right"
-                        android_material_icon_name="chevron-right"
-                        size={20}
-                        color={colors.card}
-                      />
-                    </View>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </React.Fragment>
-            ))
+                        <Text style={styles.storyBarCategory}>{story.category.toUpperCase()}</Text>
+                        <Text style={styles.storyBarTitle} numberOfLines={2}>
+                          {story.title}
+                        </Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </React.Fragment>
+                ))}
+              </ScrollView>
+            </View>
           )}
-        </View>
 
-        <View style={styles.bottomPadding} />
-      </ScrollView>
-
-      {/* Story Detail Modal */}
-      <Modal
-        visible={selectedStory !== null}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setSelectedStory(null)}
-      >
-        {selectedStory && (
-          <SafeAreaView style={styles.modalContainer} edges={['top']}>
-            <ScrollView
-              style={styles.modalScroll}
-              contentContainerStyle={styles.modalContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {/* Modal Header */}
-              <View style={styles.modalHeader}>
-                <TouchableOpacity
-                  onPress={() => setSelectedStory(null)}
-                  style={styles.closeButton}
-                >
-                  <IconSymbol
-                    ios_icon_name="xmark"
-                    android_material_icon_name="close"
-                    size={24}
-                    color={colors.text}
-                  />
-                </TouchableOpacity>
-              </View>
-
-              {/* Story Content */}
+          {/* Content Area */}
+          <ScrollView
+            style={styles.contentScroll}
+            contentContainerStyle={styles.contentContainer}
+            showsVerticalScrollIndicator={false}
+          >
+            {selectedStory ? (
+              // Story Detail View
               <View style={styles.storyDetailCard}>
                 <LinearGradient
                   colors={getCategoryColor(selectedStory.category)}
@@ -245,7 +248,7 @@ export default function ProphetStoriesScreen() {
                         size={20}
                         color={colors.accent}
                       />
-                      <Text style={styles.sectionTitle}>Mental Health Connection</Text>
+                      <Text style={styles.sectionTitle}>Mental Health Analysis</Text>
                     </View>
                     <Text style={styles.sectionText}>{selectedStory.mental_health_connection}</Text>
                   </View>
@@ -270,11 +273,87 @@ export default function ProphetStoriesScreen() {
                   )}
                 </View>
               </View>
+            ) : (
+              // Stories List View
+              <View>
+                <View style={styles.introCard}>
+                  <LinearGradient
+                    colors={colors.gradientSunset}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.introGradient}
+                  >
+                    <IconSymbol
+                      ios_icon_name="book.closed.fill"
+                      android_material_icon_name="auto-stories"
+                      size={48}
+                      color={colors.card}
+                    />
+                    <Text style={styles.introTitle}>
+                      Learn from the Prophet&apos;s (ﷺ) Journey
+                    </Text>
+                    <Text style={styles.introText}>
+                      Discover how Prophet Muhammad (ﷺ) dealt with grief, anxiety, and emotional challenges, 
+                      offering timeless guidance for our own mental health struggles.
+                    </Text>
+                  </LinearGradient>
+                </View>
 
-              <View style={styles.bottomPadding} />
-            </ScrollView>
-          </SafeAreaView>
-        )}
+                <View style={styles.storiesGrid}>
+                  {loading ? (
+                    <Text style={styles.loadingText}>Loading stories...</Text>
+                  ) : stories.length === 0 ? (
+                    <Text style={styles.emptyText}>No stories available</Text>
+                  ) : (
+                    stories.map((story, index) => (
+                      <React.Fragment key={index}>
+                        <TouchableOpacity
+                          style={styles.storyCard}
+                          activeOpacity={0.7}
+                          onPress={() => viewStory(story)}
+                        >
+                          <LinearGradient
+                            colors={getCategoryColor(story.category)}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.storyGradient}
+                          >
+                            <View style={styles.storyHeader}>
+                              <View style={styles.storyIconContainer}>
+                                <IconSymbol
+                                  ios_icon_name="book.fill"
+                                  android_material_icon_name="menu-book"
+                                  size={28}
+                                  color={colors.card}
+                                />
+                              </View>
+                              <View style={styles.storyHeaderText}>
+                                <Text style={styles.storyTitle}>{story.title}</Text>
+                                <Text style={styles.storyCategory}>{story.category.toUpperCase()}</Text>
+                              </View>
+                            </View>
+                            <Text style={styles.storyPreview} numberOfLines={2}>
+                              {story.mental_health_connection}
+                            </Text>
+                            <View style={styles.readMoreContainer}>
+                              <Text style={styles.readMoreText}>Read Analysis</Text>
+                              <IconSymbol
+                                ios_icon_name="chevron.right"
+                                android_material_icon_name="chevron-right"
+                                size={20}
+                                color={colors.card}
+                              />
+                            </View>
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      </React.Fragment>
+                    ))
+                  )}
+                </View>
+              </View>
+            )}
+          </ScrollView>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -285,55 +364,147 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  scrollView: {
+  mainContent: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
   },
-  contentContainer: {
-    paddingTop: spacing.lg,
-    paddingHorizontal: spacing.xl,
-  },
-  headerContainer: {
-    marginBottom: spacing.xxl,
-    borderRadius: borderRadius.xl,
+  openStoriesButton: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: borderRadius.xxl,
     overflow: 'hidden',
     ...shadows.large,
   },
-  headerGradient: {
-    padding: spacing.xxxl,
+  openStoriesGradient: {
+    padding: spacing.xxxl * 2,
     alignItems: 'center',
   },
-  header: {
+  openStoriesTitle: {
     ...typography.h1,
     color: colors.card,
-    marginTop: spacing.lg,
-    marginBottom: spacing.xs,
+    marginTop: spacing.md,
     textAlign: 'center',
   },
-  subtitle: {
+  openStoriesSubtitle: {
     ...typography.body,
     color: colors.card,
-    textAlign: 'center',
-    opacity: 0.95,
+    opacity: 0.9,
+    marginTop: spacing.sm,
   },
-  infoCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.xxl,
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.secondary + '30',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  infoText: {
-    ...typography.body,
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.small,
+  },
+  modalTitle: {
+    ...typography.h4,
     color: colors.text,
     flex: 1,
-    lineHeight: 22,
+    textAlign: 'center',
+    paddingHorizontal: spacing.md,
   },
-  storiesContainer: {
+  placeholder: {
+    width: 40,
+  },
+  storiesBar: {
+    backgroundColor: colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingVertical: spacing.md,
+  },
+  storiesBarTitle: {
+    ...typography.bodyBold,
+    color: colors.text,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  storiesBarScroll: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+  },
+  storyBarItem: {
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    ...shadows.medium,
+  },
+  storyBarGradient: {
+    padding: spacing.md,
+    minWidth: 140,
+    minHeight: 140,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  storyBarCategory: {
+    ...typography.small,
+    color: colors.card,
+    opacity: 0.9,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    fontWeight: '700',
+  },
+  storyBarTitle: {
+    ...typography.caption,
+    color: colors.card,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  contentScroll: {
+    flex: 1,
+  },
+  contentContainer: {
+    padding: spacing.xl,
+  },
+  introCard: {
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
     marginBottom: spacing.xxl,
+    ...shadows.large,
+  },
+  introGradient: {
+    padding: spacing.xxl,
+    alignItems: 'center',
+  },
+  introTitle: {
+    ...typography.h2,
+    color: colors.card,
+    textAlign: 'center',
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  introText: {
+    ...typography.body,
+    color: colors.card,
+    opacity: 0.95,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  storiesGrid: {
+    gap: spacing.lg,
+  },
+  loadingText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    paddingVertical: spacing.xxxl,
   },
   emptyText: {
     ...typography.body,
@@ -343,7 +514,6 @@ const styles = StyleSheet.create({
   },
   storyCard: {
     borderRadius: borderRadius.lg,
-    marginBottom: spacing.lg,
     overflow: 'hidden',
     ...shadows.medium,
   },
@@ -393,36 +563,10 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.card,
   },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  modalScroll: {
-    flex: 1,
-  },
-  modalContent: {
-    paddingTop: spacing.lg,
-    paddingHorizontal: spacing.xl,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: spacing.lg,
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.small,
-  },
   storyDetailCard: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.xl,
     overflow: 'hidden',
-    marginBottom: spacing.xxl,
     ...shadows.large,
   },
   storyDetailHeader: {
@@ -490,8 +634,5 @@ const styles = StyleSheet.create({
   tagText: {
     ...typography.caption,
     color: colors.primary,
-  },
-  bottomPadding: {
-    height: 120,
   },
 });
