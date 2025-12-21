@@ -90,7 +90,7 @@ export default function ImanTrackerScreen() {
           <View style={styles.featuresGrid}>
             <TouchableOpacity
               style={styles.featureCard}
-              onPress={() => router.push('/(tabs)/(iman)/streak-tracker' as any)}
+              onPress={() => router.push('/(tabs)/(iman)/trends' as any)}
               activeOpacity={0.7}
             >
               <LinearGradient
@@ -100,13 +100,13 @@ export default function ImanTrackerScreen() {
                 style={styles.featureGradient}
               >
                 <IconSymbol
-                  ios_icon_name="flame.fill"
-                  android_material_icon_name="local-fire-department"
+                  ios_icon_name="chart.line.uptrend.xyaxis"
+                  android_material_icon_name="trending-up"
                   size={32}
                   color="#FFFFFF"
                 />
-                <Text style={styles.featureTitle}>Streaks</Text>
-                <Text style={styles.featureSubtitle}>Track consistency</Text>
+                <Text style={styles.featureTitle}>Trends</Text>
+                <Text style={styles.featureSubtitle}>View progress</Text>
               </LinearGradient>
             </TouchableOpacity>
 
@@ -129,50 +129,6 @@ export default function ImanTrackerScreen() {
                 />
                 <Text style={styles.featureTitle}>Achievements</Text>
                 <Text style={styles.featureSubtitle}>Unlock badges</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.featureCard}
-              onPress={() => router.push('/(tabs)/(iman)/leaderboard' as any)}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={['#10B981', '#059669']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.featureGradient}
-              >
-                <IconSymbol
-                  ios_icon_name="chart.bar.fill"
-                  android_material_icon_name="leaderboard"
-                  size={32}
-                  color="#FFFFFF"
-                />
-                <Text style={styles.featureTitle}>Leaderboard</Text>
-                <Text style={styles.featureSubtitle}>Compare ranks</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.featureCard}
-              onPress={() => router.push('/(tabs)/(iman)/community-challenges' as any)}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={['#3B82F6', '#2563EB']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.featureGradient}
-              >
-                <IconSymbol
-                  ios_icon_name="person.3.fill"
-                  android_material_icon_name="groups"
-                  size={32}
-                  color="#FFFFFF"
-                />
-                <Text style={styles.featureTitle}>Challenges</Text>
-                <Text style={styles.featureSubtitle}>Join community</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
