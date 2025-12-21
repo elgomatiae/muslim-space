@@ -551,6 +551,40 @@ export default function AdminPanelScreen() {
                   </View>
                 </LinearGradient>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.optionCard}
+                onPress={() => router.push('/(tabs)/(learning)/recategorize-lectures')}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={['#8B5CF6', '#7C3AED']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.optionGradient}
+                >
+                  <View style={styles.optionIconContainer}>
+                    <IconSymbol
+                      ios_icon_name="sparkles"
+                      android_material_icon_name="auto-awesome"
+                      size={48}
+                      color={colors.card}
+                    />
+                  </View>
+                  <Text style={styles.optionTitle}>AI Recategorize</Text>
+                  <Text style={styles.optionDescription}>
+                    Use AI to automatically categorize all lectures
+                  </Text>
+                  <View style={styles.optionArrow}>
+                    <IconSymbol
+                      ios_icon_name="arrow.right.circle.fill"
+                      android_material_icon_name="arrow-circle-right"
+                      size={32}
+                      color={colors.card}
+                    />
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
           </React.Fragment>
         ) : activeTab === 'playlist' ? (
