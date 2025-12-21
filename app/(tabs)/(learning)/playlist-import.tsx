@@ -46,7 +46,6 @@ export default function PlaylistImportScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      // Call the Edge Function
       const { data, error } = await supabase.functions.invoke('youtube-playlist-import', {
         body: {
           playlistUrl: playlistUrl.trim(),
@@ -271,8 +270,8 @@ export default function PlaylistImportScreen() {
           </View>
           <Text style={styles.categoriesText}>
             {contentType === 'lecture' 
-              ? 'Tafsir, Hadith Studies, Fiqh, Aqeedah, Seerah, Contemporary Issues, Ramadan Specials, Youth & Family'
-              : 'Various Quran recitation categories'}
+              ? 'Tafsir, Hadith Studies, Fiqh, Aqeedah, Seerah, Contemporary Issues, Ramadan Specials, Youth & Family, Islamic History, Spirituality & Purification, General Islamic Knowledge'
+              : 'Full Quran Recitation, Juz Recitation, Surah Recitation, Short Surahs, Tilawah with Translation, Tajweed Lessons, Memorization Aid, Beautiful Recitations, Quranic Reflections'}
           </Text>
           <Text style={styles.categoriesSubtext}>
             AI will analyze each video and assign it to the most appropriate category automatically.

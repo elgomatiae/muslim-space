@@ -1,104 +1,284 @@
 
-import { supabase as supabaseClient } from '@/app/integrations/supabase/client';
-
-// Re-export the supabase client
-export const supabase = supabaseClient;
-
-// Database types
-export interface VideoCategory {
-  id: string;
-  name: string;
-  description: string;
-  type: 'lecture' | 'recitation';
-  order_index: number;
-  created_at: string;
-}
+import { supabase } from '@/app/integrations/supabase/client';
 
 export interface Video {
   id: string;
   title: string;
-  description: string;
-  thumbnail_url: string;
+  description?: string;
+  thumbnail_url?: string;
+  image_url?: string;
   video_url: string;
-  category_id: string;
-  duration: number; // in seconds
+  url?: string;
+  category?: string;
+  category_id?: string;
+  duration?: number;
   scholar_name?: string;
   reciter_name?: string;
   views: number;
-  order_index: number;
-  created_at: string;
+  order_index?: number;
+  created_at?: string;
 }
 
-// Helper function to extract YouTube video ID from URL
-export const extractYouTubeVideoId = (url: string): string | null => {
-  if (!url) return null;
-  
-  // Handle various YouTube URL formats
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
-    /^([a-zA-Z0-9_-]{11})$/ // Direct video ID
-  ];
-  
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match && match[1]) {
-      return match[1];
-    }
-  }
-  
-  return null;
-};
+export interface VideoCategory {
+  id: string;
+  name: string;
+  description?: string;
+  type: string;
+  order_index?: number;
+}
 
-// Helper function to get YouTube thumbnail URL from video URL
-export const getYouTubeThumbnailUrl = (videoUrl: string): string => {
-  const videoId = extractYouTubeVideoId(videoUrl);
-  
-  if (videoId) {
-    // Use maxresdefault for highest quality, fallback to hqdefault if not available
-    return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
-  }
-  
-  // Return a placeholder or the original thumbnail_url if it's not a YouTube video
-  return videoUrl;
-};
+export interface Lecture {
+  id: string;
+  title: string;
+  url: string;
+  image_url: string;
+  category: string;
+  description?: string;
+  scholar_name?: string;
+  duration: number;
+  views: number;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
 
-// Helper function to check if URL is a YouTube video
-export const isYouTubeUrl = (url: string): boolean => {
-  if (!url) return false;
-  return url.includes('youtube.com') || url.includes('youtu.be');
-};
+export interface Recitation {
+  id: string;
+  title: string;
+  url: string;
+  image_url: string;
+  category: string;
+  description?: string;
+  reciter_name?: string;
+  duration: number;
+  views: number;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
 
-// Helper function to get proper YouTube watch URL
-export const getYouTubeWatchUrl = (videoUrl: string): string => {
-  const videoId = extractYouTubeVideoId(videoUrl);
-  
-  if (videoId) {
-    return `https://www.youtube.com/watch?v=${videoId}`;
-  }
-  
-  return videoUrl;
-};
-
-// Helper function to check if Supabase is configured
-export const isSupabaseConfigured = (): boolean => {
-  // Check if the supabase client is properly initialized
+export function isSupabaseConfigured(): boolean {
   try {
-    const url = supabaseClient.supabaseUrl;
-    const key = supabaseClient.supabaseKey;
-    return url !== '' && key !== '' && url !== undefined && key !== undefined;
-  } catch (error) {
-    console.error('Error checking Supabase configuration:', error);
+    const url = supabase.supabaseUrl;
+    const key = supabase.supabaseKey;
+    return !!(url && key && url !== 'YOUR_SUPABASE_URL' && key !== 'YOUR_SUPABASE_ANON_KEY');
+  } catch {
     return false;
   }
-};
+}
 
-// Fetch categories by type
-export const fetchCategories = async (type: 'lecture' | 'recitation'): Promise<VideoCategory[]> => {
-  if (!isSupabaseConfigured()) {
-    console.log('Supabase not configured');
+export async function fetchLectures(): Promise<Lecture[]> {
+  try {
+    const { data, error } = await supabase
+      .from('lectures')
+      .select('*')
+      .order('order_index', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching lectures:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching lectures:', error);
     return [];
   }
+}
 
+export async function fetchLecturesByCategory(category: string): Promise<Lecture[]> {
+  try {
+    const { data, error } = await supabase
+      .from('lectures')
+      .select('*')
+      .eq('category', category)
+      .order('order_index', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching lectures by category:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching lectures by category:', error);
+    return [];
+  }
+}
+
+export async function fetchRecitations(): Promise<Recitation[]> {
+  try {
+    const { data, error } = await supabase
+      .from('recitations')
+      .select('*')
+      .order('order_index', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching recitations:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching recitations:', error);
+    return [];
+  }
+}
+
+export async function fetchRecitationsByCategory(category: string): Promise<Recitation[]> {
+  try {
+    const { data, error } = await supabase
+      .from('recitations')
+      .select('*')
+      .eq('category', category)
+      .order('order_index', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching recitations by category:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching recitations by category:', error);
+    return [];
+  }
+}
+
+export async function getLectureCategories(): Promise<string[]> {
+  try {
+    const { data, error } = await supabase
+      .from('lectures')
+      .select('category')
+      .order('category');
+
+    if (error) {
+      console.error('Error fetching lecture categories:', error);
+      return [];
+    }
+
+    // Get unique categories
+    const categories = [...new Set(data.map(item => item.category))];
+    return categories;
+  } catch (error) {
+    console.error('Error fetching lecture categories:', error);
+    return [];
+  }
+}
+
+export async function getRecitationCategories(): Promise<string[]> {
+  try {
+    const { data, error } = await supabase
+      .from('recitations')
+      .select('category')
+      .order('category');
+
+    if (error) {
+      console.error('Error fetching recitation categories:', error);
+      return [];
+    }
+
+    // Get unique categories
+    const categories = [...new Set(data.map(item => item.category))];
+    return categories;
+  } catch (error) {
+    console.error('Error fetching recitation categories:', error);
+    return [];
+  }
+}
+
+export async function searchLectures(query: string): Promise<Lecture[]> {
+  try {
+    const { data, error } = await supabase
+      .from('lectures')
+      .select('*')
+      .or(`title.ilike.%${query}%,description.ilike.%${query}%,scholar_name.ilike.%${query}%,category.ilike.%${query}%`)
+      .order('views', { ascending: false })
+      .limit(20);
+
+    if (error) {
+      console.error('Error searching lectures:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error searching lectures:', error);
+    return [];
+  }
+}
+
+export async function searchRecitations(query: string): Promise<Recitation[]> {
+  try {
+    const { data, error } = await supabase
+      .from('recitations')
+      .select('*')
+      .or(`title.ilike.%${query}%,description.ilike.%${query}%,reciter_name.ilike.%${query}%,category.ilike.%${query}%`)
+      .order('views', { ascending: false })
+      .limit(20);
+
+    if (error) {
+      console.error('Error searching recitations:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error searching recitations:', error);
+    return [];
+  }
+}
+
+export async function incrementLectureViews(id: string): Promise<void> {
+  try {
+    const { error } = await supabase.rpc('increment_lecture_views', { lecture_id: id });
+    
+    if (error) {
+      // If RPC doesn't exist, use a simple update
+      const { data: lecture } = await supabase
+        .from('lectures')
+        .select('views')
+        .eq('id', id)
+        .single();
+      
+      if (lecture) {
+        await supabase
+          .from('lectures')
+          .update({ views: lecture.views + 1 })
+          .eq('id', id);
+      }
+    }
+  } catch (error) {
+    console.error('Error incrementing lecture views:', error);
+  }
+}
+
+export async function incrementRecitationViews(id: string): Promise<void> {
+  try {
+    const { error } = await supabase.rpc('increment_recitation_views', { recitation_id: id });
+    
+    if (error) {
+      // If RPC doesn't exist, use a simple update
+      const { data: recitation } = await supabase
+        .from('recitations')
+        .select('views')
+        .eq('id', id)
+        .single();
+      
+      if (recitation) {
+        await supabase
+          .from('recitations')
+          .update({ views: recitation.views + 1 })
+          .eq('id', id);
+      }
+    }
+  } catch (error) {
+    console.error('Error incrementing recitation views:', error);
+  }
+}
+
+// Legacy functions for backward compatibility with old video_categories system
+export async function fetchCategories(type: 'lecture' | 'recitation'): Promise<VideoCategory[]> {
   try {
     const { data, error } = await supabase
       .from('video_categories')
@@ -116,15 +296,9 @@ export const fetchCategories = async (type: 'lecture' | 'recitation'): Promise<V
     console.error('Error fetching categories:', error);
     return [];
   }
-};
+}
 
-// Fetch videos by category
-export const fetchVideosByCategory = async (categoryId: string): Promise<Video[]> => {
-  if (!isSupabaseConfigured()) {
-    console.log('Supabase not configured');
-    return [];
-  }
-
+export async function fetchVideosByCategory(categoryId: string): Promise<Video[]> {
   try {
     const { data, error } = await supabase
       .from('videos')
@@ -142,53 +316,28 @@ export const fetchVideosByCategory = async (categoryId: string): Promise<Video[]
     console.error('Error fetching videos:', error);
     return [];
   }
-};
+}
 
-// Fetch all videos (for search)
-export const fetchAllVideos = async (type: 'lecture' | 'recitation'): Promise<Video[]> => {
-  if (!isSupabaseConfigured()) {
-    console.log('Supabase not configured');
-    return [];
-  }
-
+export async function searchVideos(query: string, type: 'lecture' | 'recitation'): Promise<Video[]> {
   try {
-    const { data, error } = await supabase
-      .from('videos')
-      .select('*, video_categories!inner(type)')
-      .eq('video_categories.type', type)
-      .order('created_at', { ascending: false });
+    const { data: categories } = await supabase
+      .from('video_categories')
+      .select('id')
+      .eq('type', type);
 
-    if (error) {
-      console.error('Error fetching all videos:', error);
+    if (!categories || categories.length === 0) {
       return [];
     }
 
-    return data || [];
-  } catch (error) {
-    console.error('Error fetching all videos:', error);
-    return [];
-  }
-};
+    const categoryIds = categories.map(cat => cat.id);
 
-// Search videos by title, description, or scholar name
-export const searchVideos = async (
-  query: string,
-  type: 'lecture' | 'recitation'
-): Promise<Video[]> => {
-  if (!isSupabaseConfigured() || !query.trim()) {
-    return [];
-  }
-
-  try {
-    const searchTerm = `%${query.toLowerCase()}%`;
-    
     const { data, error } = await supabase
       .from('videos')
-      .select('*, video_categories!inner(type)')
-      .eq('video_categories.type', type)
-      .or(`title.ilike.${searchTerm},description.ilike.${searchTerm},scholar_name.ilike.${searchTerm},reciter_name.ilike.${searchTerm}`)
+      .select('*')
+      .in('category_id', categoryIds)
+      .or(`title.ilike.%${query}%,description.ilike.%${query}%,scholar_name.ilike.%${query}%,reciter_name.ilike.%${query}%`)
       .order('views', { ascending: false })
-      .limit(50);
+      .limit(20);
 
     if (error) {
       console.error('Error searching videos:', error);
@@ -200,21 +349,59 @@ export const searchVideos = async (
     console.error('Error searching videos:', error);
     return [];
   }
-};
+}
 
-// Increment video views
-export const incrementVideoViews = async (videoId: string): Promise<void> => {
-  if (!isSupabaseConfigured()) {
-    return;
-  }
-
+export async function incrementVideoViews(id: string): Promise<void> {
   try {
-    const { error } = await supabase.rpc('increment_video_views', { video_id: videoId });
+    const { data: video } = await supabase
+      .from('videos')
+      .select('views')
+      .eq('id', id)
+      .single();
 
-    if (error) {
-      console.error('Error incrementing views:', error);
+    if (video) {
+      await supabase
+        .from('videos')
+        .update({ views: video.views + 1 })
+        .eq('id', id);
     }
   } catch (error) {
-    console.error('Error incrementing views:', error);
+    console.error('Error incrementing video views:', error);
   }
-};
+}
+
+export function isYouTubeUrl(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+    return urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be');
+  } catch {
+    return false;
+  }
+}
+
+export function getYouTubeWatchUrl(url: string): string {
+  try {
+    const urlObj = new URL(url);
+    
+    // If it's already a watch URL, return as is
+    if (urlObj.pathname.includes('/watch')) {
+      return url;
+    }
+    
+    // If it's a youtu.be short URL
+    if (urlObj.hostname === 'youtu.be') {
+      const videoId = urlObj.pathname.slice(1);
+      return `https://www.youtube.com/watch?v=${videoId}`;
+    }
+    
+    // If it's an embed URL
+    if (urlObj.pathname.includes('/embed/')) {
+      const videoId = urlObj.pathname.split('/embed/')[1];
+      return `https://www.youtube.com/watch?v=${videoId}`;
+    }
+    
+    return url;
+  } catch {
+    return url;
+  }
+}

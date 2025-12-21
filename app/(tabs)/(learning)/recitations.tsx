@@ -3,9 +3,18 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Platform, ActivityIndicator, TouchableOpacity, TextInput, Keyboard, Alert, Modal } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
-import CategoryRow from '@/components/CategoryRow';
 import VideoPlayer from '@/components/VideoPlayer';
-import { fetchCategories, fetchVideosByCategory, incrementVideoViews, isSupabaseConfigured, searchVideos, Video, VideoCategory, isYouTubeUrl, getYouTubeWatchUrl } from '@/lib/supabase';
+import { 
+  fetchRecitations, 
+  fetchRecitationsByCategory, 
+  getRecitationCategories, 
+  searchRecitations, 
+  incrementRecitationViews,
+  isSupabaseConfigured, 
+  isYouTubeUrl, 
+  getYouTubeWatchUrl,
+  Recitation 
+} from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '@/app/integrations/supabase/client';
@@ -17,17 +26,17 @@ import { router } from 'expo-router';
 export default function RecitationsScreen() {
   const { user } = useAuth();
   const { ilmGoals, updateIlmGoals } = useImanTracker();
-  const [categories, setCategories] = useState<VideoCategory[]>([]);
-  const [videosByCategory, setVideosByCategory] = useState<{ [key: string]: Video[] }>({});
+  const [categories, setCategories] = useState<string[]>([]);
+  const [recitationsByCategory, setRecitationsByCategory] = useState<{ [key: string]: Recitation[] }>({});
   const [loading, setLoading] = useState(true);
-  const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
+  const [selectedRecitation, setSelectedRecitation] = useState<Recitation | null>(null);
   const [supabaseEnabled, setSupabaseEnabled] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Video[]>([]);
+  const [searchResults, setSearchResults] = useState<Recitation[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
-  const [pendingVideo, setPendingVideo] = useState<Video | null>(null);
+  const [pendingRecitation, setPendingRecitation] = useState<Recitation | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -40,15 +49,15 @@ export default function RecitationsScreen() {
     }
 
     try {
-      const fetchedCategories = await fetchCategories('recitation');
+      const fetchedCategories = await getRecitationCategories();
       setCategories(fetchedCategories);
 
-      const videosData: { [key: string]: Video[] } = {};
+      const recitationsData: { [key: string]: Recitation[] } = {};
       for (const category of fetchedCategories) {
-        const videos = await fetchVideosByCategory(category.id);
-        videosData[category.id] = videos;
+        const recitations = await fetchRecitationsByCategory(category);
+        recitationsData[category] = recitations;
       }
-      setVideosByCategory(videosData);
+      setRecitationsByCategory(recitationsData);
     } catch (error) {
       console.error('Error loading recitations:', error);
     } finally {
@@ -59,10 +68,10 @@ export default function RecitationsScreen() {
   const performSearch = useCallback(async () => {
     setIsSearching(true);
     try {
-      const results = await searchVideos(searchQuery, 'recitation');
+      const results = await searchRecitations(searchQuery);
       setSearchResults(results);
     } catch (error) {
-      console.error('Error searching videos:', error);
+      console.error('Error searching recitations:', error);
     } finally {
       setIsSearching(false);
     }
@@ -81,23 +90,22 @@ export default function RecitationsScreen() {
     }
   }, [searchQuery, performSearch]);
 
-  const trackRecitation = async (video: Video) => {
+  const trackRecitation = async (recitation: Recitation) => {
     if (!user) {
       console.log('User not logged in, skipping tracking');
       return;
     }
 
     try {
-      // Track in database
       const { error } = await supabase
         .from('tracked_content')
         .upsert({
           user_id: user.id,
           content_type: 'recitation',
-          video_id: video.id,
-          video_title: video.title,
-          video_url: video.video_url,
-          reciter_name: video.reciter_name,
+          video_id: recitation.id,
+          video_title: recitation.title,
+          video_url: recitation.url,
+          reciter_name: recitation.reciter_name,
           tracked_at: new Date().toISOString(),
         }, {
           onConflict: 'user_id,video_id'
@@ -109,7 +117,6 @@ export default function RecitationsScreen() {
         return;
       }
 
-      // Increment Iman Tracker counter
       if (ilmGoals) {
         const updatedGoals = {
           ...ilmGoals,
@@ -128,9 +135,9 @@ export default function RecitationsScreen() {
     }
   };
 
-  const openYouTubeVideo = async (video: Video) => {
+  const openYouTubeVideo = async (recitation: Recitation) => {
     try {
-      const youtubeUrl = getYouTubeWatchUrl(video.video_url);
+      const youtubeUrl = getYouTubeWatchUrl(recitation.url);
       console.log('Opening YouTube video:', youtubeUrl);
       await WebBrowser.openBrowserAsync(youtubeUrl);
     } catch (error) {
@@ -139,40 +146,36 @@ export default function RecitationsScreen() {
     }
   };
 
-  const handleVideoPress = async (video: Video) => {
-    // Increment views first
-    await incrementVideoViews(video.id);
+  const handleRecitationPress = async (recitation: Recitation) => {
+    await incrementRecitationViews(recitation.id);
 
-    // Check if it's a YouTube video
-    if (isYouTubeUrl(video.video_url)) {
-      // Show tracking modal before opening YouTube
-      setPendingVideo(video);
+    if (isYouTubeUrl(recitation.url)) {
+      setPendingRecitation(recitation);
       setShowTrackingModal(true);
     } else {
-      // Use the in-app video player for non-YouTube videos
-      setSelectedVideo(video);
+      setSelectedRecitation(recitation);
     }
   };
 
   const handleTrackAndWatch = async () => {
-    if (pendingVideo) {
-      await trackRecitation(pendingVideo);
+    if (pendingRecitation) {
+      await trackRecitation(pendingRecitation);
       setShowTrackingModal(false);
-      await openYouTubeVideo(pendingVideo);
-      setPendingVideo(null);
+      await openYouTubeVideo(pendingRecitation);
+      setPendingRecitation(null);
     }
   };
 
   const handleWatchWithoutTracking = async () => {
-    if (pendingVideo) {
+    if (pendingRecitation) {
       setShowTrackingModal(false);
-      await openYouTubeVideo(pendingVideo);
-      setPendingVideo(null);
+      await openYouTubeVideo(pendingRecitation);
+      setPendingRecitation(null);
     }
   };
 
   const handleCloseVideo = () => {
-    setSelectedVideo(null);
+    setSelectedRecitation(null);
   };
 
   const handleSearchToggle = () => {
@@ -184,17 +187,30 @@ export default function RecitationsScreen() {
     }
   };
 
+  const handleImportPlaylist = () => {
+    router.push('/(tabs)/(learning)/playlist-import?type=recitation');
+  };
+
   const handleClearSearch = () => {
     setSearchQuery('');
     setSearchResults([]);
   };
 
-  const handleImportPlaylist = () => {
-    router.push('/(tabs)/(learning)/playlist-import?type=recitation');
-  };
-
-  if (selectedVideo) {
-    return <VideoPlayer video={selectedVideo} onClose={handleCloseVideo} />;
+  if (selectedRecitation) {
+    return (
+      <VideoPlayer 
+        video={{
+          id: selectedRecitation.id,
+          title: selectedRecitation.title,
+          description: selectedRecitation.description,
+          thumbnail_url: selectedRecitation.image_url,
+          video_url: selectedRecitation.url,
+          reciter_name: selectedRecitation.reciter_name,
+          views: selectedRecitation.views,
+        }} 
+        onClose={handleCloseVideo} 
+      />
+    );
   }
 
   if (!supabaseEnabled) {
@@ -224,13 +240,6 @@ export default function RecitationsScreen() {
               To access Quran recitations, please enable Supabase by pressing the Supabase button and connecting to your project.
             </Text>
           </LinearGradient>
-
-          <View style={styles.infoCard}>
-            <Text style={styles.infoTitle}>Database Setup Complete!</Text>
-            <Text style={styles.infoText}>
-              The database tables have been created automatically. You can now upload your recitation videos to Supabase Storage and add them to the videos table with type &apos;recitation&apos;.
-            </Text>
-          </View>
         </ScrollView>
       </View>
     );
@@ -264,8 +273,28 @@ export default function RecitationsScreen() {
             </View>
             <Text style={styles.emptyTitle}>No Recitations Yet</Text>
             <Text style={styles.emptyText}>
-              Add recitation categories and videos to your Supabase database to see them here.
+              Import a YouTube playlist to get started. Tap the import button above to begin.
             </Text>
+            <TouchableOpacity
+              style={styles.emptyButton}
+              onPress={handleImportPlaylist}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={colors.gradientPrimary}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.emptyButtonGradient}
+              >
+                <IconSymbol
+                  ios_icon_name="square.and.arrow.down.fill"
+                  android_material_icon_name="download"
+                  size={20}
+                  color={colors.card}
+                />
+                <Text style={styles.emptyButtonText}>Import Playlist</Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </View>
@@ -360,11 +389,11 @@ export default function RecitationsScreen() {
                   Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
                 </Text>
                 <View style={styles.searchResultsList}>
-                  {searchResults.map((video, index) => (
+                  {searchResults.map((recitation, index) => (
                     <TouchableOpacity
                       key={index}
                       style={styles.searchResultItem}
-                      onPress={() => handleVideoPress(video)}
+                      onPress={() => handleRecitationPress(recitation)}
                       activeOpacity={0.7}
                     >
                       <View style={styles.searchResultThumbnail}>
@@ -377,28 +406,16 @@ export default function RecitationsScreen() {
                       </View>
                       <View style={styles.searchResultInfo}>
                         <Text style={styles.searchResultTitle} numberOfLines={2}>
-                          {video.title}
+                          {recitation.title}
                         </Text>
-                        {video.reciter_name && (
+                        {recitation.reciter_name && (
                           <Text style={styles.searchResultScholar} numberOfLines={1}>
-                            {video.reciter_name}
+                            {recitation.reciter_name}
                           </Text>
                         )}
                         <View style={styles.searchResultMeta}>
-                          <IconSymbol
-                            ios_icon_name="eye.fill"
-                            android_material_icon_name="visibility"
-                            size={12}
-                            color={colors.textSecondary}
-                          />
-                          <Text style={styles.searchResultViews}>
-                            {video.views} views
-                          </Text>
-                          {isYouTubeUrl(video.video_url) && (
-                            <View style={styles.youtubeIndicator}>
-                              <Text style={styles.youtubeIndicatorText}>YouTube</Text>
-                            </View>
-                          )}
+                          <Text style={styles.searchResultCategory}>{recitation.category}</Text>
+                          <Text style={styles.searchResultViews}> • {recitation.views} views</Text>
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -422,23 +439,59 @@ export default function RecitationsScreen() {
           </View>
         ) : (
           <React.Fragment>
-            {categories.map((category, index) => (
-              <React.Fragment key={index}>
-                <CategoryRow
-                  category={category}
-                  videos={videosByCategory[category.id] || []}
-                  onVideoPress={handleVideoPress}
-                  onSeeAllPress={() => console.log('See all:', category.name)}
-                />
-              </React.Fragment>
-            ))}
+            {categories.map((category, catIndex) => {
+              const recitations = recitationsByCategory[category] || [];
+              if (recitations.length === 0) return null;
+
+              return (
+                <View key={catIndex} style={styles.categorySection}>
+                  <View style={styles.categoryHeader}>
+                    <Text style={styles.categoryTitle}>{category}</Text>
+                    <Text style={styles.categoryCount}>{recitations.length} recitations</Text>
+                  </View>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.recitationsRow}
+                  >
+                    {recitations.map((recitation, recitationIndex) => (
+                      <TouchableOpacity
+                        key={recitationIndex}
+                        style={styles.recitationCard}
+                        onPress={() => handleRecitationPress(recitation)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.recitationThumbnail}>
+                          <IconSymbol
+                            ios_icon_name="play.circle.fill"
+                            android_material_icon_name="play-circle"
+                            size={40}
+                            color={colors.primary}
+                          />
+                        </View>
+                        <View style={styles.recitationInfo}>
+                          <Text style={styles.recitationTitle} numberOfLines={2}>
+                            {recitation.title}
+                          </Text>
+                          {recitation.reciter_name && (
+                            <Text style={styles.recitationReciter} numberOfLines={1}>
+                              {recitation.reciter_name}
+                            </Text>
+                          )}
+                          <Text style={styles.recitationViews}>{recitation.views} views</Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              );
+            })}
           </React.Fragment>
         )}
 
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* Tracking Modal */}
       <Modal
         visible={showTrackingModal}
         transparent
@@ -466,14 +519,14 @@ export default function RecitationsScreen() {
               <Text style={styles.modalText}>
                 Would you like to track this Quran recitation in your Iman Tracker under ʿIlm (Knowledge)?
               </Text>
-              {pendingVideo && (
+              {pendingRecitation && (
                 <View style={styles.videoPreview}>
                   <Text style={styles.videoPreviewTitle} numberOfLines={2}>
-                    {pendingVideo.title}
+                    {pendingRecitation.title}
                   </Text>
-                  {pendingVideo.reciter_name && (
+                  {pendingRecitation.reciter_name && (
                     <Text style={styles.videoPreviewScholar}>
-                      by {pendingVideo.reciter_name}
+                      by {pendingRecitation.reciter_name}
                     </Text>
                   )}
                 </View>
@@ -665,23 +718,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  searchResultCategory: {
+    ...typography.small,
+    color: colors.primary,
+    fontWeight: '600',
+  },
   searchResultViews: {
     ...typography.small,
     color: colors.textSecondary,
-    marginLeft: spacing.xs,
-  },
-  youtubeIndicator: {
-    backgroundColor: '#FF0000',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-    marginLeft: spacing.sm,
-  },
-  youtubeIndicatorText: {
-    ...typography.small,
-    color: colors.card,
-    fontWeight: '700',
-    fontSize: 9,
   },
   noResultsContainer: {
     alignItems: 'center',
@@ -724,27 +768,7 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.card,
     textAlign: 'center',
-    marginBottom: spacing.xxl,
     lineHeight: 24,
-  },
-  infoCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  infoTitle: {
-    ...typography.h4,
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  infoText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    lineHeight: 24,
-    marginBottom: spacing.md,
   },
   emptyCard: {
     backgroundColor: colors.card,
@@ -774,6 +798,78 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
+    marginBottom: spacing.xl,
+  },
+  emptyButton: {
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    ...shadows.medium,
+  },
+  emptyButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+  },
+  emptyButtonText: {
+    ...typography.bodyBold,
+    color: colors.card,
+  },
+  categorySection: {
+    marginBottom: spacing.xxl,
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  categoryTitle: {
+    ...typography.h4,
+    color: colors.text,
+  },
+  categoryCount: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  recitationsRow: {
+    paddingHorizontal: spacing.xl,
+    gap: spacing.md,
+  },
+  recitationCard: {
+    width: 200,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    ...shadows.small,
+  },
+  recitationThumbnail: {
+    width: '100%',
+    height: 120,
+    backgroundColor: colors.backgroundAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recitationInfo: {
+    padding: spacing.md,
+  },
+  recitationTitle: {
+    ...typography.bodyBold,
+    color: colors.text,
+    marginBottom: spacing.xs,
+    minHeight: 40,
+  },
+  recitationReciter: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  recitationViews: {
+    ...typography.small,
+    color: colors.textSecondary,
   },
   bottomPadding: {
     height: 40,

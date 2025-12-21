@@ -3,9 +3,18 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Platform, ActivityIndicator, TouchableOpacity, TextInput, Keyboard, Alert, Modal } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
-import CategoryRow from '@/components/CategoryRow';
 import VideoPlayer from '@/components/VideoPlayer';
-import { fetchCategories, fetchVideosByCategory, incrementVideoViews, isSupabaseConfigured, searchVideos, Video, VideoCategory, isYouTubeUrl, getYouTubeWatchUrl } from '@/lib/supabase';
+import { 
+  fetchLectures, 
+  fetchLecturesByCategory, 
+  getLectureCategories, 
+  searchLectures, 
+  incrementLectureViews,
+  isSupabaseConfigured, 
+  isYouTubeUrl, 
+  getYouTubeWatchUrl,
+  Lecture 
+} from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '@/app/integrations/supabase/client';
@@ -17,17 +26,17 @@ import { router } from 'expo-router';
 export default function LecturesScreen() {
   const { user } = useAuth();
   const { ilmGoals, updateIlmGoals } = useImanTracker();
-  const [categories, setCategories] = useState<VideoCategory[]>([]);
-  const [videosByCategory, setVideosByCategory] = useState<{ [key: string]: Video[] }>({});
+  const [categories, setCategories] = useState<string[]>([]);
+  const [lecturesByCategory, setLecturesByCategory] = useState<{ [key: string]: Lecture[] }>({});
   const [loading, setLoading] = useState(true);
-  const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
+  const [selectedLecture, setSelectedLecture] = useState<Lecture | null>(null);
   const [supabaseEnabled, setSupabaseEnabled] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Video[]>([]);
+  const [searchResults, setSearchResults] = useState<Lecture[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
-  const [pendingVideo, setPendingVideo] = useState<Video | null>(null);
+  const [pendingLecture, setPendingLecture] = useState<Lecture | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -40,15 +49,15 @@ export default function LecturesScreen() {
     }
 
     try {
-      const fetchedCategories = await fetchCategories('lecture');
+      const fetchedCategories = await getLectureCategories();
       setCategories(fetchedCategories);
 
-      const videosData: { [key: string]: Video[] } = {};
+      const lecturesData: { [key: string]: Lecture[] } = {};
       for (const category of fetchedCategories) {
-        const videos = await fetchVideosByCategory(category.id);
-        videosData[category.id] = videos;
+        const lectures = await fetchLecturesByCategory(category);
+        lecturesData[category] = lectures;
       }
-      setVideosByCategory(videosData);
+      setLecturesByCategory(lecturesData);
     } catch (error) {
       console.error('Error loading lectures:', error);
     } finally {
@@ -59,10 +68,10 @@ export default function LecturesScreen() {
   const performSearch = useCallback(async () => {
     setIsSearching(true);
     try {
-      const results = await searchVideos(searchQuery, 'lecture');
+      const results = await searchLectures(searchQuery);
       setSearchResults(results);
     } catch (error) {
-      console.error('Error searching videos:', error);
+      console.error('Error searching lectures:', error);
     } finally {
       setIsSearching(false);
     }
@@ -81,23 +90,22 @@ export default function LecturesScreen() {
     }
   }, [searchQuery, performSearch]);
 
-  const trackLecture = async (video: Video) => {
+  const trackLecture = async (lecture: Lecture) => {
     if (!user) {
       console.log('User not logged in, skipping tracking');
       return;
     }
 
     try {
-      // Track in database
       const { error } = await supabase
         .from('tracked_content')
         .upsert({
           user_id: user.id,
           content_type: 'lecture',
-          video_id: video.id,
-          video_title: video.title,
-          video_url: video.video_url,
-          scholar_name: video.scholar_name,
+          video_id: lecture.id,
+          video_title: lecture.title,
+          video_url: lecture.url,
+          scholar_name: lecture.scholar_name,
           tracked_at: new Date().toISOString(),
         }, {
           onConflict: 'user_id,video_id'
@@ -109,7 +117,6 @@ export default function LecturesScreen() {
         return;
       }
 
-      // Increment Iman Tracker counter
       if (ilmGoals) {
         const updatedGoals = {
           ...ilmGoals,
@@ -128,9 +135,9 @@ export default function LecturesScreen() {
     }
   };
 
-  const openYouTubeVideo = async (video: Video) => {
+  const openYouTubeVideo = async (lecture: Lecture) => {
     try {
-      const youtubeUrl = getYouTubeWatchUrl(video.video_url);
+      const youtubeUrl = getYouTubeWatchUrl(lecture.url);
       console.log('Opening YouTube video:', youtubeUrl);
       await WebBrowser.openBrowserAsync(youtubeUrl);
     } catch (error) {
@@ -139,40 +146,36 @@ export default function LecturesScreen() {
     }
   };
 
-  const handleVideoPress = async (video: Video) => {
-    // Increment views first
-    await incrementVideoViews(video.id);
+  const handleLecturePress = async (lecture: Lecture) => {
+    await incrementLectureViews(lecture.id);
 
-    // Check if it's a YouTube video
-    if (isYouTubeUrl(video.video_url)) {
-      // Show tracking modal before opening YouTube
-      setPendingVideo(video);
+    if (isYouTubeUrl(lecture.url)) {
+      setPendingLecture(lecture);
       setShowTrackingModal(true);
     } else {
-      // Use the in-app video player for non-YouTube videos
-      setSelectedVideo(video);
+      setSelectedLecture(lecture);
     }
   };
 
   const handleTrackAndWatch = async () => {
-    if (pendingVideo) {
-      await trackLecture(pendingVideo);
+    if (pendingLecture) {
+      await trackLecture(pendingLecture);
       setShowTrackingModal(false);
-      await openYouTubeVideo(pendingVideo);
-      setPendingVideo(null);
+      await openYouTubeVideo(pendingLecture);
+      setPendingLecture(null);
     }
   };
 
   const handleWatchWithoutTracking = async () => {
-    if (pendingVideo) {
+    if (pendingLecture) {
       setShowTrackingModal(false);
-      await openYouTubeVideo(pendingVideo);
-      setPendingVideo(null);
+      await openYouTubeVideo(pendingLecture);
+      setPendingLecture(null);
     }
   };
 
   const handleCloseVideo = () => {
-    setSelectedVideo(null);
+    setSelectedLecture(null);
   };
 
   const handleSearchToggle = () => {
@@ -185,7 +188,7 @@ export default function LecturesScreen() {
   };
 
   const handleImportPlaylist = () => {
-    router.push('/(tabs)/(learning)/playlist-import');
+    router.push('/(tabs)/(learning)/playlist-import?type=lecture');
   };
 
   const handleClearSearch = () => {
@@ -193,8 +196,21 @@ export default function LecturesScreen() {
     setSearchResults([]);
   };
 
-  if (selectedVideo) {
-    return <VideoPlayer video={selectedVideo} onClose={handleCloseVideo} />;
+  if (selectedLecture) {
+    return (
+      <VideoPlayer 
+        video={{
+          id: selectedLecture.id,
+          title: selectedLecture.title,
+          description: selectedLecture.description,
+          thumbnail_url: selectedLecture.image_url,
+          video_url: selectedLecture.url,
+          scholar_name: selectedLecture.scholar_name,
+          views: selectedLecture.views,
+        }} 
+        onClose={handleCloseVideo} 
+      />
+    );
   }
 
   if (!supabaseEnabled) {
@@ -223,39 +239,7 @@ export default function LecturesScreen() {
             <Text style={styles.setupDescription}>
               To access Islamic lectures, please enable Supabase by pressing the Supabase button and connecting to your project.
             </Text>
-            <View style={styles.setupSteps}>
-              <View style={styles.stepItem}>
-                <View style={styles.stepNumber}>
-                  <Text style={styles.stepNumberText}>1</Text>
-                </View>
-                <Text style={styles.stepText}>Create a Supabase project</Text>
-              </View>
-              <View style={styles.stepItem}>
-                <View style={styles.stepNumber}>
-                  <Text style={styles.stepNumberText}>2</Text>
-                </View>
-                <Text style={styles.stepText}>Press the Supabase button</Text>
-              </View>
-              <View style={styles.stepItem}>
-                <View style={styles.stepNumber}>
-                  <Text style={styles.stepNumberText}>3</Text>
-                </View>
-                <Text style={styles.stepText}>Connect to your project</Text>
-              </View>
-            </View>
           </LinearGradient>
-
-          <View style={styles.infoCard}>
-            <Text style={styles.infoTitle}>Database Setup Complete!</Text>
-            <Text style={styles.infoText}>
-              The database tables have been created automatically. You can now upload your lecture videos to Supabase Storage and add them to the videos table.
-            </Text>
-            <View style={styles.codeBlock}>
-              <Text style={styles.codeText}>✓ video_categories</Text>
-              <Text style={styles.codeText}>✓ videos</Text>
-              <Text style={styles.codeText}>✓ Sample categories added</Text>
-            </View>
-          </View>
         </ScrollView>
       </View>
     );
@@ -289,8 +273,28 @@ export default function LecturesScreen() {
             </View>
             <Text style={styles.emptyTitle}>No Lectures Yet</Text>
             <Text style={styles.emptyText}>
-              Add videos to your Supabase database to see them here. Sample categories have been created for you.
+              Import a YouTube playlist to get started. Tap the import button above to begin.
             </Text>
+            <TouchableOpacity
+              style={styles.emptyButton}
+              onPress={handleImportPlaylist}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={colors.gradientPrimary}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.emptyButtonGradient}
+              >
+                <IconSymbol
+                  ios_icon_name="square.and.arrow.down.fill"
+                  android_material_icon_name="download"
+                  size={20}
+                  color={colors.card}
+                />
+                <Text style={styles.emptyButtonText}>Import Playlist</Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </View>
@@ -385,11 +389,11 @@ export default function LecturesScreen() {
                   Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
                 </Text>
                 <View style={styles.searchResultsList}>
-                  {searchResults.map((video, index) => (
+                  {searchResults.map((lecture, index) => (
                     <TouchableOpacity
                       key={index}
                       style={styles.searchResultItem}
-                      onPress={() => handleVideoPress(video)}
+                      onPress={() => handleLecturePress(lecture)}
                       activeOpacity={0.7}
                     >
                       <View style={styles.searchResultThumbnail}>
@@ -402,28 +406,16 @@ export default function LecturesScreen() {
                       </View>
                       <View style={styles.searchResultInfo}>
                         <Text style={styles.searchResultTitle} numberOfLines={2}>
-                          {video.title}
+                          {lecture.title}
                         </Text>
-                        {video.scholar_name && (
+                        {lecture.scholar_name && (
                           <Text style={styles.searchResultScholar} numberOfLines={1}>
-                            {video.scholar_name}
+                            {lecture.scholar_name}
                           </Text>
                         )}
                         <View style={styles.searchResultMeta}>
-                          <IconSymbol
-                            ios_icon_name="eye.fill"
-                            android_material_icon_name="visibility"
-                            size={12}
-                            color={colors.textSecondary}
-                          />
-                          <Text style={styles.searchResultViews}>
-                            {video.views} views
-                          </Text>
-                          {isYouTubeUrl(video.video_url) && (
-                            <View style={styles.youtubeIndicator}>
-                              <Text style={styles.youtubeIndicatorText}>YouTube</Text>
-                            </View>
-                          )}
+                          <Text style={styles.searchResultCategory}>{lecture.category}</Text>
+                          <Text style={styles.searchResultViews}> • {lecture.views} views</Text>
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -447,23 +439,59 @@ export default function LecturesScreen() {
           </View>
         ) : (
           <React.Fragment>
-            {categories.map((category, index) => (
-              <React.Fragment key={index}>
-                <CategoryRow
-                  category={category}
-                  videos={videosByCategory[category.id] || []}
-                  onVideoPress={handleVideoPress}
-                  onSeeAllPress={() => console.log('See all:', category.name)}
-                />
-              </React.Fragment>
-            ))}
+            {categories.map((category, catIndex) => {
+              const lectures = lecturesByCategory[category] || [];
+              if (lectures.length === 0) return null;
+
+              return (
+                <View key={catIndex} style={styles.categorySection}>
+                  <View style={styles.categoryHeader}>
+                    <Text style={styles.categoryTitle}>{category}</Text>
+                    <Text style={styles.categoryCount}>{lectures.length} lectures</Text>
+                  </View>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.lecturesRow}
+                  >
+                    {lectures.map((lecture, lectureIndex) => (
+                      <TouchableOpacity
+                        key={lectureIndex}
+                        style={styles.lectureCard}
+                        onPress={() => handleLecturePress(lecture)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.lectureThumbnail}>
+                          <IconSymbol
+                            ios_icon_name="play.circle.fill"
+                            android_material_icon_name="play-circle"
+                            size={40}
+                            color={colors.primary}
+                          />
+                        </View>
+                        <View style={styles.lectureInfo}>
+                          <Text style={styles.lectureTitle} numberOfLines={2}>
+                            {lecture.title}
+                          </Text>
+                          {lecture.scholar_name && (
+                            <Text style={styles.lectureScholar} numberOfLines={1}>
+                              {lecture.scholar_name}
+                            </Text>
+                          )}
+                          <Text style={styles.lectureViews}>{lecture.views} views</Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              );
+            })}
           </React.Fragment>
         )}
 
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* Tracking Modal */}
       <Modal
         visible={showTrackingModal}
         transparent
@@ -491,14 +519,14 @@ export default function LecturesScreen() {
               <Text style={styles.modalText}>
                 Would you like to track this lecture in your Iman Tracker under ʿIlm (Knowledge)?
               </Text>
-              {pendingVideo && (
+              {pendingLecture && (
                 <View style={styles.videoPreview}>
                   <Text style={styles.videoPreviewTitle} numberOfLines={2}>
-                    {pendingVideo.title}
+                    {pendingLecture.title}
                   </Text>
-                  {pendingVideo.scholar_name && (
+                  {pendingLecture.scholar_name && (
                     <Text style={styles.videoPreviewScholar}>
-                      by {pendingVideo.scholar_name}
+                      by {pendingLecture.scholar_name}
                     </Text>
                   )}
                 </View>
@@ -690,23 +718,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  searchResultCategory: {
+    ...typography.small,
+    color: colors.primary,
+    fontWeight: '600',
+  },
   searchResultViews: {
     ...typography.small,
     color: colors.textSecondary,
-    marginLeft: spacing.xs,
-  },
-  youtubeIndicator: {
-    backgroundColor: '#FF0000',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-    marginLeft: spacing.sm,
-  },
-  youtubeIndicatorText: {
-    ...typography.small,
-    color: colors.card,
-    fontWeight: '700',
-    fontSize: 9,
   },
   noResultsContainer: {
     alignItems: 'center',
@@ -749,65 +768,7 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.card,
     textAlign: 'center',
-    marginBottom: spacing.xxl,
     lineHeight: 24,
-  },
-  setupSteps: {
-    width: '100%',
-    alignItems: 'flex-start',
-  },
-  stepItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  stepNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.md,
-  },
-  stepNumberText: {
-    ...typography.bodyBold,
-    color: colors.card,
-  },
-  stepText: {
-    ...typography.body,
-    color: colors.card,
-  },
-  infoCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  infoTitle: {
-    ...typography.h4,
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  infoText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    lineHeight: 24,
-    marginBottom: spacing.md,
-  },
-  codeBlock: {
-    backgroundColor: colors.backgroundAlt,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  codeText: {
-    ...typography.caption,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    color: colors.text,
-    marginBottom: spacing.xs,
   },
   emptyCard: {
     backgroundColor: colors.card,
@@ -837,6 +798,78 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
+    marginBottom: spacing.xl,
+  },
+  emptyButton: {
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    ...shadows.medium,
+  },
+  emptyButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+  },
+  emptyButtonText: {
+    ...typography.bodyBold,
+    color: colors.card,
+  },
+  categorySection: {
+    marginBottom: spacing.xxl,
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  categoryTitle: {
+    ...typography.h4,
+    color: colors.text,
+  },
+  categoryCount: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  lecturesRow: {
+    paddingHorizontal: spacing.xl,
+    gap: spacing.md,
+  },
+  lectureCard: {
+    width: 200,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    ...shadows.small,
+  },
+  lectureThumbnail: {
+    width: '100%',
+    height: 120,
+    backgroundColor: colors.backgroundAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lectureInfo: {
+    padding: spacing.md,
+  },
+  lectureTitle: {
+    ...typography.bodyBold,
+    color: colors.text,
+    marginBottom: spacing.xs,
+    minHeight: 40,
+  },
+  lectureScholar: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  lectureViews: {
+    ...typography.small,
+    color: colors.textSecondary,
   },
   bottomPadding: {
     height: 40,
