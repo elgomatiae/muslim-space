@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, Platform, ActivityIndicator, TouchableOpacity, TextInput, Keyboard, Alert, Modal, Image } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -40,6 +40,7 @@ export default function LecturesScreen() {
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [pendingLecture, setPendingLecture] = useState<Lecture | null>(null);
   const [isCategorizing, setIsCategorizing] = useState(false);
+  const categorizationTriggered = useRef(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -78,12 +79,53 @@ export default function LecturesScreen() {
       setUncategorizedLectures(uncategorized);
       
       console.log(`Loaded ${allLectures.length} lectures: ${uniqueCategories.length} categories, ${uncategorized.length} uncategorized`);
+
+      // Automatically trigger categorization if there are uncategorized lectures
+      // Only trigger once per session
+      if (uncategorized.length > 0 && !categorizationTriggered.current) {
+        categorizationTriggered.current = true;
+        console.log(`Auto-triggering categorization for ${uncategorized.length} uncategorized lectures...`);
+        await triggerAutoCategorization(uncategorized.length);
+      }
     } catch (error) {
       console.error('Error loading lectures:', error);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const triggerAutoCategorization = async (count: number) => {
+    try {
+      setIsCategorizing(true);
+      console.log(`Starting AI categorization for ${count} lectures...`);
+      
+      const response = await fetch(
+        `${supabase.supabaseUrl}/functions/v1/categorize-lectures`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('AI categorization completed:', result.message);
+        // Reload data to show newly categorized lectures
+        setTimeout(() => {
+          loadData();
+        }, 2000);
+      } else {
+        console.error('AI categorization failed:', result.error);
+      }
+    } catch (error) {
+      console.error('Error triggering auto-categorization:', error);
+    } finally {
+      setIsCategorizing(false);
+    }
+  };
 
   const performSearch = useCallback(async () => {
     setIsSearching(true);
@@ -211,69 +253,6 @@ export default function LecturesScreen() {
     router.push('/(tabs)/(learning)/playlist-import?type=lecture');
   };
 
-  const handleCategorizeLectures = async () => {
-    const totalUncategorized = uncategorizedLectures.length;
-    
-    if (totalUncategorized === 0) {
-      Alert.alert(
-        'All Categorized',
-        'All lectures are already categorized!',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
-    Alert.alert(
-      'Categorize Lectures',
-      `This will automatically categorize ${totalUncategorized} uncategorized lecture${totalUncategorized !== 1 ? 's' : ''} using AI. This may take a few minutes.`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Categorize',
-          onPress: async () => {
-            try {
-              setIsCategorizing(true);
-              const response = await fetch(
-                `${supabase.supabaseUrl}/functions/v1/categorize-lectures`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                }
-              );
-
-              const result = await response.json();
-              
-              if (result.success) {
-                Alert.alert(
-                  'Success',
-                  result.message,
-                  [
-                    {
-                      text: 'OK',
-                      onPress: () => loadData(),
-                    },
-                  ]
-                );
-              } else {
-                Alert.alert('Error', result.error || 'Failed to categorize lectures');
-              }
-            } catch (error) {
-              console.error('Error categorizing lectures:', error);
-              Alert.alert('Error', 'Failed to categorize lectures. Please try again.');
-            } finally {
-              setIsCategorizing(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
   const handleClearSearch = () => {
     setSearchQuery('');
     setSearchResults([]);
@@ -394,29 +373,10 @@ export default function LecturesScreen() {
             <Text style={styles.headerTitle}>Islamic Lectures</Text>
             <Text style={styles.headerSubtitle}>
               {totalLectures} lecture{totalLectures !== 1 ? 's' : ''} available
-              {uncategorizedLectures.length > 0 && ` • ${uncategorizedLectures.length} uncategorized`}
+              {isCategorizing && ' • AI categorizing...'}
             </Text>
           </View>
           <View style={styles.headerActions}>
-            {uncategorizedLectures.length > 0 && (
-              <TouchableOpacity
-                style={[styles.categorizeButton, isCategorizing && styles.categorizeButtonActive]}
-                onPress={handleCategorizeLectures}
-                activeOpacity={0.7}
-                disabled={isCategorizing}
-              >
-                {isCategorizing ? (
-                  <ActivityIndicator size="small" color={colors.primary} />
-                ) : (
-                  <IconSymbol
-                    ios_icon_name="tag.fill"
-                    android_material_icon_name="label"
-                    size={20}
-                    color={colors.primary}
-                  />
-                )}
-              </TouchableOpacity>
-            )}
             <TouchableOpacity
               style={styles.importButton}
               onPress={handleImportPlaylist}
@@ -569,38 +529,37 @@ export default function LecturesScreen() {
           </View>
         ) : (
           <React.Fragment>
-            {/* Show uncategorized lectures first with a banner to categorize */}
-            {uncategorizedLectures.length > 0 && (
+            {/* Show AI categorization banner if in progress */}
+            {isCategorizing && uncategorizedLectures.length > 0 && (
               <View style={styles.categorySection}>
-                <View style={styles.uncategorizedBanner}>
+                <View style={styles.categorizingBanner}>
                   <LinearGradient
-                    colors={['#F59E0B', '#D97706']}
+                    colors={['#3B82F6', '#2563EB']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
-                    style={styles.uncategorizedBannerGradient}
+                    style={styles.categorizingBannerGradient}
                   >
-                    <View style={styles.uncategorizedBannerContent}>
-                      <View style={styles.uncategorizedBannerIcon}>
-                        <IconSymbol
-                          ios_icon_name="exclamationmark.triangle.fill"
-                          android_material_icon_name="warning"
-                          size={24}
-                          color="#FFFFFF"
-                        />
-                      </View>
-                      <View style={styles.uncategorizedBannerText}>
-                        <Text style={styles.uncategorizedBannerTitle}>
-                          {uncategorizedLectures.length} Uncategorized Lecture{uncategorizedLectures.length !== 1 ? 's' : ''}
+                    <View style={styles.categorizingBannerContent}>
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      <View style={styles.categorizingBannerText}>
+                        <Text style={styles.categorizingBannerTitle}>
+                          AI Categorizing Lectures
                         </Text>
-                        <Text style={styles.uncategorizedBannerSubtitle}>
-                          Tap the label icon above to auto-categorize with AI
+                        <Text style={styles.categorizingBannerSubtitle}>
+                          Organizing {uncategorizedLectures.length} lecture{uncategorizedLectures.length !== 1 ? 's' : ''} by topic...
                         </Text>
                       </View>
                     </View>
                   </LinearGradient>
                 </View>
+              </View>
+            )}
+
+            {/* Show uncategorized lectures only if not currently categorizing */}
+            {!isCategorizing && uncategorizedLectures.length > 0 && (
+              <View style={styles.categorySection}>
                 <View style={styles.categoryHeader}>
-                  <Text style={styles.categoryTitle}>Uncategorized</Text>
+                  <Text style={styles.categoryTitle}>Recently Added</Text>
                   <Text style={styles.categoryCount}>{uncategorizedLectures.length} lectures</Text>
                 </View>
                 <ScrollView
@@ -868,18 +827,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
-  categorizeButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...shadows.small,
-  },
-  categorizeButtonActive: {
-    opacity: 0.6,
-  },
   importButton: {
     width: 44,
     height: 44,
@@ -1095,38 +1042,30 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.card,
   },
-  uncategorizedBanner: {
+  categorizingBanner: {
     marginHorizontal: spacing.xl,
     marginBottom: spacing.lg,
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
     ...shadows.medium,
   },
-  uncategorizedBannerGradient: {
+  categorizingBannerGradient: {
     padding: spacing.md,
   },
-  uncategorizedBannerContent: {
+  categorizingBannerContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.md,
   },
-  uncategorizedBannerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.md,
-  },
-  uncategorizedBannerText: {
+  categorizingBannerText: {
     flex: 1,
   },
-  uncategorizedBannerTitle: {
+  categorizingBannerTitle: {
     ...typography.bodyBold,
     color: '#FFFFFF',
     marginBottom: spacing.xs,
   },
-  uncategorizedBannerSubtitle: {
+  categorizingBannerSubtitle: {
     ...typography.caption,
     color: 'rgba(255, 255, 255, 0.9)',
   },
