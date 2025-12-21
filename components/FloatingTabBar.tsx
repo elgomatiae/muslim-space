@@ -233,7 +233,7 @@ function AnimatedCenterTab({
           <IconSymbol
             android_material_icon_name={tab.icon}
             ios_icon_name={tab.iosIcon || tab.icon}
-            size={40}
+            size={36}
             color="#FFFFFF"
           />
         </View>
@@ -354,18 +354,18 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '700',
   },
-  // Center tab (Iman) special styles - ENHANCED
+  // Center tab (Iman) special styles - REDUCED SIZE
   centerTabWrapper: {
     flex: 1.2,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 4,
-    marginTop: -40,
+    marginTop: -35,
   },
   centerTab: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     marginBottom: 6,
     ...Platform.select({
       ios: {
@@ -385,15 +385,15 @@ const styles = StyleSheet.create({
   centerTabGradient: {
     width: '100%',
     height: '100%',
-    borderRadius: 40,
+    borderRadius: 35,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 4,
     borderColor: '#FFFFFF',
   },
   centerIconContainer: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
