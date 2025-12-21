@@ -212,8 +212,7 @@ export default function ProfileScreen() {
     
     try {
       console.log('Attempting to navigate to notification-settings');
-      // Use the full path from the tabs root
-      router.push('/(tabs)/notification-settings');
+      router.push('notification-settings');
       console.log('Navigation command executed successfully');
     } catch (error) {
       console.error('Navigation error:', error);
