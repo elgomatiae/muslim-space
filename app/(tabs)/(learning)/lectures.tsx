@@ -39,8 +39,6 @@ export default function LecturesScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [pendingLecture, setPendingLecture] = useState<Lecture | null>(null);
-  const [isCategorizing, setIsCategorizing] = useState(false);
-  const categorizationTriggered = useRef(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -79,53 +77,12 @@ export default function LecturesScreen() {
       setUncategorizedLectures(uncategorized);
       
       console.log(`Loaded ${allLectures.length} lectures: ${uniqueCategories.length} categories, ${uncategorized.length} uncategorized`);
-
-      // Automatically trigger categorization if there are uncategorized lectures
-      // Only trigger once per session
-      if (uncategorized.length > 0 && !categorizationTriggered.current) {
-        categorizationTriggered.current = true;
-        console.log(`Auto-triggering categorization for ${uncategorized.length} uncategorized lectures...`);
-        await triggerAutoCategorization(uncategorized.length);
-      }
     } catch (error) {
       console.error('Error loading lectures:', error);
     } finally {
       setLoading(false);
     }
   }, []);
-
-  const triggerAutoCategorization = async (count: number) => {
-    try {
-      setIsCategorizing(true);
-      console.log(`Starting AI categorization for ${count} lectures...`);
-      
-      const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/categorize-lectures`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      const result = await response.json();
-      
-      if (result.success) {
-        console.log('AI categorization completed:', result.message);
-        // Reload data to show newly categorized lectures
-        setTimeout(() => {
-          loadData();
-        }, 2000);
-      } else {
-        console.error('AI categorization failed:', result.error);
-      }
-    } catch (error) {
-      console.error('Error triggering auto-categorization:', error);
-    } finally {
-      setIsCategorizing(false);
-    }
-  };
 
   const performSearch = useCallback(async () => {
     setIsSearching(true);
@@ -253,63 +210,6 @@ export default function LecturesScreen() {
     router.push('/(tabs)/(learning)/playlist-import?type=lecture');
   };
 
-  const handleRecategorizeGeneralKnowledge = async () => {
-    try {
-      setIsCategorizing(true);
-      console.log('Starting recategorization of General Knowledge lectures...');
-      
-      Alert.alert(
-        'Recategorize Lectures',
-        'This will use AI to recategorize all "General Knowledge" lectures into more specific categories. This may take a few minutes. Continue?',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-            onPress: () => setIsCategorizing(false),
-          },
-          {
-            text: 'Continue',
-            onPress: async () => {
-              try {
-                const response = await fetch(
-                  `${supabase.supabaseUrl}/functions/v1/recategorize-general-knowledge`,
-                  {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                  }
-                );
-
-                const result = await response.json();
-                
-                if (result.success) {
-                  console.log('Recategorization completed:', result.message);
-                  Alert.alert(
-                    'Success',
-                    `${result.message}\n\nNew categories created:\n${result.categoryDistribution?.map((c: any) => `• ${c.category}: ${c.count} lectures`).join('\n')}`,
-                    [{ text: 'OK', onPress: () => loadData() }]
-                  );
-                } else {
-                  console.error('Recategorization failed:', result.error);
-                  Alert.alert('Error', result.error || 'Failed to recategorize lectures.');
-                }
-              } catch (error) {
-                console.error('Error during recategorization:', error);
-                Alert.alert('Error', 'An error occurred during recategorization. Please try again.');
-              } finally {
-                setIsCategorizing(false);
-              }
-            },
-          },
-        ]
-      );
-    } catch (error) {
-      console.error('Error triggering recategorization:', error);
-      setIsCategorizing(false);
-    }
-  };
-
   const handleClearSearch = () => {
     setSearchQuery('');
     setSearchResults([]);
@@ -429,24 +329,10 @@ export default function LecturesScreen() {
           <View style={styles.headerTextContainer}>
             <Text style={styles.headerTitle}>Islamic Lectures</Text>
             <Text style={styles.headerSubtitle}>
-              {totalLectures} lecture{totalLectures !== 1 ? 's' : ''} available
-              {isCategorizing && ' • AI categorizing...'}
+              {totalLectures} lecture{totalLectures !== 1 ? 's' : ''} • {categories.length} categories
             </Text>
           </View>
           <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={styles.importButton}
-              onPress={handleRecategorizeGeneralKnowledge}
-              activeOpacity={0.7}
-              disabled={isCategorizing}
-            >
-              <IconSymbol
-                ios_icon_name="sparkles"
-                android_material_icon_name="auto-awesome"
-                size={20}
-                color={isCategorizing ? colors.textSecondary : colors.primary}
-              />
-            </TouchableOpacity>
             <TouchableOpacity
               style={styles.importButton}
               onPress={handleImportPlaylist}
@@ -599,34 +485,8 @@ export default function LecturesScreen() {
           </View>
         ) : (
           <React.Fragment>
-            {/* Show AI categorization banner if in progress */}
-            {isCategorizing && uncategorizedLectures.length > 0 && (
-              <View style={styles.categorySection}>
-                <View style={styles.categorizingBanner}>
-                  <LinearGradient
-                    colors={['#3B82F6', '#2563EB']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.categorizingBannerGradient}
-                  >
-                    <View style={styles.categorizingBannerContent}>
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                      <View style={styles.categorizingBannerText}>
-                        <Text style={styles.categorizingBannerTitle}>
-                          AI Categorizing Lectures
-                        </Text>
-                        <Text style={styles.categorizingBannerSubtitle}>
-                          Organizing {uncategorizedLectures.length} lecture{uncategorizedLectures.length !== 1 ? 's' : ''} by topic...
-                        </Text>
-                      </View>
-                    </View>
-                  </LinearGradient>
-                </View>
-              </View>
-            )}
-
-            {/* Show uncategorized lectures only if not currently categorizing */}
-            {!isCategorizing && uncategorizedLectures.length > 0 && (
+            {/* Show uncategorized lectures */}
+            {uncategorizedLectures.length > 0 && (
               <View style={styles.categorySection}>
                 <View style={styles.categoryHeader}>
                   <Text style={styles.categoryTitle}>Recently Added</Text>
