@@ -15,13 +15,13 @@ export default function TabLayout() {
         light: '#8B5CF6',
       })}
       iconColor={DynamicColorIOS({
-        dark: '#94A3B8',
-        light: '#64748B',
+        dark: '#D1D5DB',
+        light: '#6B7280',
       })}
       labelStyle={{
         color: DynamicColorIOS({
-          dark: '#E2E8F0',
-          light: '#475569',
+          dark: '#E5E7EB',
+          light: '#374151',
         }),
         fontSize: 10,
         fontWeight: '600',
