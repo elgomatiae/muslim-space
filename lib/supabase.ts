@@ -1,6 +1,9 @@
 
 import { supabase } from '@/app/integrations/supabase/client';
 
+// Re-export the supabase client for convenience
+export { supabase };
+
 export interface Video {
   id: string;
   title: string;
