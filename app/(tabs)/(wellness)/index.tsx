@@ -6,6 +6,7 @@ import { colors, typography, spacing, borderRadius, shadows } from "@/styles/com
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from 'expo-haptics';
+import { useImanTracker } from "@/contexts/ImanTrackerContext";
 
 // Import the hub screens
 import MentalHealthHubScreen from './mental-health';
@@ -16,6 +17,7 @@ type TabType = 'mental' | 'physical';
 export default function WellnessScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('mental');
   const slideAnim = React.useRef(new Animated.Value(0)).current;
+  const { amanahGoals, sectionScores } = useImanTracker();
 
   const switchTab = (tab: TabType) => {
     if (tab === activeTab) return;
@@ -38,6 +40,49 @@ export default function WellnessScreen() {
     outputRange: [0, 180], // Half of container width minus padding
   });
 
+  // Calculate Amanah completion percentage
+  const calculateAmanahCompletion = () => {
+    if (!amanahGoals) return 0;
+    
+    let totalGoals = 0;
+    let completedGoals = 0;
+    
+    // Physical goals
+    if (amanahGoals.dailyExerciseGoal > 0) {
+      totalGoals++;
+      if (amanahGoals.dailyExerciseCompleted >= amanahGoals.dailyExerciseGoal) completedGoals++;
+    }
+    if (amanahGoals.dailyWaterGoal > 0) {
+      totalGoals++;
+      if (amanahGoals.dailyWaterCompleted >= amanahGoals.dailyWaterGoal) completedGoals++;
+    }
+    if (amanahGoals.weeklyWorkoutGoal > 0) {
+      totalGoals++;
+      if (amanahGoals.weeklyWorkoutCompleted >= amanahGoals.weeklyWorkoutGoal) completedGoals++;
+    }
+    
+    // Mental goals
+    if (amanahGoals.weeklyMentalHealthGoal > 0) {
+      totalGoals++;
+      if (amanahGoals.weeklyMentalHealthCompleted >= amanahGoals.weeklyMentalHealthGoal) completedGoals++;
+    }
+    if (amanahGoals.weeklyStressManagementGoal > 0) {
+      totalGoals++;
+      if (amanahGoals.weeklyStressManagementCompleted >= amanahGoals.weeklyStressManagementGoal) completedGoals++;
+    }
+    
+    // Sleep goals
+    if (amanahGoals.dailySleepGoal > 0) {
+      totalGoals++;
+      if (amanahGoals.dailySleepCompleted >= amanahGoals.dailySleepGoal) completedGoals++;
+    }
+    
+    return totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0;
+  };
+
+  const amanahCompletion = calculateAmanahCompletion();
+  const amanahScore = sectionScores.amanah || 0;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header with Tabs */}
@@ -58,6 +103,37 @@ export default function WellnessScreen() {
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle}>Wellness Hub</Text>
               <Text style={styles.headerSubtitle}>Nurture mind, body, and soul</Text>
+            </View>
+          </View>
+
+          {/* Amanah Ring Reflection */}
+          <View style={styles.amanahReflection}>
+            <View style={styles.amanahRingContainer}>
+              <View style={styles.amanahRingBackground}>
+                <View 
+                  style={[
+                    styles.amanahRingFill,
+                    { 
+                      transform: [{ 
+                        rotate: `${(amanahScore / 100) * 360}deg` 
+                      }] 
+                    }
+                  ]} 
+                />
+              </View>
+              <View style={styles.amanahRingCenter}>
+                <Text style={styles.amanahScore}>{Math.round(amanahScore)}</Text>
+                <Text style={styles.amanahLabel}>Amanah</Text>
+              </View>
+            </View>
+            <View style={styles.amanahStats}>
+              <Text style={styles.amanahStatsTitle}>Well-Being Score</Text>
+              <Text style={styles.amanahStatsText}>
+                {amanahCompletion}% of goals completed
+              </Text>
+              <Text style={styles.amanahStatsSubtext}>
+                Linked to your Iman Tracker
+              </Text>
             </View>
           </View>
 
@@ -161,6 +237,74 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.card,
     opacity: 0.95,
+  },
+  amanahReflection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    gap: spacing.lg,
+  },
+  amanahRingContainer: {
+    width: 80,
+    height: 80,
+    position: 'relative',
+  },
+  amanahRingBackground: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    overflow: 'hidden',
+  },
+  amanahRingFill: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 8,
+    borderColor: colors.card,
+    borderStyle: 'solid',
+    position: 'absolute',
+  },
+  amanahRingCenter: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  amanahScore: {
+    ...typography.h3,
+    color: colors.card,
+    fontWeight: '800',
+  },
+  amanahLabel: {
+    ...typography.small,
+    color: colors.card,
+    opacity: 0.9,
+  },
+  amanahStats: {
+    flex: 1,
+  },
+  amanahStatsTitle: {
+    ...typography.h4,
+    color: colors.card,
+    marginBottom: spacing.xs,
+  },
+  amanahStatsText: {
+    ...typography.body,
+    color: colors.card,
+    opacity: 0.95,
+    marginBottom: spacing.xs,
+  },
+  amanahStatsSubtext: {
+    ...typography.caption,
+    color: colors.card,
+    opacity: 0.8,
   },
   tabContainer: {
     width: '100%',

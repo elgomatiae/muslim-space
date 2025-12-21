@@ -1,12 +1,14 @@
 
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Animated, TextInput } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Animated, TextInput, Modal } from "react-native";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useImanTracker } from "@/contexts/ImanTrackerContext";
+import * as Haptics from 'expo-haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = (SCREEN_WIDTH - spacing.xl * 2 - spacing.md) / 2;
@@ -47,6 +49,7 @@ interface MoodEntry {
 
 export default function MentalHealthHubScreen() {
   const { user } = useAuth();
+  const { amanahGoals, updateAmanahGoals } = useImanTracker();
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [prophetStories, setProphetStories] = useState<ProphetStory[]>([]);
   const [duas, setDuas] = useState<Dua[]>([]);
@@ -56,6 +59,7 @@ export default function MentalHealthHubScreen() {
   const [moodStreak, setMoodStreak] = useState(0);
   const [quickJournalText, setQuickJournalText] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showProphetModal, setShowProphetModal] = useState(false);
   
   // Animation values
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
@@ -186,6 +190,8 @@ export default function MentalHealthHubScreen() {
   const handleQuickJournal = async () => {
     if (!user || !quickJournalText.trim()) return;
     
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
     const { error } = await supabase
       .from('journal_entries')
       .insert({
@@ -198,6 +204,15 @@ export default function MentalHealthHubScreen() {
       setQuickJournalText('');
       loadJournalEntries();
       loadStats();
+      
+      // Update Iman Tracker - mental health activity
+      if (amanahGoals) {
+        const updatedGoals = {
+          ...amanahGoals,
+          weeklyMentalHealthCompleted: amanahGoals.weeklyMentalHealthCompleted + 1,
+        };
+        await updateAmanahGoals(updatedGoals);
+      }
     }
   };
 
@@ -274,8 +289,72 @@ export default function MentalHealthHubScreen() {
               <Text style={styles.statLabel}>Stories</Text>
             </View>
           </View>
+
+          {/* Link to Iman Tracker */}
+          <TouchableOpacity
+            style={styles.imanTrackerLink}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/(tabs)/(iman)' as any);
+            }}
+            activeOpacity={0.8}
+          >
+            <IconSymbol
+              ios_icon_name="sparkles"
+              android_material_icon_name="auto-awesome"
+              size={20}
+              color={colors.card}
+            />
+            <Text style={styles.imanTrackerLinkText}>View in Iman Tracker</Text>
+            <IconSymbol
+              ios_icon_name="arrow.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={colors.card}
+            />
+          </TouchableOpacity>
         </LinearGradient>
       </Animated.View>
+
+      {/* Prophet's Mental Health Struggles - Featured Section */}
+      <View style={styles.prophetSection}>
+        <TouchableOpacity
+          style={styles.prophetFeatureCard}
+          activeOpacity={0.8}
+          onPress={() => setShowProphetModal(true)}
+        >
+          <LinearGradient
+            colors={colors.gradientSunset}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.prophetFeatureGradient}
+          >
+            <View style={styles.prophetFeatureIcon}>
+              <IconSymbol
+                ios_icon_name="book.closed.fill"
+                android_material_icon_name="auto-stories"
+                size={48}
+                color={colors.card}
+              />
+            </View>
+            <Text style={styles.prophetFeatureTitle}>
+              Prophet Muhammad&apos;s (ﷺ) Mental Health Journey
+            </Text>
+            <Text style={styles.prophetFeatureSubtitle}>
+              Learn how the Prophet (ﷺ) dealt with grief, anxiety, and emotional challenges
+            </Text>
+            <View style={styles.prophetFeatureAction}>
+              <Text style={styles.prophetFeatureActionText}>Explore Stories</Text>
+              <IconSymbol
+                ios_icon_name="arrow.right.circle.fill"
+                android_material_icon_name="arrow-forward"
+                size={24}
+                color={colors.card}
+              />
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
 
       {/* Quick Journal Entry */}
       <View style={styles.quickJournalSection}>
@@ -287,11 +366,20 @@ export default function MentalHealthHubScreen() {
             color={colors.primary}
           />
           <Text style={styles.sectionTitle}>Quick Journal</Text>
+          <View style={styles.imanBadge}>
+            <IconSymbol
+              ios_icon_name="sparkles"
+              android_material_icon_name="auto-awesome"
+              size={14}
+              color={colors.primary}
+            />
+            <Text style={styles.imanBadgeText}>+Iman</Text>
+          </View>
         </View>
         <View style={styles.quickJournalCard}>
           <TextInput
             style={styles.quickJournalInput}
-            placeholder="How are you feeling today?"
+            placeholder="How are you feeling today? Express your thoughts..."
             placeholderTextColor={colors.textSecondary}
             value={quickJournalText}
             onChangeText={setQuickJournalText}
@@ -315,9 +403,12 @@ export default function MentalHealthHubScreen() {
                 size={24}
                 color={colors.card}
               />
-              <Text style={styles.quickJournalButtonText}>Save</Text>
+              <Text style={styles.quickJournalButtonText}>Save & Track</Text>
             </LinearGradient>
           </TouchableOpacity>
+          <Text style={styles.quickJournalHint}>
+            Journaling counts toward your mental health goals in the Iman Tracker
+          </Text>
         </View>
       </View>
 
@@ -327,7 +418,7 @@ export default function MentalHealthHubScreen() {
           <TouchableOpacity
             style={styles.promptCard}
             activeOpacity={0.8}
-            onPress={() => router.push('/journal-prompts' as any)}
+            onPress={() => router.push('/(tabs)/(wellness)/journal-prompts' as any)}
           >
             <LinearGradient
               colors={colors.gradientInfo}
@@ -369,9 +460,9 @@ export default function MentalHealthHubScreen() {
               size={28}
               color={colors.primary}
             />
-            <Text style={styles.sectionTitle}>Recent Entries</Text>
+            <Text style={styles.sectionTitle}>My Journal</Text>
             <TouchableOpacity
-              onPress={() => router.push('/journal' as any)}
+              onPress={() => router.push('/(tabs)/(wellness)/journal' as any)}
               style={styles.seeAllButton}
             >
               <Text style={styles.seeAllText}>See All</Text>
@@ -393,7 +484,7 @@ export default function MentalHealthHubScreen() {
                 <TouchableOpacity
                   style={styles.journalCard}
                   activeOpacity={0.8}
-                  onPress={() => router.push('/journal' as any)}
+                  onPress={() => router.push('/(tabs)/(wellness)/journal' as any)}
                 >
                   <View style={styles.journalCardHeader}>
                     <Text style={styles.journalCardTitle} numberOfLines={1}>
@@ -425,7 +516,7 @@ export default function MentalHealthHubScreen() {
             />
             <Text style={styles.sectionTitle}>Mood This Week</Text>
             <TouchableOpacity
-              onPress={() => router.push('/mood-tracker' as any)}
+              onPress={() => router.push('/(tabs)/(wellness)/mood-tracker' as any)}
               style={styles.seeAllButton}
             >
               <Text style={styles.seeAllText}>Track</Text>
@@ -462,7 +553,7 @@ export default function MentalHealthHubScreen() {
             />
             <Text style={styles.sectionTitle}>Prophet Stories</Text>
             <TouchableOpacity
-              onPress={() => router.push('/prophet-stories' as any)}
+              onPress={() => router.push('/(tabs)/(wellness)/prophet-stories' as any)}
               style={styles.seeAllButton}
             >
               <Text style={styles.seeAllText}>See All</Text>
@@ -481,7 +572,7 @@ export default function MentalHealthHubScreen() {
                   style={styles.storyCard}
                   activeOpacity={0.8}
                   onPress={() => router.push({
-                    pathname: '/prophet-stories' as any,
+                    pathname: '/(tabs)/(wellness)/prophet-stories' as any,
                     params: { storyId: story.id }
                   })}
                 >
@@ -526,7 +617,7 @@ export default function MentalHealthHubScreen() {
             />
             <Text style={styles.sectionTitle}>Healing Duas</Text>
             <TouchableOpacity
-              onPress={() => router.push('/mental-duas' as any)}
+              onPress={() => router.push('/(tabs)/(wellness)/mental-duas' as any)}
               style={styles.seeAllButton}
             >
               <Text style={styles.seeAllText}>See All</Text>
@@ -545,7 +636,7 @@ export default function MentalHealthHubScreen() {
                   style={styles.duaCard}
                   activeOpacity={0.8}
                   onPress={() => router.push({
-                    pathname: '/mental-duas' as any,
+                    pathname: '/(tabs)/(wellness)/mental-duas' as any,
                     params: { duaId: dua.id }
                   })}
                 >
@@ -593,7 +684,7 @@ export default function MentalHealthHubScreen() {
           <TouchableOpacity
             style={styles.toolCard}
             activeOpacity={0.8}
-            onPress={() => router.push('/meditation' as any)}
+            onPress={() => router.push('/(tabs)/(wellness)/meditation' as any)}
           >
             <LinearGradient
               colors={colors.gradientSecondary}
@@ -614,7 +705,7 @@ export default function MentalHealthHubScreen() {
           <TouchableOpacity
             style={styles.toolCard}
             activeOpacity={0.8}
-            onPress={() => router.push('/emotional-support' as any)}
+            onPress={() => router.push('/(tabs)/(wellness)/emotional-support' as any)}
           >
             <LinearGradient
               colors={colors.gradientAccent}
@@ -638,7 +729,7 @@ export default function MentalHealthHubScreen() {
       <TouchableOpacity
         style={styles.crisisCard}
         activeOpacity={0.8}
-        onPress={() => router.push('/crisis-support' as any)}
+        onPress={() => router.push('/(tabs)/(wellness)/crisis-support' as any)}
       >
         <LinearGradient
           colors={['#FF6B6B', '#EE5A6F']}
@@ -701,6 +792,135 @@ export default function MentalHealthHubScreen() {
         </Text>
       </View>
 
+      {/* Prophet Modal */}
+      <Modal
+        visible={showProphetModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowProphetModal(false)}
+      >
+        <SafeAreaView style={styles.modalContainer} edges={['top']}>
+          <ScrollView
+            style={styles.modalScroll}
+            contentContainerStyle={styles.modalContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.modalHeader}>
+              <TouchableOpacity
+                onPress={() => setShowProphetModal(false)}
+                style={styles.closeButton}
+              >
+                <IconSymbol
+                  ios_icon_name="xmark"
+                  android_material_icon_name="close"
+                  size={24}
+                  color={colors.text}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalTitleSection}>
+              <LinearGradient
+                colors={colors.gradientSunset}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.modalTitleGradient}
+              >
+                <IconSymbol
+                  ios_icon_name="book.closed.fill"
+                  android_material_icon_name="auto-stories"
+                  size={64}
+                  color={colors.card}
+                />
+                <Text style={styles.modalTitle}>
+                  Prophet Muhammad&apos;s (ﷺ) Mental Health Journey
+                </Text>
+              </LinearGradient>
+            </View>
+
+            <View style={styles.modalIntro}>
+              <Text style={styles.modalIntroText}>
+                The Prophet Muhammad (ﷺ) faced immense emotional and mental challenges throughout his life. 
+                His experiences offer profound guidance for dealing with grief, anxiety, depression, and stress.
+              </Text>
+            </View>
+
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionTitle}>Grief & Loss</Text>
+              <Text style={styles.modalSectionText}>
+                The Prophet (ﷺ) experienced profound grief when he lost his beloved wife Khadijah (RA) and his uncle Abu Talib 
+                in the same year, known as the &quot;Year of Sorrow.&quot; He openly wept and mourned, showing us that expressing 
+                grief is natural and healthy. He taught us that it&apos;s okay to cry and feel sadness, but to always maintain 
+                hope in Allah&apos;s mercy.
+              </Text>
+            </View>
+
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionTitle}>Anxiety & Stress</Text>
+              <Text style={styles.modalSectionText}>
+                During times of extreme stress, such as the Battle of Ahzab when the Muslims were surrounded, the Prophet (ﷺ) 
+                turned to prayer and dhikr. He would seek solace in the Cave of Hira, spending time in reflection and connection 
+                with Allah. This teaches us the importance of spiritual practices in managing anxiety.
+              </Text>
+            </View>
+
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionTitle}>Depression & Sadness</Text>
+              <Text style={styles.modalSectionText}>
+                When the Prophet (ﷺ) felt overwhelmed, he would say: &quot;O Allah, I seek refuge in You from anxiety and sorrow, 
+                weakness and laziness, miserliness and cowardice, the burden of debts and from being overpowered by men.&quot; 
+                This dua acknowledges the reality of these feelings while seeking divine help.
+              </Text>
+            </View>
+
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionTitle}>Self-Care & Balance</Text>
+              <Text style={styles.modalSectionText}>
+                The Prophet (ﷺ) emphasized the importance of taking care of one&apos;s body and mind. He said: &quot;Your body 
+                has a right over you, your eyes have a right over you, and your spouse has a right over you.&quot; He practiced 
+                moderation in all things and encouraged rest, healthy eating, and physical activity.
+              </Text>
+            </View>
+
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionTitle}>Seeking Support</Text>
+              <Text style={styles.modalSectionText}>
+                The Prophet (ﷺ) didn&apos;t face his challenges alone. He confided in his companions, sought their counsel, 
+                and accepted their support. This teaches us that seeking help from others is a sign of strength, not weakness.
+              </Text>
+            </View>
+
+            <View style={styles.modalCTA}>
+              <TouchableOpacity
+                style={styles.modalCTAButton}
+                onPress={() => {
+                  setShowProphetModal(false);
+                  router.push('/(tabs)/(wellness)/prophet-stories' as any);
+                }}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={colors.gradientSunset}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.modalCTAGradient}
+                >
+                  <Text style={styles.modalCTAText}>Explore More Stories</Text>
+                  <IconSymbol
+                    ios_icon_name="arrow.right"
+                    android_material_icon_name="arrow-forward"
+                    size={24}
+                    color={colors.card}
+                  />
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.bottomPadding} />
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
       <View style={styles.bottomPadding} />
     </ScrollView>
   );
@@ -747,6 +967,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
+    marginBottom: spacing.md,
   },
   statItem: {
     alignItems: 'center',
@@ -767,6 +988,69 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     opacity: 0.3,
   },
+  imanTrackerLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+  },
+  imanTrackerLinkText: {
+    ...typography.bodyBold,
+    color: colors.card,
+  },
+  prophetSection: {
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.xxl,
+  },
+  prophetFeatureCard: {
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    ...shadows.large,
+  },
+  prophetFeatureGradient: {
+    padding: spacing.xxl,
+    alignItems: 'center',
+  },
+  prophetFeatureIcon: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+  },
+  prophetFeatureTitle: {
+    ...typography.h2,
+    color: colors.card,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  prophetFeatureSubtitle: {
+    ...typography.body,
+    color: colors.card,
+    opacity: 0.95,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+    lineHeight: 24,
+  },
+  prophetFeatureAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.lg,
+  },
+  prophetFeatureActionText: {
+    ...typography.h4,
+    color: colors.card,
+  },
   quickJournalSection: {
     marginHorizontal: spacing.xl,
     marginBottom: spacing.xxl,
@@ -781,6 +1065,19 @@ const styles = StyleSheet.create({
     ...typography.h3,
     color: colors.text,
     flex: 1,
+  },
+  imanBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.highlight,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+  },
+  imanBadgeText: {
+    ...typography.smallBold,
+    color: colors.primary,
   },
   seeAllButton: {
     flexDirection: 'row',
@@ -809,6 +1106,7 @@ const styles = StyleSheet.create({
   quickJournalButton: {
     borderRadius: borderRadius.md,
     overflow: 'hidden',
+    marginBottom: spacing.sm,
   },
   quickJournalGradient: {
     flexDirection: 'row',
@@ -820,6 +1118,11 @@ const styles = StyleSheet.create({
   quickJournalButtonText: {
     ...typography.bodyBold,
     color: colors.card,
+  },
+  quickJournalHint: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   promptSection: {
     marginHorizontal: spacing.xl,
@@ -1112,6 +1415,100 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     flex: 1,
     lineHeight: 20,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  modalScroll: {
+    flex: 1,
+  },
+  modalContent: {
+    paddingTop: spacing.lg,
+    paddingHorizontal: spacing.xl,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: spacing.lg,
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.small,
+  },
+  modalTitleSection: {
+    marginBottom: spacing.xxl,
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    ...shadows.large,
+  },
+  modalTitleGradient: {
+    padding: spacing.xxxl,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    ...typography.h2,
+    color: colors.card,
+    textAlign: 'center',
+    marginTop: spacing.lg,
+  },
+  modalIntro: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xxl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.small,
+  },
+  modalIntroText: {
+    ...typography.body,
+    color: colors.text,
+    lineHeight: 24,
+  },
+  modalSection: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.small,
+  },
+  modalSectionTitle: {
+    ...typography.h4,
+    color: colors.primary,
+    marginBottom: spacing.md,
+  },
+  modalSectionText: {
+    ...typography.body,
+    color: colors.text,
+    lineHeight: 24,
+  },
+  modalCTA: {
+    marginTop: spacing.lg,
+    marginBottom: spacing.xxl,
+  },
+  modalCTAButton: {
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    ...shadows.large,
+  },
+  modalCTAGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.lg,
+  },
+  modalCTAText: {
+    ...typography.h4,
+    color: colors.card,
   },
   bottomPadding: {
     height: 120,
