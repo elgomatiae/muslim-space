@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Platform, ActivityIndicator, TouchableOpacity, TextInput, Keyboard, Alert, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Platform, ActivityIndicator, TouchableOpacity, TextInput, Keyboard, Alert, Modal, Image } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import VideoPlayer from '@/components/VideoPlayer';
@@ -13,6 +13,7 @@ import {
   isSupabaseConfigured, 
   isYouTubeUrl, 
   getYouTubeWatchUrl,
+  getYouTubeThumbnailUrl,
   Lecture 
 } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -191,6 +192,58 @@ export default function LecturesScreen() {
     router.push('/(tabs)/(learning)/playlist-import?type=lecture');
   };
 
+  const handleCategorizeLectures = async () => {
+    Alert.alert(
+      'Categorize Lectures',
+      'This will automatically categorize all uncategorized lectures using AI. This may take a few minutes.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Categorize',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const response = await fetch(
+                `${supabase.supabaseUrl}/functions/v1/categorize-lectures`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                }
+              );
+
+              const result = await response.json();
+              
+              if (result.success) {
+                Alert.alert(
+                  'Success',
+                  result.message,
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => loadData(),
+                    },
+                  ]
+                );
+              } else {
+                Alert.alert('Error', result.error || 'Failed to categorize lectures');
+              }
+            } catch (error) {
+              console.error('Error categorizing lectures:', error);
+              Alert.alert('Error', 'Failed to categorize lectures. Please try again.');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleClearSearch = () => {
     setSearchQuery('');
     setSearchResults([]);
@@ -311,6 +364,18 @@ export default function LecturesScreen() {
           </View>
           <View style={styles.headerActions}>
             <TouchableOpacity
+              style={styles.categorizeButton}
+              onPress={handleCategorizeLectures}
+              activeOpacity={0.7}
+            >
+              <IconSymbol
+                ios_icon_name="tag.fill"
+                android_material_icon_name="label"
+                size={20}
+                color={colors.primary}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
               style={styles.importButton}
               onPress={handleImportPlaylist}
               activeOpacity={0.7}
@@ -389,37 +454,60 @@ export default function LecturesScreen() {
                   Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
                 </Text>
                 <View style={styles.searchResultsList}>
-                  {searchResults.map((lecture, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.searchResultItem}
-                      onPress={() => handleLecturePress(lecture)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.searchResultThumbnail}>
-                        <IconSymbol
-                          ios_icon_name="play.circle.fill"
-                          android_material_icon_name="play-circle"
-                          size={32}
-                          color={colors.primary}
-                        />
-                      </View>
-                      <View style={styles.searchResultInfo}>
-                        <Text style={styles.searchResultTitle} numberOfLines={2}>
-                          {lecture.title}
-                        </Text>
-                        {lecture.scholar_name && (
-                          <Text style={styles.searchResultScholar} numberOfLines={1}>
-                            {lecture.scholar_name}
-                          </Text>
+                  {searchResults.map((lecture, index) => {
+                    const thumbnailUrl = lecture.thumbnail_url || (lecture.url ? getYouTubeThumbnailUrl(lecture.url) : '');
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.searchResultItem}
+                        onPress={() => handleLecturePress(lecture)}
+                        activeOpacity={0.7}
+                      >
+                        {thumbnailUrl ? (
+                          <View style={styles.searchResultThumbnailContainer}>
+                            <Image 
+                              source={{ uri: thumbnailUrl }} 
+                              style={styles.searchResultThumbnailImage}
+                              resizeMode="cover"
+                            />
+                            <View style={styles.searchPlayOverlay}>
+                              <IconSymbol
+                                ios_icon_name="play.circle.fill"
+                                android_material_icon_name="play-circle"
+                                size={32}
+                                color={colors.card}
+                              />
+                            </View>
+                          </View>
+                        ) : (
+                          <View style={styles.searchResultThumbnail}>
+                            <IconSymbol
+                              ios_icon_name="play.circle.fill"
+                              android_material_icon_name="play-circle"
+                              size={32}
+                              color={colors.primary}
+                            />
+                          </View>
                         )}
-                        <View style={styles.searchResultMeta}>
-                          <Text style={styles.searchResultCategory}>{lecture.category}</Text>
-                          <Text style={styles.searchResultViews}> • {lecture.views} views</Text>
+                        <View style={styles.searchResultInfo}>
+                          <Text style={styles.searchResultTitle} numberOfLines={2}>
+                            {lecture.title}
+                          </Text>
+                          {lecture.scholar_name && (
+                            <Text style={styles.searchResultScholar} numberOfLines={1}>
+                              {lecture.scholar_name}
+                            </Text>
+                          )}
+                          <View style={styles.searchResultMeta}>
+                            {lecture.category && (
+                              <Text style={styles.searchResultCategory}>{lecture.category}</Text>
+                            )}
+                            <Text style={styles.searchResultViews}>{lecture.category ? ' • ' : ''}{lecture.views || 0} views</Text>
+                          </View>
                         </View>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </React.Fragment>
             ) : (
@@ -454,34 +542,55 @@ export default function LecturesScreen() {
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.lecturesRow}
                   >
-                    {lectures.map((lecture, lectureIndex) => (
-                      <TouchableOpacity
-                        key={lectureIndex}
-                        style={styles.lectureCard}
-                        onPress={() => handleLecturePress(lecture)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.lectureThumbnail}>
-                          <IconSymbol
-                            ios_icon_name="play.circle.fill"
-                            android_material_icon_name="play-circle"
-                            size={40}
-                            color={colors.primary}
-                          />
-                        </View>
-                        <View style={styles.lectureInfo}>
-                          <Text style={styles.lectureTitle} numberOfLines={2}>
-                            {lecture.title}
-                          </Text>
-                          {lecture.scholar_name && (
-                            <Text style={styles.lectureScholar} numberOfLines={1}>
-                              {lecture.scholar_name}
-                            </Text>
+                    {lectures.map((lecture, lectureIndex) => {
+                      const thumbnailUrl = lecture.thumbnail_url || (lecture.url ? getYouTubeThumbnailUrl(lecture.url) : '');
+                      return (
+                        <TouchableOpacity
+                          key={lectureIndex}
+                          style={styles.lectureCard}
+                          onPress={() => handleLecturePress(lecture)}
+                          activeOpacity={0.7}
+                        >
+                          {thumbnailUrl ? (
+                            <View style={styles.lectureThumbnailContainer}>
+                              <Image 
+                                source={{ uri: thumbnailUrl }} 
+                                style={styles.lectureThumbnailImage}
+                                resizeMode="cover"
+                              />
+                              <View style={styles.playOverlay}>
+                                <IconSymbol
+                                  ios_icon_name="play.circle.fill"
+                                  android_material_icon_name="play-circle"
+                                  size={40}
+                                  color={colors.card}
+                                />
+                              </View>
+                            </View>
+                          ) : (
+                            <View style={styles.lectureThumbnail}>
+                              <IconSymbol
+                                ios_icon_name="play.circle.fill"
+                                android_material_icon_name="play-circle"
+                                size={40}
+                                color={colors.primary}
+                              />
+                            </View>
                           )}
-                          <Text style={styles.lectureViews}>{lecture.views} views</Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
+                          <View style={styles.lectureInfo}>
+                            <Text style={styles.lectureTitle} numberOfLines={2}>
+                              {lecture.title}
+                            </Text>
+                            {lecture.scholar_name && (
+                              <Text style={styles.lectureScholar} numberOfLines={1}>
+                                {lecture.scholar_name}
+                              </Text>
+                            )}
+                            <Text style={styles.lectureViews}>{lecture.views || 0} views</Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </ScrollView>
                 </View>
               );
@@ -624,6 +733,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
+  categorizeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.small,
+  },
   importButton: {
     width: 44,
     height: 44,
@@ -699,6 +817,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
+  },
+  searchResultThumbnailContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    marginRight: spacing.md,
+    position: 'relative',
+  },
+  searchResultThumbnailImage: {
+    width: '100%',
+    height: '100%',
+  },
+  searchPlayOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   searchResultInfo: {
     flex: 1,
@@ -850,6 +990,26 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 120,
     backgroundColor: colors.backgroundAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lectureThumbnailContainer: {
+    width: '100%',
+    height: 120,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  lectureThumbnailImage: {
+    width: '100%',
+    height: '100%',
+  },
+  playOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },

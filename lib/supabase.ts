@@ -34,15 +34,16 @@ export interface Lecture {
   id: string;
   title: string;
   url: string;
-  image_url: string;
-  category: string;
+  thumbnail_url?: string;
+  image_url?: string;
+  category?: string;
   description?: string;
   scholar_name?: string;
-  duration: number;
-  views: number;
-  order_index: number;
-  created_at: string;
-  updated_at: string;
+  duration?: number;
+  views?: number;
+  order_index?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Recitation {
@@ -82,7 +83,14 @@ export async function fetchLectures(): Promise<Lecture[]> {
       return [];
     }
 
-    return data || [];
+    // Map the data to ensure proper field names
+    return (data || []).map(lecture => ({
+      ...lecture,
+      image_url: lecture.thumbnail_url || lecture.image_url,
+      views: lecture.views || 0,
+      duration: lecture.duration || 0,
+      order_index: lecture.order_index || 0,
+    }));
   } catch (error) {
     console.error('Error fetching lectures:', error);
     return [];
@@ -102,7 +110,14 @@ export async function fetchLecturesByCategory(category: string): Promise<Lecture
       return [];
     }
 
-    return data || [];
+    // Map the data to ensure proper field names
+    return (data || []).map(lecture => ({
+      ...lecture,
+      image_url: lecture.thumbnail_url || lecture.image_url,
+      views: lecture.views || 0,
+      duration: lecture.duration || 0,
+      order_index: lecture.order_index || 0,
+    }));
   } catch (error) {
     console.error('Error fetching lectures by category:', error);
     return [];
@@ -153,6 +168,7 @@ export async function getLectureCategories(): Promise<string[]> {
     const { data, error } = await supabase
       .from('lectures')
       .select('category')
+      .not('category', 'is', null)
       .order('category');
 
     if (error) {
@@ -160,8 +176,8 @@ export async function getLectureCategories(): Promise<string[]> {
       return [];
     }
 
-    // Get unique categories
-    const categories = [...new Set(data.map(item => item.category))];
+    // Get unique categories and filter out null/undefined
+    const categories = [...new Set(data.map(item => item.category).filter(Boolean))];
     return categories;
   } catch (error) {
     console.error('Error fetching lecture categories:', error);
@@ -204,7 +220,14 @@ export async function searchLectures(query: string): Promise<Lecture[]> {
       return [];
     }
 
-    return data || [];
+    // Map the data to ensure proper field names
+    return (data || []).map(lecture => ({
+      ...lecture,
+      image_url: lecture.thumbnail_url || lecture.image_url,
+      views: lecture.views || 0,
+      duration: lecture.duration || 0,
+      order_index: lecture.order_index || 0,
+    }));
   } catch (error) {
     console.error('Error searching lectures:', error);
     return [];
@@ -406,5 +429,29 @@ export function getYouTubeWatchUrl(url: string): string {
     return url;
   } catch {
     return url;
+  }
+}
+
+export function getYouTubeThumbnailUrl(url: string): string {
+  try {
+    const urlObj = new URL(url);
+    let videoId = '';
+    
+    // Extract video ID from different YouTube URL formats
+    if (urlObj.hostname === 'youtu.be') {
+      videoId = urlObj.pathname.slice(1);
+    } else if (urlObj.pathname.includes('/watch')) {
+      videoId = urlObj.searchParams.get('v') || '';
+    } else if (urlObj.pathname.includes('/embed/')) {
+      videoId = urlObj.pathname.split('/embed/')[1];
+    }
+    
+    if (videoId) {
+      return `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+    }
+    
+    return '';
+  } catch {
+    return '';
   }
 }
