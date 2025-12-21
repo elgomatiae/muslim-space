@@ -296,10 +296,9 @@ export default function AdminScreen() {
     setLoading(true);
 
     try {
-      console.log('Invoking youtube-playlist-import with:', {
-        playlistUrl: playlistData.playlistUrl,
-        targetType: playlistData.targetType,
-      });
+      console.log('Starting playlist import...');
+      console.log('Playlist URL:', playlistData.playlistUrl);
+      console.log('Target Type:', playlistData.targetType);
 
       const { data, error } = await supabase.functions.invoke('youtube-playlist-import', {
         body: {
@@ -311,43 +310,47 @@ export default function AdminScreen() {
       console.log('Edge function response:', { data, error });
 
       if (error) {
-        console.error('Error importing playlist:', error);
+        console.error('Edge function error:', error);
         throw new Error(error.message || 'Failed to import playlist');
       }
 
-      if (data && data.success) {
-        if (Platform.OS !== 'web') {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        }
-
-        const errorDetails = data.errors && data.errors.length > 0 
-          ? `\n\nErrors:\n${data.errors.slice(0, 3).join('\n')}${data.errors.length > 3 ? '\n...' : ''}`
-          : '';
-
-        Alert.alert(
-          'Success',
-          `Playlist imported successfully!\n\nTotal videos: ${data.totalVideos}\nSuccessfully added: ${data.successCount}\nErrors: ${data.errorCount}\n\nEach video has been automatically categorized using AI based on its content.${errorDetails}`,
-          [
-            {
-              text: 'Import Another',
-              onPress: () => {
-                setPlaylistData({
-                  playlistUrl: '',
-                  targetType: playlistData.targetType,
-                });
-              },
-            },
-            {
-              text: 'Done',
-              onPress: () => {
-                setActiveTab(null);
-              },
-            },
-          ]
-        );
-      } else {
-        throw new Error(data?.error || 'Failed to import playlist');
+      if (!data) {
+        throw new Error('No response from server');
       }
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to import playlist');
+      }
+
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+
+      const errorDetails = data.errors && data.errors.length > 0 
+        ? `\n\nErrors:\n${data.errors.slice(0, 3).join('\n')}${data.errors.length > 3 ? '\n...' : ''}`
+        : '';
+
+      Alert.alert(
+        'Success',
+        `Playlist imported successfully!\n\nTotal videos: ${data.totalVideos}\nSuccessfully added: ${data.successCount}\nErrors: ${data.errorCount}\n\nEach video has been automatically categorized using AI based on its content.${errorDetails}`,
+        [
+          {
+            text: 'Import Another',
+            onPress: () => {
+              setPlaylistData({
+                playlistUrl: '',
+                targetType: playlistData.targetType,
+              });
+            },
+          },
+          {
+            text: 'Done',
+            onPress: () => {
+              setActiveTab(null);
+            },
+          },
+        ]
+      );
     } catch (error: any) {
       console.error('Error importing playlist:', error);
       Alert.alert(
