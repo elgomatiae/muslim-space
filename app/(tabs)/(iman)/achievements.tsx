@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { checkAndUnlockAchievements, calculateAchievementProgress } from '@/utils/achievementService';
 
 interface Achievement {
   id: string;
@@ -20,9 +21,13 @@ interface Achievement {
   points: number;
   category: string;
   tier: 'bronze' | 'silver' | 'gold' | 'platinum';
+  order_index: number;
+  unlock_message: string;
+  next_steps: string;
   unlocked: boolean;
   unlocked_at?: string;
-  progress?: number;
+  progress: number;
+  current_value: number;
 }
 
 export default function AchievementsScreen() {
@@ -30,8 +35,11 @@ export default function AchievementsScreen() {
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'unlocked' | 'locked'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'ibadah' | 'ilm' | 'amanah' | 'general'>('all');
   const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
+  const [celebrationModalVisible, setCelebrationModalVisible] = useState(false);
+  const [newlyUnlockedAchievement, setNewlyUnlockedAchievement] = useState<Achievement | null>(null);
 
   useEffect(() => {
     loadAchievements();
@@ -41,11 +49,17 @@ export default function AchievementsScreen() {
     if (!user) return;
 
     try {
+      setLoading(true);
+
+      // Check and unlock any new achievements
+      await checkAndUnlockAchievements(user.id);
+
       // Load all achievements
       const { data: allAchievements, error: achievementsError } = await supabase
         .from('achievements')
         .select('*')
-        .order('points', { ascending: true });
+        .eq('is_active', true)
+        .order('order_index', { ascending: true });
 
       if (achievementsError) {
         console.log('Error loading achievements:', achievementsError);
@@ -62,15 +76,35 @@ export default function AchievementsScreen() {
         console.log('Error loading user achievements:', userError);
       }
 
+      // Load progress for locked achievements
+      const { data: progressData, error: progressError } = await supabase
+        .from('achievement_progress')
+        .select('achievement_id, current_value')
+        .eq('user_id', user.id);
+
+      if (progressError) {
+        console.log('Error loading progress:', progressError);
+      }
+
       // Merge data
       const unlockedIds = new Set(userAchievements?.map(ua => ua.achievement_id) || []);
-      const mergedAchievements = allAchievements?.map(achievement => ({
-        ...achievement,
-        unlocked: unlockedIds.has(achievement.id),
-        unlocked_at: userAchievements?.find(ua => ua.achievement_id === achievement.id)?.unlocked_at,
-        category: getCategoryFromType(achievement.requirement_type),
-        tier: getTierFromPoints(achievement.points),
-      })) || [];
+      const progressMap = new Map(progressData?.map(p => [p.achievement_id, p.current_value]) || []);
+
+      const mergedAchievements = await Promise.all(
+        (allAchievements || []).map(async (achievement) => {
+          const unlocked = unlockedIds.has(achievement.id);
+          const currentValue = progressMap.get(achievement.id) || 0;
+          const progress = unlocked ? 100 : Math.min(100, (currentValue / achievement.requirement_value) * 100);
+
+          return {
+            ...achievement,
+            unlocked,
+            unlocked_at: userAchievements?.find(ua => ua.achievement_id === achievement.id)?.unlocked_at,
+            progress,
+            current_value: currentValue,
+          };
+        })
+      );
 
       setAchievements(mergedAchievements);
     } catch (error) {
@@ -78,22 +112,6 @@ export default function AchievementsScreen() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const getCategoryFromType = (type: string): string => {
-    if (type.includes('prayer') || type.includes('salah')) return 'ibadah';
-    if (type.includes('quran')) return 'ibadah';
-    if (type.includes('dhikr')) return 'ibadah';
-    if (type.includes('lecture') || type.includes('learning')) return 'ilm';
-    if (type.includes('exercise') || type.includes('sleep')) return 'amanah';
-    return 'general';
-  };
-
-  const getTierFromPoints = (points: number): 'bronze' | 'silver' | 'gold' | 'platinum' => {
-    if (points >= 500) return 'platinum';
-    if (points >= 250) return 'gold';
-    if (points >= 100) return 'silver';
-    return 'bronze';
   };
 
   const getTierColor = (tier: string) => {
@@ -115,6 +133,15 @@ export default function AchievementsScreen() {
     }
   };
 
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'ibadah': return { ios: 'hands.sparkles.fill', android: 'self-improvement' };
+      case 'ilm': return { ios: 'book.fill', android: 'menu-book' };
+      case 'amanah': return { ios: 'heart.fill', android: 'favorite' };
+      default: return { ios: 'star.fill', android: 'star' };
+    }
+  };
+
   const openAchievementDetails = (achievement: Achievement) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSelectedAchievement(achievement);
@@ -128,8 +155,9 @@ export default function AchievementsScreen() {
   };
 
   const filteredAchievements = achievements.filter(achievement => {
-    if (filter === 'unlocked') return achievement.unlocked;
-    if (filter === 'locked') return !achievement.unlocked;
+    if (filter === 'unlocked' && !achievement.unlocked) return false;
+    if (filter === 'locked' && achievement.unlocked) return false;
+    if (categoryFilter !== 'all' && achievement.category !== categoryFilter) return false;
     return true;
   });
 
@@ -138,11 +166,16 @@ export default function AchievementsScreen() {
     .filter(a => a.unlocked)
     .reduce((sum, a) => sum + a.points, 0);
 
+  const nextAchievement = achievements
+    .filter(a => !a.unlocked && a.progress > 0)
+    .sort((a, b) => b.progress - a.progress)[0];
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading...</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading achievements...</Text>
         </View>
       </SafeAreaView>
     );
@@ -207,134 +240,347 @@ export default function AchievementsScreen() {
               <Text style={styles.statLabel}>Total Points</Text>
             </View>
           </View>
+
+          <Text style={styles.statsSubtext}>
+            {unlockedCount === 0 
+              ? 'Start your journey to unlock achievements!'
+              : unlockedCount === achievements.length
+              ? 'Masha\'Allah! You\'ve unlocked all achievements!'
+              : `Keep going! ${achievements.length - unlockedCount} more to unlock`}
+          </Text>
         </LinearGradient>
 
+        {/* Next Achievement Card */}
+        {nextAchievement && (
+          <TouchableOpacity
+            style={styles.nextAchievementCard}
+            onPress={() => openAchievementDetails(nextAchievement)}
+            activeOpacity={0.7}
+          >
+            <LinearGradient
+              colors={[getTierColor(nextAchievement.tier) + '20', getTierColor(nextAchievement.tier) + '10']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.nextAchievementGradient}
+            >
+              <View style={styles.nextAchievementHeader}>
+                <IconSymbol
+                  ios_icon_name="target"
+                  android_material_icon_name="flag"
+                  size={20}
+                  color={getTierColor(nextAchievement.tier)}
+                />
+                <Text style={styles.nextAchievementTitle}>Next Achievement</Text>
+              </View>
+
+              <View style={styles.nextAchievementContent}>
+                <View style={[styles.nextAchievementIcon, { backgroundColor: getTierColor(nextAchievement.tier) }]}>
+                  <IconSymbol
+                    ios_icon_name="lock.fill"
+                    android_material_icon_name="lock"
+                    size={24}
+                    color={colors.card}
+                  />
+                </View>
+
+                <View style={styles.nextAchievementInfo}>
+                  <Text style={styles.nextAchievementName}>{nextAchievement.title}</Text>
+                  <Text style={styles.nextAchievementDesc} numberOfLines={1}>
+                    {nextAchievement.description}
+                  </Text>
+
+                  <View style={styles.progressBarContainer}>
+                    <View style={styles.progressBarBackground}>
+                      <View 
+                        style={[
+                          styles.progressBarFill, 
+                          { 
+                            width: `${nextAchievement.progress}%`,
+                            backgroundColor: getTierColor(nextAchievement.tier)
+                          }
+                        ]} 
+                      />
+                    </View>
+                    <Text style={styles.progressText}>
+                      {nextAchievement.current_value}/{nextAchievement.requirement_value} ({Math.round(nextAchievement.progress)}%)
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <Text style={styles.nextAchievementMotivation}>
+                You're {Math.round(100 - nextAchievement.progress)}% away from unlocking this! Keep going! 💪
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
+
         {/* Filter Tabs */}
-        <View style={styles.filterTabs}>
-          <TouchableOpacity
-            style={[styles.filterTab, filter === 'all' && styles.filterTabActive]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setFilter('all');
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.filterTabText, filter === 'all' && styles.filterTabTextActive]}>
-              All
-            </Text>
-          </TouchableOpacity>
+        <View style={styles.filterSection}>
+          <Text style={styles.filterSectionTitle}>Status</Text>
+          <View style={styles.filterTabs}>
+            <TouchableOpacity
+              style={[styles.filterTab, filter === 'all' && styles.filterTabActive]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setFilter('all');
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.filterTabText, filter === 'all' && styles.filterTabTextActive]}>
+                All
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.filterTab, filter === 'unlocked' && styles.filterTabActive]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setFilter('unlocked');
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.filterTabText, filter === 'unlocked' && styles.filterTabTextActive]}>
-              Unlocked
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterTab, filter === 'unlocked' && styles.filterTabActive]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setFilter('unlocked');
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.filterTabText, filter === 'unlocked' && styles.filterTabTextActive]}>
+                Unlocked
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.filterTab, filter === 'locked' && styles.filterTabActive]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setFilter('locked');
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.filterTabText, filter === 'locked' && styles.filterTabTextActive]}>
-              Locked
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterTab, filter === 'locked' && styles.filterTabActive]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setFilter('locked');
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.filterTabText, filter === 'locked' && styles.filterTabTextActive]}>
+                Locked
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Category Filter */}
+        <View style={styles.filterSection}>
+          <Text style={styles.filterSectionTitle}>Category</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+            <TouchableOpacity
+              style={[styles.categoryChip, categoryFilter === 'all' && styles.categoryChipActive]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setCategoryFilter('all');
+              }}
+              activeOpacity={0.7}
+            >
+              <IconSymbol
+                ios_icon_name="square.grid.2x2.fill"
+                android_material_icon_name="apps"
+                size={16}
+                color={categoryFilter === 'all' ? colors.card : colors.text}
+              />
+              <Text style={[styles.categoryChipText, categoryFilter === 'all' && styles.categoryChipTextActive]}>
+                All
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.categoryChip, categoryFilter === 'ibadah' && styles.categoryChipActive, categoryFilter === 'ibadah' && { backgroundColor: getCategoryColor('ibadah') }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setCategoryFilter('ibadah');
+              }}
+              activeOpacity={0.7}
+            >
+              <IconSymbol
+                ios_icon_name={getCategoryIcon('ibadah').ios}
+                android_material_icon_name={getCategoryIcon('ibadah').android}
+                size={16}
+                color={categoryFilter === 'ibadah' ? colors.card : colors.text}
+              />
+              <Text style={[styles.categoryChipText, categoryFilter === 'ibadah' && styles.categoryChipTextActive]}>
+                ʿIbādah
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.categoryChip, categoryFilter === 'ilm' && styles.categoryChipActive, categoryFilter === 'ilm' && { backgroundColor: getCategoryColor('ilm') }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setCategoryFilter('ilm');
+              }}
+              activeOpacity={0.7}
+            >
+              <IconSymbol
+                ios_icon_name={getCategoryIcon('ilm').ios}
+                android_material_icon_name={getCategoryIcon('ilm').android}
+                size={16}
+                color={categoryFilter === 'ilm' ? colors.card : colors.text}
+              />
+              <Text style={[styles.categoryChipText, categoryFilter === 'ilm' && styles.categoryChipTextActive]}>
+                ʿIlm
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.categoryChip, categoryFilter === 'amanah' && styles.categoryChipActive, categoryFilter === 'amanah' && { backgroundColor: getCategoryColor('amanah') }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setCategoryFilter('amanah');
+              }}
+              activeOpacity={0.7}
+            >
+              <IconSymbol
+                ios_icon_name={getCategoryIcon('amanah').ios}
+                android_material_icon_name={getCategoryIcon('amanah').android}
+                size={16}
+                color={categoryFilter === 'amanah' ? colors.card : colors.text}
+              />
+              <Text style={[styles.categoryChipText, categoryFilter === 'amanah' && styles.categoryChipTextActive]}>
+                Amanah
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.categoryChip, categoryFilter === 'general' && styles.categoryChipActive, categoryFilter === 'general' && { backgroundColor: getCategoryColor('general') }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setCategoryFilter('general');
+              }}
+              activeOpacity={0.7}
+            >
+              <IconSymbol
+                ios_icon_name={getCategoryIcon('general').ios}
+                android_material_icon_name={getCategoryIcon('general').android}
+                size={16}
+                color={categoryFilter === 'general' ? colors.card : colors.text}
+              />
+              <Text style={[styles.categoryChipText, categoryFilter === 'general' && styles.categoryChipTextActive]}>
+                General
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
 
         {/* Achievements List */}
         <View style={styles.achievementsList}>
-          {filteredAchievements.map((achievement, index) => {
-            const tierColor = getTierColor(achievement.tier);
-            const categoryColor = getCategoryColor(achievement.category);
+          {filteredAchievements.length === 0 ? (
+            <View style={styles.emptyState}>
+              <IconSymbol
+                ios_icon_name="trophy"
+                android_material_icon_name="emoji-events"
+                size={64}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.emptyStateText}>No achievements found</Text>
+              <Text style={styles.emptyStateSubtext}>
+                {filter === 'unlocked' 
+                  ? 'Start completing activities to unlock achievements!'
+                  : 'Try changing your filters'}
+              </Text>
+            </View>
+          ) : (
+            filteredAchievements.map((achievement, index) => {
+              const tierColor = getTierColor(achievement.tier);
+              const categoryColor = getCategoryColor(achievement.category);
 
-            return (
-              <React.Fragment key={index}>
-                <TouchableOpacity
-                  style={[
-                    styles.achievementCard,
-                    achievement.unlocked && styles.achievementCardUnlocked,
-                  ]}
-                  onPress={() => openAchievementDetails(achievement)}
-                  activeOpacity={0.7}
-                >
-                  <LinearGradient
-                    colors={achievement.unlocked ? [tierColor + '40', tierColor + '20'] : [colors.card, colors.card]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.achievementGradient}
+              return (
+                <React.Fragment key={index}>
+                  <TouchableOpacity
+                    style={[
+                      styles.achievementCard,
+                      achievement.unlocked && styles.achievementCardUnlocked,
+                    ]}
+                    onPress={() => openAchievementDetails(achievement)}
+                    activeOpacity={0.7}
                   >
-                    <View style={[
-                      styles.achievementIcon,
-                      { backgroundColor: achievement.unlocked ? tierColor : colors.border },
-                    ]}>
-                      <IconSymbol
-                        ios_icon_name={achievement.unlocked ? 'star.fill' : 'lock.fill'}
-                        android_material_icon_name={achievement.unlocked ? 'star' : 'lock'}
-                        size={32}
-                        color={achievement.unlocked ? colors.card : colors.textSecondary}
-                      />
-                    </View>
-
-                    <View style={styles.achievementContent}>
-                      <View style={styles.achievementHeader}>
-                        <Text style={[
-                          styles.achievementTitle,
-                          !achievement.unlocked && styles.achievementTitleLocked,
-                        ]}>
-                          {achievement.title}
-                        </Text>
-                        <View style={[styles.tierBadge, { backgroundColor: tierColor }]}>
-                          <Text style={styles.tierBadgeText}>{achievement.tier}</Text>
-                        </View>
+                    <LinearGradient
+                      colors={achievement.unlocked ? [tierColor + '40', tierColor + '20'] : [colors.card, colors.card]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.achievementGradient}
+                    >
+                      <View style={[
+                        styles.achievementIcon,
+                        { backgroundColor: achievement.unlocked ? tierColor : colors.border },
+                      ]}>
+                        <IconSymbol
+                          ios_icon_name={achievement.unlocked ? 'star.fill' : 'lock.fill'}
+                          android_material_icon_name={achievement.unlocked ? 'star' : 'lock'}
+                          size={32}
+                          color={achievement.unlocked ? colors.card : colors.textSecondary}
+                        />
                       </View>
 
-                      <Text style={[
-                        styles.achievementDescription,
-                        !achievement.unlocked && styles.achievementDescriptionLocked,
-                      ]} numberOfLines={2}>
-                        {achievement.description}
-                      </Text>
-
-                      <View style={styles.achievementFooter}>
-                        <View style={[styles.categoryBadge, { backgroundColor: categoryColor + '20' }]}>
-                          <Text style={[styles.categoryBadgeText, { color: categoryColor }]}>
-                            {achievement.category}
+                      <View style={styles.achievementContent}>
+                        <View style={styles.achievementHeader}>
+                          <Text style={[
+                            styles.achievementTitle,
+                            !achievement.unlocked && styles.achievementTitleLocked,
+                          ]}>
+                            {achievement.title}
                           </Text>
+                          <View style={[styles.tierBadge, { backgroundColor: tierColor }]}>
+                            <Text style={styles.tierBadgeText}>{achievement.tier}</Text>
+                          </View>
                         </View>
 
-                        <View style={styles.pointsBadge}>
-                          <IconSymbol
-                            ios_icon_name="star.fill"
-                            android_material_icon_name="star"
-                            size={14}
-                            color={colors.warning}
-                          />
-                          <Text style={styles.pointsText}>{achievement.points} pts</Text>
+                        <Text style={[
+                          styles.achievementDescription,
+                          !achievement.unlocked && styles.achievementDescriptionLocked,
+                        ]} numberOfLines={2}>
+                          {achievement.description}
+                        </Text>
+
+                        {!achievement.unlocked && achievement.progress > 0 && (
+                          <View style={styles.progressBarContainer}>
+                            <View style={styles.progressBarBackground}>
+                              <View 
+                                style={[
+                                  styles.progressBarFill, 
+                                  { 
+                                    width: `${achievement.progress}%`,
+                                    backgroundColor: tierColor
+                                  }
+                                ]} 
+                              />
+                            </View>
+                            <Text style={styles.progressText}>
+                              {achievement.current_value}/{achievement.requirement_value}
+                            </Text>
+                          </View>
+                        )}
+
+                        <View style={styles.achievementFooter}>
+                          <View style={[styles.categoryBadge, { backgroundColor: categoryColor + '20' }]}>
+                            <Text style={[styles.categoryBadgeText, { color: categoryColor }]}>
+                              {achievement.category}
+                            </Text>
+                          </View>
+
+                          <View style={styles.pointsBadge}>
+                            <IconSymbol
+                              ios_icon_name="star.fill"
+                              android_material_icon_name="star"
+                              size={14}
+                              color={colors.warning}
+                            />
+                            <Text style={styles.pointsText}>{achievement.points} pts</Text>
+                          </View>
                         </View>
                       </View>
-                    </View>
 
-                    <IconSymbol
-                      ios_icon_name="chevron.right"
-                      android_material_icon_name="chevron-right"
-                      size={20}
-                      color={colors.textSecondary}
-                    />
-                  </LinearGradient>
-                </TouchableOpacity>
-              </React.Fragment>
-            );
-          })}
+                      <IconSymbol
+                        ios_icon_name="chevron.right"
+                        android_material_icon_name="chevron-right"
+                        size={20}
+                        color={colors.textSecondary}
+                      />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </React.Fragment>
+              );
+            })
+          )}
         </View>
 
         <View style={styles.bottomPadding} />
@@ -426,8 +672,13 @@ export default function AchievementsScreen() {
                       <View style={styles.modalDetailContent}>
                         <Text style={styles.modalDetailLabel}>Requirement</Text>
                         <Text style={styles.modalDetailText}>
-                          {selectedAchievement.requirement_type}: {selectedAchievement.requirement_value}
+                          {selectedAchievement.requirement_type.replace(/_/g, ' ')}: {selectedAchievement.requirement_value}
                         </Text>
+                        {!selectedAchievement.unlocked && (
+                          <Text style={styles.modalDetailProgress}>
+                            Current: {selectedAchievement.current_value} ({Math.round(selectedAchievement.progress)}%)
+                          </Text>
+                        )}
                       </View>
                     </View>
 
@@ -445,41 +696,97 @@ export default function AchievementsScreen() {
                     </View>
 
                     {selectedAchievement.unlocked && selectedAchievement.unlocked_at && (
-                      <View style={styles.modalDetailRow}>
-                        <IconSymbol
-                          ios_icon_name="calendar.badge.checkmark"
-                          android_material_icon_name="event-available"
-                          size={24}
-                          color={colors.success}
-                        />
-                        <View style={styles.modalDetailContent}>
-                          <Text style={styles.modalDetailLabel}>Unlocked On</Text>
-                          <Text style={styles.modalDetailText}>
-                            {new Date(selectedAchievement.unlocked_at).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric',
-                            })}
-                          </Text>
+                      <>
+                        <View style={styles.modalDetailRow}>
+                          <IconSymbol
+                            ios_icon_name="calendar.badge.checkmark"
+                            android_material_icon_name="event-available"
+                            size={24}
+                            color={colors.success}
+                          />
+                          <View style={styles.modalDetailContent}>
+                            <Text style={styles.modalDetailLabel}>Unlocked On</Text>
+                            <Text style={styles.modalDetailText}>
+                              {new Date(selectedAchievement.unlocked_at).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                              })}
+                            </Text>
+                          </View>
                         </View>
-                      </View>
+
+                        {selectedAchievement.unlock_message && (
+                          <View style={styles.modalCelebrationCard}>
+                            <IconSymbol
+                              ios_icon_name="party.popper.fill"
+                              android_material_icon_name="celebration"
+                              size={24}
+                              color={getTierColor(selectedAchievement.tier)}
+                            />
+                            <View style={styles.modalCelebrationContent}>
+                              <Text style={styles.modalCelebrationTitle}>Congratulations!</Text>
+                              <Text style={styles.modalCelebrationText}>
+                                {selectedAchievement.unlock_message}
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+                      </>
                     )}
 
                     {!selectedAchievement.unlocked && (
-                      <View style={styles.modalTipCard}>
-                        <IconSymbol
-                          ios_icon_name="lightbulb.fill"
-                          android_material_icon_name="lightbulb"
-                          size={24}
-                          color={colors.warning}
-                        />
-                        <View style={styles.modalTipContent}>
-                          <Text style={styles.modalTipTitle}>How to Unlock</Text>
-                          <Text style={styles.modalTipText}>
-                            Keep working on your {selectedAchievement.category} goals to unlock this achievement!
-                          </Text>
-                        </View>
-                      </View>
+                      <>
+                        {selectedAchievement.progress > 0 && (
+                          <View style={styles.modalProgressCard}>
+                            <View style={styles.modalProgressHeader}>
+                              <IconSymbol
+                                ios_icon_name="chart.bar.fill"
+                                android_material_icon_name="bar-chart"
+                                size={24}
+                                color={getTierColor(selectedAchievement.tier)}
+                              />
+                              <Text style={styles.modalProgressTitle}>Your Progress</Text>
+                            </View>
+                            <View style={styles.modalProgressBarContainer}>
+                              <View style={styles.modalProgressBarBackground}>
+                                <View 
+                                  style={[
+                                    styles.modalProgressBarFill, 
+                                    { 
+                                      width: `${selectedAchievement.progress}%`,
+                                      backgroundColor: getTierColor(selectedAchievement.tier)
+                                    }
+                                  ]} 
+                                />
+                              </View>
+                              <Text style={styles.modalProgressPercentage}>
+                                {Math.round(selectedAchievement.progress)}%
+                              </Text>
+                            </View>
+                            <Text style={styles.modalProgressSubtext}>
+                              {selectedAchievement.requirement_value - selectedAchievement.current_value} more to go!
+                            </Text>
+                          </View>
+                        )}
+
+                        {selectedAchievement.next_steps && (
+                          <View style={styles.modalTipCard}>
+                            <IconSymbol
+                              ios_icon_name="lightbulb.fill"
+                              android_material_icon_name="lightbulb"
+                              size={24}
+                              color={colors.warning}
+                            />
+                            <View style={styles.modalTipContent}>
+                              <Text style={styles.modalTipTitle}>Next Steps</Text>
+                              <Text style={styles.modalTipText}>
+                                {selectedAchievement.next_steps}
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+                      </>
                     )}
                   </View>
                 </ScrollView>
@@ -501,6 +808,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.md,
   },
   loadingText: {
     ...typography.body,
@@ -543,6 +851,7 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: spacing.md,
   },
   statItem: {
     flex: 1,
@@ -564,10 +873,73 @@ const styles = StyleSheet.create({
     height: 60,
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
   },
+  statsSubtext: {
+    ...typography.body,
+    color: colors.card,
+    textAlign: 'center',
+    opacity: 0.9,
+  },
+  nextAchievementCard: {
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    marginBottom: spacing.lg,
+    ...shadows.medium,
+  },
+  nextAchievementGradient: {
+    padding: spacing.lg,
+  },
+  nextAchievementHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  nextAchievementTitle: {
+    ...typography.bodyBold,
+    color: colors.text,
+  },
+  nextAchievementContent: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  nextAchievementIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nextAchievementInfo: {
+    flex: 1,
+  },
+  nextAchievementName: {
+    ...typography.h4,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  nextAchievementDesc: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  nextAchievementMotivation: {
+    ...typography.caption,
+    color: colors.text,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  filterSection: {
+    marginBottom: spacing.lg,
+  },
+  filterSectionTitle: {
+    ...typography.bodyBold,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
   filterTabs: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginBottom: spacing.lg,
   },
   filterTab: {
     flex: 1,
@@ -592,8 +964,52 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '700',
   },
+  categoryScroll: {
+    marginHorizontal: -spacing.lg,
+    paddingHorizontal: spacing.lg,
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.card,
+    borderWidth: 2,
+    borderColor: colors.border,
+    marginRight: spacing.sm,
+  },
+  categoryChipActive: {
+    borderColor: 'transparent',
+  },
+  categoryChipText: {
+    ...typography.caption,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  categoryChipTextActive: {
+    color: colors.card,
+    fontWeight: '700',
+  },
   achievementsList: {
     gap: spacing.md,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xxl * 2,
+  },
+  emptyStateText: {
+    ...typography.h3,
+    color: colors.text,
+    marginTop: spacing.lg,
+  },
+  emptyStateSubtext: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
+    textAlign: 'center',
   },
   achievementCard: {
     borderRadius: borderRadius.lg,
@@ -655,6 +1071,25 @@ const styles = StyleSheet.create({
   },
   achievementDescriptionLocked: {
     color: colors.textSecondary,
+  },
+  progressBarContainer: {
+    marginBottom: spacing.sm,
+  },
+  progressBarBackground: {
+    height: 6,
+    backgroundColor: colors.border,
+    borderRadius: borderRadius.sm,
+    overflow: 'hidden',
+    marginBottom: spacing.xs,
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: borderRadius.sm,
+  },
+  progressText: {
+    ...typography.small,
+    color: colors.textSecondary,
+    fontWeight: '600',
   },
   achievementFooter: {
     flexDirection: 'row',
@@ -781,6 +1216,76 @@ const styles = StyleSheet.create({
   modalDetailText: {
     ...typography.body,
     color: colors.text,
+  },
+  modalDetailProgress: {
+    ...typography.caption,
+    color: colors.primary,
+    marginTop: spacing.xs,
+    fontWeight: '600',
+  },
+  modalCelebrationCard: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    backgroundColor: colors.success + '10',
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.success + '30',
+  },
+  modalCelebrationContent: {
+    flex: 1,
+  },
+  modalCelebrationTitle: {
+    ...typography.bodyBold,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  modalCelebrationText: {
+    ...typography.caption,
+    color: colors.text,
+    lineHeight: 18,
+  },
+  modalProgressCard: {
+    backgroundColor: colors.card,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modalProgressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  modalProgressTitle: {
+    ...typography.bodyBold,
+    color: colors.text,
+  },
+  modalProgressBarContainer: {
+    marginBottom: spacing.sm,
+  },
+  modalProgressBarBackground: {
+    height: 12,
+    backgroundColor: colors.border,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    marginBottom: spacing.sm,
+  },
+  modalProgressBarFill: {
+    height: '100%',
+    borderRadius: borderRadius.md,
+  },
+  modalProgressPercentage: {
+    ...typography.h3,
+    color: colors.text,
+    textAlign: 'center',
+    fontWeight: '800',
+  },
+  modalProgressSubtext: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   modalTipCard: {
     flexDirection: 'row',

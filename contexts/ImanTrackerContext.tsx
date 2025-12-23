@@ -30,6 +30,7 @@ import {
 import { useAuth } from './AuthContext';
 import { syncLocalToSupabase, syncSupabaseToLocal, initializeImanTrackerForUser } from '@/utils/imanSupabaseSync';
 import { sendImanTrackerMilestone } from '@/utils/notificationService';
+import { checkAndUnlockAchievements } from '@/utils/achievementService';
 
 interface ImanTrackerContextType {
   // New ring structure
@@ -89,6 +90,9 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
       if (user) {
         await initializeImanTrackerForUser(user.id);
         await syncSupabaseToLocal(user.id);
+        
+        // Check for new achievements
+        await checkAndUnlockAchievements(user.id);
       }
       
       await updateSectionScores();
@@ -151,6 +155,8 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     
     if (user) {
       await syncLocalToSupabase(user.id);
+      // Check for new achievements
+      await checkAndUnlockAchievements(user.id);
     }
     
     console.log('ImanTrackerContext: Ibadah goals updated');
@@ -169,6 +175,8 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     
     if (user) {
       await syncLocalToSupabase(user.id);
+      // Check for new achievements
+      await checkAndUnlockAchievements(user.id);
     }
     
     console.log('ImanTrackerContext: Ilm goals updated');
@@ -187,6 +195,8 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     
     if (user) {
       await syncLocalToSupabase(user.id);
+      // Check for new achievements
+      await checkAndUnlockAchievements(user.id);
     }
     
     console.log('ImanTrackerContext: Amanah goals updated');
@@ -209,6 +219,8 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     
     if (user) {
       await syncLocalToSupabase(user.id);
+      // Check for new achievements
+      await checkAndUnlockAchievements(user.id);
     }
     
     console.log('ImanTrackerContext: Prayer goals updated');
@@ -231,6 +243,8 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     
     if (user) {
       await syncLocalToSupabase(user.id);
+      // Check for new achievements
+      await checkAndUnlockAchievements(user.id);
     }
     
     console.log('ImanTrackerContext: Dhikr goals updated');
@@ -253,6 +267,8 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     
     if (user) {
       await syncLocalToSupabase(user.id);
+      // Check for new achievements
+      await checkAndUnlockAchievements(user.id);
     }
     
     console.log('ImanTrackerContext: Quran goals updated');
@@ -295,10 +311,15 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
       
       setSectionScores(scores);
       setOverallScore(overall);
+      
+      // Check for new achievements
+      if (user) {
+        await checkAndUnlockAchievements(user.id);
+      }
     }, 30000);
     
     return () => clearInterval(scoreInterval);
-  }, [overallScore]);
+  }, [overallScore, user]);
 
   useEffect(() => {
     if (!user) return;
