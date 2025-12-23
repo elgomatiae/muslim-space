@@ -68,28 +68,23 @@ export default function LearningScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.header}>Learning Center</Text>
-        <Text style={styles.subtitle}>Expand your Islamic knowledge</Text>
-
-        {/* Featured Banner */}
+        {/* Modern Header with Gradient Background */}
         <LinearGradient
-          colors={colors.gradientPrimary}
+          colors={colors.gradientOcean}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.featuredBanner}
+          style={styles.headerGradient}
         >
-          <View style={styles.featuredIconContainer}>
+          <View style={styles.headerIconContainer}>
             <IconSymbol
-              ios_icon_name="star.fill"
-              android_material_icon_name="star"
-              size={36}
+              ios_icon_name="book.fill"
+              android_material_icon_name="menu-book"
+              size={40}
               color={colors.card}
             />
           </View>
-          <Text style={styles.featuredTitle}>Start Your Learning Journey</Text>
-          <Text style={styles.featuredSubtitle}>
-            Explore our collection of Islamic resources
-          </Text>
+          <Text style={styles.header}>Learning Center</Text>
+          <Text style={styles.subtitle}>Expand your Islamic knowledge</Text>
         </LinearGradient>
 
         {/* Learning Sections */}
@@ -170,48 +165,38 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingTop: Platform.OS === 'android' ? 56 : 20,
-    paddingHorizontal: spacing.xl,
+  },
+  headerGradient: {
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.xxxl,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xxxl,
+    alignItems: 'center',
+    ...shadows.large,
+  },
+  headerIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
   },
   header: {
     ...typography.h1,
-    color: colors.text,
-    marginBottom: spacing.xs,
+    color: colors.card,
+    marginBottom: spacing.sm,
     textAlign: 'center',
   },
   subtitle: {
     ...typography.body,
-    color: colors.textSecondary,
-    marginBottom: spacing.xxl,
-    textAlign: 'center',
-  },
-  featuredBanner: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.xxxl,
-    alignItems: 'center',
-    marginBottom: spacing.xxxl,
-    ...shadows.colored,
-  },
-  featuredIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: borderRadius.round,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  featuredTitle: {
-    ...typography.h3,
-    color: colors.card,
-    marginBottom: spacing.sm,
-  },
-  featuredSubtitle: {
-    ...typography.caption,
     color: colors.card,
     opacity: 0.95,
     textAlign: 'center',
   },
   sectionsContainer: {
+    paddingHorizontal: spacing.xl,
     marginBottom: spacing.xxl,
   },
   sectionCard: {
@@ -266,6 +251,7 @@ const styles = StyleSheet.create({
     color: colors.card,
   },
   infoCard: {
+    marginHorizontal: spacing.xl,
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
     padding: spacing.xl,

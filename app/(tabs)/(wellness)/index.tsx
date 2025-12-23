@@ -163,74 +163,76 @@ export default function WellnessScreen() {
         </LinearGradient>
       </Animated.View>
 
-      {/* Tab Switcher */}
-      <View style={styles.tabSwitcher}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'mental' && styles.tabActive]}
-          onPress={() => handleTabChange('mental')}
-          activeOpacity={0.7}
-        >
-          {activeTab === 'mental' ? (
-            <LinearGradient
-              colors={colors.gradientPrimary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.tabGradient}
-            >
-              <IconSymbol
-                ios_icon_name="brain.head.profile"
-                android_material_icon_name="psychology"
-                size={20}
-                color={colors.card}
-              />
-              <Text style={styles.tabTextActive}>Mental Wellness</Text>
-            </LinearGradient>
-          ) : (
-            <View style={styles.tabContent}>
-              <IconSymbol
-                ios_icon_name="brain.head.profile"
-                android_material_icon_name="psychology"
-                size={20}
-                color={colors.textSecondary}
-              />
-              <Text style={styles.tabText}>Mental Wellness</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+      {/* Tab Switcher - Now positioned dynamically below the header */}
+      <Animated.View style={[styles.tabSwitcherContainer, { top: headerHeight }]}>
+        <View style={styles.tabSwitcher}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'mental' && styles.tabActive]}
+            onPress={() => handleTabChange('mental')}
+            activeOpacity={0.7}
+          >
+            {activeTab === 'mental' ? (
+              <LinearGradient
+                colors={colors.gradientPrimary}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.tabGradient}
+              >
+                <IconSymbol
+                  ios_icon_name="brain.head.profile"
+                  android_material_icon_name="psychology"
+                  size={20}
+                  color={colors.card}
+                />
+                <Text style={styles.tabTextActive}>Mental Wellness</Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.tabContent}>
+                <IconSymbol
+                  ios_icon_name="brain.head.profile"
+                  android_material_icon_name="psychology"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.tabText}>Mental Wellness</Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'physical' && styles.tabActive]}
-          onPress={() => handleTabChange('physical')}
-          activeOpacity={0.7}
-        >
-          {activeTab === 'physical' ? (
-            <LinearGradient
-              colors={colors.gradientWarning}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.tabGradient}
-            >
-              <IconSymbol
-                ios_icon_name="figure.run"
-                android_material_icon_name="directions-run"
-                size={20}
-                color={colors.card}
-              />
-              <Text style={styles.tabTextActive}>Physical Wellness</Text>
-            </LinearGradient>
-          ) : (
-            <View style={styles.tabContent}>
-              <IconSymbol
-                ios_icon_name="figure.run"
-                android_material_icon_name="directions-run"
-                size={20}
-                color={colors.textSecondary}
-              />
-              <Text style={styles.tabText}>Physical Wellness</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'physical' && styles.tabActive]}
+            onPress={() => handleTabChange('physical')}
+            activeOpacity={0.7}
+          >
+            {activeTab === 'physical' ? (
+              <LinearGradient
+                colors={colors.gradientWarning}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.tabGradient}
+              >
+                <IconSymbol
+                  ios_icon_name="figure.run"
+                  android_material_icon_name="directions-run"
+                  size={20}
+                  color={colors.card}
+                />
+                <Text style={styles.tabTextActive}>Physical Wellness</Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.tabContent}>
+                <IconSymbol
+                  ios_icon_name="figure.run"
+                  android_material_icon_name="directions-run"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.tabText}>Physical Wellness</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
 
       {/* Scrollable Content */}
       <Animated.ScrollView
@@ -243,6 +245,9 @@ export default function WellnessScreen() {
           { useNativeDriver: false }
         )}
       >
+        {/* Add padding at the top to account for header + tabs */}
+        <View style={styles.contentTopPadding} />
+
         {activeTab === 'mental' ? (
           <View style={styles.section}>
             <View style={styles.cardsGrid}>
@@ -652,11 +657,16 @@ const styles = StyleSheet.create({
     color: colors.card,
     opacity: 0.8,
   },
+  tabSwitcherContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 9,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+  },
   tabSwitcher: {
     flexDirection: 'row',
-    marginTop: HEADER_MAX_HEIGHT + spacing.lg + spacing.xl,
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.lg,
     gap: spacing.md,
   },
   tab: {
@@ -697,6 +707,9 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingHorizontal: spacing.xl,
+  },
+  contentTopPadding: {
+    height: HEADER_MAX_HEIGHT + 80,
   },
   section: {
     marginBottom: spacing.xxl,
