@@ -75,7 +75,7 @@ export default function ImanTrackerScreen() {
           </View>
         </LinearGradient>
 
-        {/* IMAN RINGS DISPLAY */}
+        {/* IMAN RINGS DISPLAY WITH ACHIEVEMENTS */}
         <ImanRingsDisplay onRefresh={onRefresh} />
 
         {/* DEDICATED SECTIONS FOR EACH RING */}
@@ -112,7 +112,7 @@ export default function ImanTrackerScreen() {
 
             <TouchableOpacity
               style={styles.featureCard}
-              onPress={() => router.push('/(tabs)/(iman)/achievements' as any)}
+              onPress={() => router.push('/(tabs)/(iman)/goals-settings' as any)}
               activeOpacity={0.7}
             >
               <LinearGradient
@@ -122,13 +122,13 @@ export default function ImanTrackerScreen() {
                 style={styles.featureGradient}
               >
                 <IconSymbol
-                  ios_icon_name="trophy.fill"
-                  android_material_icon_name="emoji-events"
+                  ios_icon_name="target"
+                  android_material_icon_name="flag"
                   size={32}
                   color="#FFFFFF"
                 />
-                <Text style={styles.featureTitle}>Achievements</Text>
-                <Text style={styles.featureSubtitle}>Unlock badges</Text>
+                <Text style={styles.featureTitle}>Goals</Text>
+                <Text style={styles.featureSubtitle}>Set targets</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -149,6 +149,7 @@ export default function ImanTrackerScreen() {
                 - Each ring represents: ʿIbādah, ʿIlm, and Amanah{'\n'}
                 - Track progress directly on this screen{'\n'}
                 - Rings update INSTANTLY when you track goals{'\n'}
+                - Achievements unlock INSTANTLY when you complete goals{'\n'}
                 - Scores slowly decay over time if inactive{'\n'}
                 - Unmet daily goals deplete score at midnight{'\n'}
                 - Unmet weekly goals deplete score Sunday 12 AM{'\n'}

@@ -155,7 +155,8 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     
     if (user) {
       await syncLocalToSupabase(user.id);
-      // Check for new achievements
+      // INSTANT achievement check - this ensures badges update immediately
+      console.log('ImanTrackerContext: Checking achievements after ibadah update...');
       await checkAndUnlockAchievements(user.id);
     }
     
@@ -175,7 +176,8 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     
     if (user) {
       await syncLocalToSupabase(user.id);
-      // Check for new achievements
+      // INSTANT achievement check
+      console.log('ImanTrackerContext: Checking achievements after ilm update...');
       await checkAndUnlockAchievements(user.id);
     }
     
@@ -195,7 +197,8 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     
     if (user) {
       await syncLocalToSupabase(user.id);
-      // Check for new achievements
+      // INSTANT achievement check
+      console.log('ImanTrackerContext: Checking achievements after amanah update...');
       await checkAndUnlockAchievements(user.id);
     }
     
@@ -219,7 +222,8 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     
     if (user) {
       await syncLocalToSupabase(user.id);
-      // Check for new achievements
+      // INSTANT achievement check
+      console.log('ImanTrackerContext: Checking achievements after prayer update...');
       await checkAndUnlockAchievements(user.id);
     }
     
@@ -243,7 +247,8 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     
     if (user) {
       await syncLocalToSupabase(user.id);
-      // Check for new achievements
+      // INSTANT achievement check
+      console.log('ImanTrackerContext: Checking achievements after dhikr update...');
       await checkAndUnlockAchievements(user.id);
     }
     
@@ -267,7 +272,8 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     
     if (user) {
       await syncLocalToSupabase(user.id);
-      // Check for new achievements
+      // INSTANT achievement check
+      console.log('ImanTrackerContext: Checking achievements after quran update...');
       await checkAndUnlockAchievements(user.id);
     }
     
@@ -312,7 +318,7 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
       setSectionScores(scores);
       setOverallScore(overall);
       
-      // Check for new achievements
+      // Check for new achievements periodically
       if (user) {
         await checkAndUnlockAchievements(user.id);
       }
