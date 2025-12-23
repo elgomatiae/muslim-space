@@ -293,7 +293,7 @@ export interface NotificationSettings {
   notificationPermissionGranted: boolean;
 }
 
-// Get notification settings
+// Get notification settings - exported function
 export async function getNotificationSettings(userId?: string): Promise<NotificationSettings> {
   try {
     // Check permissions

@@ -178,18 +178,28 @@ export default function LecturesScreen() {
 
   const handleTrackAndWatch = async () => {
     if (pendingLecture) {
+      const lectureToOpen = pendingLecture;
       await trackLecture(pendingLecture);
       setShowTrackingModal(false);
-      await openYouTubeVideo(pendingLecture);
       setPendingLecture(null);
+      
+      // Add a small delay to ensure modal is fully closed before opening browser
+      setTimeout(async () => {
+        await openYouTubeVideo(lectureToOpen);
+      }, 300);
     }
   };
 
   const handleWatchWithoutTracking = async () => {
     if (pendingLecture) {
+      const lectureToOpen = pendingLecture;
       setShowTrackingModal(false);
-      await openYouTubeVideo(pendingLecture);
       setPendingLecture(null);
+      
+      // Add a small delay to ensure modal is fully closed before opening browser
+      setTimeout(async () => {
+        await openYouTubeVideo(lectureToOpen);
+      }, 300);
     }
   };
 

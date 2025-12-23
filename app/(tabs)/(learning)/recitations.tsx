@@ -178,18 +178,28 @@ export default function RecitationsScreen() {
 
   const handleTrackAndWatch = async () => {
     if (pendingRecitation) {
+      const recitationToOpen = pendingRecitation;
       await trackRecitation(pendingRecitation);
       setShowTrackingModal(false);
-      await openYouTubeVideo(pendingRecitation);
       setPendingRecitation(null);
+      
+      // Add a small delay to ensure modal is fully closed before opening browser
+      setTimeout(async () => {
+        await openYouTubeVideo(recitationToOpen);
+      }, 300);
     }
   };
 
   const handleWatchWithoutTracking = async () => {
     if (pendingRecitation) {
+      const recitationToOpen = pendingRecitation;
       setShowTrackingModal(false);
-      await openYouTubeVideo(pendingRecitation);
       setPendingRecitation(null);
+      
+      // Add a small delay to ensure modal is fully closed before opening browser
+      setTimeout(async () => {
+        await openYouTubeVideo(recitationToOpen);
+      }, 300);
     }
   };
 
