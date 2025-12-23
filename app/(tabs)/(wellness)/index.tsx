@@ -1,6 +1,6 @@
 
-import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from "react-native";
+import React, { useState, useRef } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
@@ -11,6 +11,16 @@ import { router } from "expo-router";
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = (SCREEN_WIDTH - spacing.lg * 3) / 2;
+
+// Header animation constants
+const HEADER_MAX_HEIGHT = 280;
+const HEADER_MIN_HEIGHT = 80;
+const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
+
+// Tab animation constants
+const TAB_MAX_HEIGHT = 70;
+const TAB_MIN_HEIGHT = 0;
+const TAB_SCROLL_DISTANCE = 100;
 
 type WellnessTab = 'mental' | 'physical';
 
@@ -63,6 +73,44 @@ export default function WellnessScreen() {
   const insets = useSafeAreaInsets();
   const { amanahGoals, sectionScores } = useImanTracker();
   const [activeTab, setActiveTab] = useState<WellnessTab>('mental');
+
+  // Animation values
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  // Header height animation
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
+    extrapolate: 'clamp',
+  });
+
+  // Header content opacity
+  const headerContentOpacity = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE / 2, HEADER_SCROLL_DISTANCE],
+    outputRange: [1, 0.5, 0],
+    extrapolate: 'clamp',
+  });
+
+  // Header title scale for collapsed state
+  const headerTitleScale = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [1, 0.7],
+    extrapolate: 'clamp',
+  });
+
+  // Tab switcher height animation
+  const tabHeight = scrollY.interpolate({
+    inputRange: [0, TAB_SCROLL_DISTANCE],
+    outputRange: [TAB_MAX_HEIGHT, TAB_MIN_HEIGHT],
+    extrapolate: 'clamp',
+  });
+
+  // Tab switcher opacity
+  const tabOpacity = scrollY.interpolate({
+    inputRange: [0, TAB_SCROLL_DISTANCE / 2, TAB_SCROLL_DISTANCE],
+    outputRange: [1, 0.5, 0],
+    extrapolate: 'clamp',
+  });
 
   // Calculate Amanah completion percentage
   const calculateAmanahCompletion = () => {
@@ -210,16 +258,31 @@ export default function WellnessScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header Section */}
-      <View style={styles.headerSection}>
+      {/* Collapsing Header Section */}
+      <Animated.View 
+        style={[
+          styles.headerSection,
+          { height: headerHeight }
+        ]}
+      >
         <LinearGradient
           colors={colors.gradientOcean}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
         >
-          <View style={styles.headerContent}>
-            <View style={styles.headerTop}>
+          <Animated.View 
+            style={[
+              styles.headerContent,
+              { opacity: headerContentOpacity }
+            ]}
+          >
+            <Animated.View 
+              style={[
+                styles.headerTop,
+                { transform: [{ scale: headerTitleScale }] }
+              ]}
+            >
               <View style={styles.headerIconContainer}>
                 <IconSymbol
                   ios_icon_name="heart.circle.fill"
@@ -232,7 +295,7 @@ export default function WellnessScreen() {
                 <Text style={styles.headerTitle}>Wellness Hub</Text>
                 <Text style={styles.headerSubtitle}>Nurture mind, body & soul</Text>
               </View>
-            </View>
+            </Animated.View>
 
             {/* Well-Being Score Card */}
             <View style={styles.scoreCard}>
@@ -250,12 +313,20 @@ export default function WellnessScreen() {
                 </View>
               </View>
             </View>
-          </View>
+          </Animated.View>
         </LinearGradient>
-      </View>
+      </Animated.View>
 
-      {/* Tab Switcher */}
-      <View style={styles.tabContainer}>
+      {/* Collapsing Tab Switcher */}
+      <Animated.View 
+        style={[
+          styles.tabContainer,
+          { 
+            height: tabHeight,
+            opacity: tabOpacity,
+          }
+        ]}
+      >
         <View style={styles.tabSwitcher}>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'mental' && styles.tabActive]}
@@ -323,13 +394,18 @@ export default function WellnessScreen() {
             )}
           </TouchableOpacity>
         </View>
-      </View>
+      </Animated.View>
 
       {/* Scrollable Content */}
-      <ScrollView
+      <Animated.ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
       >
         {/* Wellness Cards Grid */}
         <View style={styles.cardsGrid}>
@@ -423,7 +499,7 @@ export default function WellnessScreen() {
 
         {/* Bottom Padding for Tab Bar */}
         <View style={styles.bottomPadding} />
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }
@@ -436,13 +512,14 @@ const styles = StyleSheet.create({
   headerSection: {
     marginHorizontal: spacing.lg,
     marginTop: spacing.md,
-    marginBottom: spacing.lg,
     borderRadius: borderRadius.xl,
     overflow: 'hidden',
     ...shadows.large,
   },
   headerGradient: {
+    flex: 1,
     padding: spacing.xl,
+    justifyContent: 'center',
   },
   headerContent: {
     gap: spacing.lg,
@@ -530,7 +607,8 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
+    overflow: 'hidden',
   },
   tabSwitcher: {
     flexDirection: 'row',
@@ -580,6 +658,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
     paddingBottom: spacing.xl,
   },
   cardsGrid: {
