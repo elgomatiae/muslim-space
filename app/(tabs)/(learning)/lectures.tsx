@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Platform, ActivityIndicator, TouchableOpacity, TextInput, Keyboard, Alert, Modal, Image } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -198,40 +198,53 @@ export default function LecturesScreen() {
   };
 
   const handleLecturePress = async (lecture: Lecture) => {
+    console.log('Lecture pressed:', lecture.title);
     await incrementLectureViews(lecture.id);
 
     if (isYouTubeUrl(lecture.url)) {
+      console.log('YouTube URL detected, showing tracking modal');
       setPendingLecture(lecture);
       setShowTrackingModal(true);
     } else {
+      console.log('Non-YouTube URL, opening video player');
       setSelectedLecture(lecture);
     }
   };
 
   const handleTrackAndWatch = async () => {
+    console.log('Track and watch clicked');
     if (pendingLecture) {
       const lectureToOpen = pendingLecture;
-      await trackLecture(pendingLecture);
+      
+      // First, close the modal
       setShowTrackingModal(false);
       setPendingLecture(null);
       
-      // Add a small delay to ensure modal is fully closed before opening browser
+      // Track the lecture
+      await trackLecture(lectureToOpen);
+      
+      // Add a delay to ensure modal is fully closed before opening browser
       setTimeout(async () => {
+        console.log('Opening YouTube video after delay');
         await openYouTubeVideo(lectureToOpen);
-      }, 300);
+      }, 500);
     }
   };
 
   const handleWatchWithoutTracking = async () => {
+    console.log('Watch without tracking clicked');
     if (pendingLecture) {
       const lectureToOpen = pendingLecture;
+      
+      // First, close the modal
       setShowTrackingModal(false);
       setPendingLecture(null);
       
-      // Add a small delay to ensure modal is fully closed before opening browser
+      // Add a delay to ensure modal is fully closed before opening browser
       setTimeout(async () => {
+        console.log('Opening YouTube video after delay');
         await openYouTubeVideo(lectureToOpen);
-      }, 300);
+      }, 500);
     }
   };
 
@@ -671,7 +684,11 @@ export default function LecturesScreen() {
         visible={showTrackingModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowTrackingModal(false)}
+        onRequestClose={() => {
+          console.log('Modal close requested');
+          setShowTrackingModal(false);
+          setPendingLecture(null);
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -1013,33 +1030,6 @@ const styles = StyleSheet.create({
   emptyButtonText: {
     ...typography.bodyBold,
     color: colors.card,
-  },
-  categorizingBanner: {
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.lg,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    ...shadows.medium,
-  },
-  categorizingBannerGradient: {
-    padding: spacing.md,
-  },
-  categorizingBannerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  categorizingBannerText: {
-    flex: 1,
-  },
-  categorizingBannerTitle: {
-    ...typography.bodyBold,
-    color: '#FFFFFF',
-    marginBottom: spacing.xs,
-  },
-  categorizingBannerSubtitle: {
-    ...typography.caption,
-    color: 'rgba(255, 255, 255, 0.9)',
   },
   categorySection: {
     marginBottom: spacing.xxl,

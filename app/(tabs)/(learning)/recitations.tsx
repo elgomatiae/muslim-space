@@ -199,40 +199,53 @@ export default function RecitationsScreen() {
   };
 
   const handleRecitationPress = async (recitation: Recitation) => {
+    console.log('Recitation pressed:', recitation.title);
     await incrementRecitationViews(recitation.id);
 
     if (isYouTubeUrl(recitation.url)) {
+      console.log('YouTube URL detected, showing tracking modal');
       setPendingRecitation(recitation);
       setShowTrackingModal(true);
     } else {
+      console.log('Non-YouTube URL, opening video player');
       setSelectedRecitation(recitation);
     }
   };
 
   const handleTrackAndWatch = async () => {
+    console.log('Track and watch clicked');
     if (pendingRecitation) {
       const recitationToOpen = pendingRecitation;
-      await trackRecitation(pendingRecitation);
+      
+      // First, close the modal
       setShowTrackingModal(false);
       setPendingRecitation(null);
       
-      // Add a small delay to ensure modal is fully closed before opening browser
+      // Track the recitation
+      await trackRecitation(recitationToOpen);
+      
+      // Add a delay to ensure modal is fully closed before opening browser
       setTimeout(async () => {
+        console.log('Opening YouTube video after delay');
         await openYouTubeVideo(recitationToOpen);
-      }, 300);
+      }, 500);
     }
   };
 
   const handleWatchWithoutTracking = async () => {
+    console.log('Watch without tracking clicked');
     if (pendingRecitation) {
       const recitationToOpen = pendingRecitation;
+      
+      // First, close the modal
       setShowTrackingModal(false);
       setPendingRecitation(null);
       
-      // Add a small delay to ensure modal is fully closed before opening browser
+      // Add a delay to ensure modal is fully closed before opening browser
       setTimeout(async () => {
+        console.log('Opening YouTube video after delay');
         await openYouTubeVideo(recitationToOpen);
-      }, 300);
+      }, 500);
     }
   };
 
@@ -672,7 +685,11 @@ export default function RecitationsScreen() {
         visible={showTrackingModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowTrackingModal(false)}
+        onRequestClose={() => {
+          console.log('Modal close requested');
+          setShowTrackingModal(false);
+          setPendingRecitation(null);
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
