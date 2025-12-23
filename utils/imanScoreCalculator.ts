@@ -115,11 +115,11 @@ export function calculateIbadahScore(goals: IbadahGoals): number {
   let totalScore = 0;
   let totalWeight = 0;
   
-  // Salah (40% of ʿIbādah)
+  // Salah (55% of ʿIbādah) - INCREASED from 40%
   const fardCount = Object.values(goals.fardPrayers).filter(Boolean).length;
-  const fardScore = (fardCount / 5) * 30; // 30% for 5 daily prayers
+  const fardScore = (fardCount / 5) * 45; // 45% for 5 daily prayers - INCREASED from 30%
   totalScore += fardScore;
-  totalWeight += 30;
+  totalWeight += 45;
   
   const sunnahScore = goals.sunnahDailyGoal > 0 
     ? Math.min(1, goals.sunnahCompleted / goals.sunnahDailyGoal) * 7 // 7% for sunnah
@@ -133,50 +133,50 @@ export function calculateIbadahScore(goals: IbadahGoals): number {
   totalScore += tahajjudScore;
   totalWeight += 3;
   
-  // Quran (30% of ʿIbādah)
+  // Quran (23% of ʿIbādah) - DECREASED from 30%
   const pagesScore = goals.quranDailyPagesGoal > 0
-    ? Math.min(1, goals.quranDailyPagesCompleted / goals.quranDailyPagesGoal) * 12 // 12%
+    ? Math.min(1, goals.quranDailyPagesCompleted / goals.quranDailyPagesGoal) * 9 // 9% - DECREASED from 12%
     : 0;
   totalScore += pagesScore;
-  totalWeight += 12;
+  totalWeight += 9;
   
   const versesScore = goals.quranDailyVersesGoal > 0
-    ? Math.min(1, goals.quranDailyVersesCompleted / goals.quranDailyVersesGoal) * 10 // 10%
+    ? Math.min(1, goals.quranDailyVersesCompleted / goals.quranDailyVersesGoal) * 8 // 8% - DECREASED from 10%
     : 0;
   totalScore += versesScore;
-  totalWeight += 10;
+  totalWeight += 8;
   
   const memorizationScore = goals.quranWeeklyMemorizationGoal > 0
-    ? Math.min(1, goals.quranWeeklyMemorizationCompleted / goals.quranWeeklyMemorizationGoal) * 8 // 8%
-    : 8;
+    ? Math.min(1, goals.quranWeeklyMemorizationCompleted / goals.quranWeeklyMemorizationGoal) * 6 // 6% - DECREASED from 8%
+    : 6;
   totalScore += memorizationScore;
-  totalWeight += 8;
+  totalWeight += 6;
   
-  // Dhikr & Dua (25% of ʿIbādah)
+  // Dhikr & Dua (19% of ʿIbādah) - DECREASED from 25%
   const dhikrDailyScore = goals.dhikrDailyGoal > 0
-    ? Math.min(1, goals.dhikrDailyCompleted / goals.dhikrDailyGoal) * 10 // 10%
+    ? Math.min(1, goals.dhikrDailyCompleted / goals.dhikrDailyGoal) * 8 // 8% - DECREASED from 10%
     : 0;
   totalScore += dhikrDailyScore;
-  totalWeight += 10;
-  
-  const dhikrWeeklyScore = goals.dhikrWeeklyGoal > 0
-    ? Math.min(1, goals.dhikrWeeklyCompleted / goals.dhikrWeeklyGoal) * 8 // 8%
-    : 8;
-  totalScore += dhikrWeeklyScore;
   totalWeight += 8;
   
-  const duaScore = goals.duaDailyGoal > 0
-    ? Math.min(1, goals.duaDailyCompleted / goals.duaDailyGoal) * 7 // 7%
-    : 7;
-  totalScore += duaScore;
-  totalWeight += 7;
+  const dhikrWeeklyScore = goals.dhikrWeeklyGoal > 0
+    ? Math.min(1, goals.dhikrWeeklyCompleted / goals.dhikrWeeklyGoal) * 6 // 6% - DECREASED from 8%
+    : 6;
+  totalScore += dhikrWeeklyScore;
+  totalWeight += 6;
   
-  // Fasting (5% of ʿIbādah - optional)
-  const fastingScore = goals.fastingWeeklyGoal > 0
-    ? Math.min(1, goals.fastingWeeklyCompleted / goals.fastingWeeklyGoal) * 5 // 5%
+  const duaScore = goals.duaDailyGoal > 0
+    ? Math.min(1, goals.duaDailyCompleted / goals.duaDailyGoal) * 5 // 5% - DECREASED from 7%
     : 5;
-  totalScore += fastingScore;
+  totalScore += duaScore;
   totalWeight += 5;
+  
+  // Fasting (3% of ʿIbādah - optional) - DECREASED from 5%
+  const fastingScore = goals.fastingWeeklyGoal > 0
+    ? Math.min(1, goals.fastingWeeklyCompleted / goals.fastingWeeklyGoal) * 3 // 3% - DECREASED from 5%
+    : 3;
+  totalScore += fastingScore;
+  totalWeight += 3;
   
   return Math.min(100, totalScore);
 }
@@ -676,10 +676,13 @@ export async function resetWeeklyGoals(): Promise<void> {
   }
 }
 
-// Get overall Iman score
+// Get overall Iman score with weighted sections
+// UPDATED: Ibadah now has 50% weight, Ilm 25%, Amanah 25%
 export async function getOverallImanScore(): Promise<number> {
   const scores = await getCurrentSectionScores();
-  return Math.round((scores.ibadah + scores.ilm + scores.amanah) / 3);
+  // Weighted average: Ibadah 50%, Ilm 25%, Amanah 25%
+  const weightedScore = (scores.ibadah * 0.5) + (scores.ilm * 0.25) + (scores.amanah * 0.25);
+  return Math.round(weightedScore);
 }
 
 // Check and handle time-based resets
