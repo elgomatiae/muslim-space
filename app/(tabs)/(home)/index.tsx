@@ -35,7 +35,8 @@ export default function HomeScreen() {
   const { 
     prayerGoals, 
     dhikrGoals, 
-    quranGoals, 
+    quranGoals,
+    ibadahGoals,
     sectionScores, 
     overallScore,
     refreshData,
@@ -208,12 +209,41 @@ export default function HomeScreen() {
     const centerX = 100;
     const centerY = 100;
     
-    // Safely get section scores with fallback to 0
-    const prayerScore = typeof sectionScores.prayer === 'number' && !isNaN(sectionScores.prayer) ? sectionScores.prayer : 0;
-    const quranScore = typeof sectionScores.quran === 'number' && !isNaN(sectionScores.quran) ? sectionScores.quran : 0;
-    const dhikrScore = typeof sectionScores.dhikr === 'number' && !isNaN(sectionScores.dhikr) ? sectionScores.dhikr : 0;
+    // Calculate individual ring percentages from ibadahGoals
+    let prayerScore = 0;
+    let quranScore = 0;
+    let dhikrScore = 0;
+
+    if (ibadahGoals) {
+      // Prayer score (based on fard prayers + sunnah)
+      const fardCount = Object.values(ibadahGoals.fardPrayers).filter(Boolean).length;
+      const fardPercentage = (fardCount / 5) * 100;
+      const sunnahPercentage = ibadahGoals.sunnahDailyGoal > 0 
+        ? Math.min(100, (ibadahGoals.sunnahCompleted / ibadahGoals.sunnahDailyGoal) * 100)
+        : 100;
+      prayerScore = (fardPercentage * 0.75 + sunnahPercentage * 0.25); // 75% fard, 25% sunnah
+
+      // Quran score (based on pages and verses)
+      const pagesPercentage = ibadahGoals.quranDailyPagesGoal > 0
+        ? Math.min(100, (ibadahGoals.quranDailyPagesCompleted / ibadahGoals.quranDailyPagesGoal) * 100)
+        : 0;
+      const versesPercentage = ibadahGoals.quranDailyVersesGoal > 0
+        ? Math.min(100, (ibadahGoals.quranDailyVersesCompleted / ibadahGoals.quranDailyVersesGoal) * 100)
+        : 0;
+      quranScore = (pagesPercentage + versesPercentage) / 2;
+
+      // Dhikr score (based on daily dhikr)
+      dhikrScore = ibadahGoals.dhikrDailyGoal > 0
+        ? Math.min(100, (ibadahGoals.dhikrDailyCompleted / ibadahGoals.dhikrDailyGoal) * 100)
+        : 0;
+    }
     
-    console.log('Home Screen - Section Scores:', { prayer: prayerScore, quran: quranScore, dhikr: dhikrScore });
+    // Ensure scores are valid numbers
+    prayerScore = typeof prayerScore === 'number' && !isNaN(prayerScore) ? prayerScore : 0;
+    quranScore = typeof quranScore === 'number' && !isNaN(quranScore) ? quranScore : 0;
+    dhikrScore = typeof dhikrScore === 'number' && !isNaN(dhikrScore) ? dhikrScore : 0;
+    
+    console.log('Home Screen - Individual Ring Scores:', { prayer: prayerScore, quran: quranScore, dhikr: dhikrScore });
     
     // Prayer ring (outer) - Green
     const prayerRadius = 85;

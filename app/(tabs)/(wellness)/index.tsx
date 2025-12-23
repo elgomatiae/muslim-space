@@ -145,7 +145,7 @@ export default function WellnessScreen() {
         </LinearGradient>
       </Animated.View>
 
-      {/* Tab Switcher - Now positioned dynamically below the header with REDUCED SPACING */}
+      {/* Tab Switcher - INCREASED SPACING FROM HEADER */}
       <Animated.View style={[styles.tabSwitcherContainer, { top: headerHeight }]}>
         <View style={styles.tabSwitcher}>
           <TouchableOpacity
@@ -227,7 +227,7 @@ export default function WellnessScreen() {
           { useNativeDriver: false }
         )}
       >
-        {/* Add padding at the top to account for header + tabs - REDUCED SPACING */}
+        {/* Add padding at the top to account for header + tabs - DECREASED SPACING */}
         <View style={styles.contentTopPadding} />
 
         {activeTab === 'mental' ? (
@@ -620,7 +620,7 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 9,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xs,
+    paddingTop: spacing.md,
   },
   tabSwitcher: {
     flexDirection: 'row',
@@ -668,7 +668,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   contentTopPadding: {
-    height: HEADER_MAX_HEIGHT + 50,
+    height: HEADER_MAX_HEIGHT + 60,
   },
   section: {
     marginBottom: spacing.xl,
