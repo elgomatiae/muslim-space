@@ -484,19 +484,6 @@ export default function WellnessScreen() {
           </LinearGradient>
         </View>
 
-        {/* Disclaimer */}
-        <View style={styles.disclaimerCard}>
-          <IconSymbol
-            ios_icon_name="info.circle.fill"
-            android_material_icon_name="info"
-            size={20}
-            color={colors.primary}
-          />
-          <Text style={styles.disclaimerText}>
-            This app provides Islamic guidance and support resources, but is not a substitute for professional mental health care.
-          </Text>
-        </View>
-
         {/* Bottom Padding for Tab Bar */}
         <View style={styles.bottomPadding} />
       </Animated.ScrollView>
@@ -773,23 +760,6 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.card,
     opacity: 0.95,
-  },
-  disclaimerCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    flexDirection: 'row',
-    gap: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.small,
-    marginBottom: spacing.md,
-  },
-  disclaimerText: {
-    ...typography.small,
-    color: colors.textSecondary,
-    flex: 1,
-    lineHeight: 20,
   },
   bottomPadding: {
     height: 100,

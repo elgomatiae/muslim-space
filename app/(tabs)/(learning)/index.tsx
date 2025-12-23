@@ -133,22 +133,6 @@ export default function LearningScreen() {
           ))}
         </View>
 
-        {/* Info Card */}
-        <View style={styles.infoCard}>
-          <View style={styles.infoIconContainer}>
-            <IconSymbol
-              ios_icon_name="info.circle.fill"
-              android_material_icon_name="info"
-              size={32}
-              color={colors.primary}
-            />
-          </View>
-          <Text style={styles.infoTitle}>Content Management</Text>
-          <Text style={styles.infoText}>
-            Islamic Lectures and Quran Recitations feature a Netflix-style browsing experience. Admins can manage content through the admin panel accessible from the profile tab.
-          </Text>
-        </View>
-
         <View style={styles.bottomPadding} />
       </ScrollView>
     </View>
@@ -249,38 +233,6 @@ const styles = StyleSheet.create({
   newBadgeText: {
     ...typography.smallBold,
     color: colors.card,
-  },
-  infoCard: {
-    marginHorizontal: spacing.xl,
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
-    alignItems: 'center',
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.xxl,
-  },
-  infoIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.highlight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  infoTitle: {
-    ...typography.h4,
-    color: colors.text,
-    marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-  infoText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
   },
   bottomPadding: {
     height: 120,

@@ -134,32 +134,6 @@ export default function ImanTrackerScreen() {
           </View>
         </View>
 
-        {/* INFO SECTION */}
-        <View style={styles.infoSection}>
-          <View style={styles.infoCard}>
-            <IconSymbol
-              ios_icon_name="info.circle.fill"
-              android_material_icon_name="info"
-              size={24}
-              color={colors.primary}
-            />
-            <View style={styles.infoContent}>
-              <Text style={styles.infoTitle}>How It Works</Text>
-              <Text style={styles.infoText}>
-                - Each ring represents: ʿIbādah, ʿIlm, and Amanah{'\n'}
-                - Track progress directly on this screen{'\n'}
-                - Rings update INSTANTLY when you track goals{'\n'}
-                - Achievements unlock INSTANTLY when you complete goals{'\n'}
-                - Scores slowly decay over time if inactive{'\n'}
-                - Unmet daily goals deplete score at midnight{'\n'}
-                - Unmet weekly goals deplete score Sunday 12 AM{'\n'}
-                - Stay consistent to maintain high scores!{'\n'}
-                {user && '- Progress auto-saves to your account'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
         <View style={styles.bottomPadding} />
       </ScrollView>
     </SafeAreaView>
@@ -224,32 +198,6 @@ const styles = StyleSheet.create({
   },
   headerDecoration: {
     opacity: 0.8,
-  },
-  infoSection: {
-    marginBottom: spacing.xxl,
-  },
-  infoCard: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    backgroundColor: colors.card,
-    padding: spacing.lg,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.small,
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoTitle: {
-    ...typography.bodyBold,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  infoText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    lineHeight: 20,
   },
   bottomPadding: {
     height: 100,
