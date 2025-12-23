@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Platform, ActivityIndicator, TouchableOpacity, TextInput, Keyboard, Alert, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Platform, ActivityIndicator, TouchableOpacity, TextInput, Keyboard, Alert, Modal, Image } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import VideoPlayer from '@/components/VideoPlayer';
@@ -13,6 +13,7 @@ import {
   isSupabaseConfigured, 
   isYouTubeUrl, 
   getYouTubeWatchUrl,
+  getYouTubeThumbnailUrl,
   Recitation 
 } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,6 +29,7 @@ export default function RecitationsScreen() {
   const { ilmGoals, updateIlmGoals } = useImanTracker();
   const [categories, setCategories] = useState<string[]>([]);
   const [recitationsByCategory, setRecitationsByCategory] = useState<{ [key: string]: Recitation[] }>({});
+  const [uncategorizedRecitations, setUncategorizedRecitations] = useState<Recitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRecitation, setSelectedRecitation] = useState<Recitation | null>(null);
   const [supabaseEnabled, setSupabaseEnabled] = useState(false);
@@ -37,7 +39,6 @@ export default function RecitationsScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [pendingRecitation, setPendingRecitation] = useState<Recitation | null>(null);
-  const [needsMigration, setNeedsMigration] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -50,30 +51,32 @@ export default function RecitationsScreen() {
     }
 
     try {
-      const fetchedCategories = await getRecitationCategories();
-      setCategories(fetchedCategories);
-
-      const recitationsData: { [key: string]: Recitation[] } = {};
-      for (const category of fetchedCategories) {
-        const recitations = await fetchRecitationsByCategory(category);
-        recitationsData[category] = recitations;
-      }
-      setRecitationsByCategory(recitationsData);
-
-      // Check if we have any recitations at all
-      const totalRecitations = Object.values(recitationsData).reduce((sum, arr) => sum + arr.length, 0);
+      // Fetch all recitations first
+      const allRecitations = await fetchRecitations();
       
-      // If we have categories but no recitations, check if migration is needed
-      if (fetchedCategories.length > 0 && totalRecitations === 0) {
-        // Check if quran_recitations table has data
-        const { count, error } = await supabase
-          .from('quran_recitations')
-          .select('*', { count: 'exact', head: true });
-        
-        if (!error && count && count > 0) {
-          setNeedsMigration(true);
+      // Separate categorized and uncategorized recitations
+      const categorized: { [key: string]: Recitation[] } = {};
+      const uncategorized: Recitation[] = [];
+      
+      allRecitations.forEach(recitation => {
+        if (recitation.category && recitation.category.trim() !== '') {
+          if (!categorized[recitation.category]) {
+            categorized[recitation.category] = [];
+          }
+          categorized[recitation.category].push(recitation);
+        } else {
+          uncategorized.push(recitation);
         }
-      }
+      });
+      
+      // Get unique categories
+      const uniqueCategories = Object.keys(categorized).sort();
+      
+      setCategories(uniqueCategories);
+      setRecitationsByCategory(categorized);
+      setUncategorizedRecitations(uncategorized);
+      
+      console.log(`Loaded ${allRecitations.length} recitations: ${uniqueCategories.length} categories, ${uncategorized.length} uncategorized`);
     } catch (error) {
       console.error('Error loading recitations:', error);
     } finally {
@@ -207,10 +210,6 @@ export default function RecitationsScreen() {
     router.push('/(tabs)/(learning)/playlist-import?type=recitation');
   };
 
-  const handleMigrateRecitations = () => {
-    router.push('/(tabs)/(learning)/migrate-recitations');
-  };
-
   const handleClearSearch = () => {
     setSearchQuery('');
     setSearchResults([]);
@@ -242,15 +241,15 @@ export default function RecitationsScreen() {
           showsVerticalScrollIndicator={false}
         >
           <LinearGradient
-            colors={colors.gradientAccent}
+            colors={colors.gradientPrimary}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.setupBanner}
           >
             <View style={styles.setupIconContainer}>
               <IconSymbol
-                ios_icon_name="music.note"
-                android_material_icon_name="headset"
+                ios_icon_name="cloud.fill"
+                android_material_icon_name="cloud"
                 size={48}
                 color={colors.card}
               />
@@ -274,149 +273,9 @@ export default function RecitationsScreen() {
     );
   }
 
-  // Show migration prompt if needed
-  if (needsMigration) {
-    return (
-      <View style={styles.container}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
-        >
-          <LinearGradient
-            colors={['#8B5CF6', '#7C3AED']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.migrationBanner}
-          >
-            <View style={styles.migrationIconContainer}>
-              <IconSymbol
-                ios_icon_name="arrow.triangle.2.circlepath"
-                android_material_icon_name="sync"
-                size={56}
-                color={colors.card}
-              />
-            </View>
-            <Text style={styles.migrationTitle}>Migration Required</Text>
-            <Text style={styles.migrationDescription}>
-              Your Quran recitations need to be migrated to the new system. This is a one-time process that will organize all 309 recitations into proper categories.
-            </Text>
-            <View style={styles.migrationStats}>
-              <View style={styles.migrationStat}>
-                <Text style={styles.migrationStatValue}>309</Text>
-                <Text style={styles.migrationStatLabel}>Videos Ready</Text>
-              </View>
-              <View style={styles.migrationStat}>
-                <Text style={styles.migrationStatValue}>8</Text>
-                <Text style={styles.migrationStatLabel}>Categories</Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              style={styles.migrationButton}
-              onPress={handleMigrateRecitations}
-              activeOpacity={0.7}
-            >
-              <View style={styles.migrationButtonContent}>
-                <IconSymbol
-                  ios_icon_name="play.circle.fill"
-                  android_material_icon_name="play-circle"
-                  size={24}
-                  color={colors.primary}
-                />
-                <Text style={styles.migrationButtonText}>Start Migration</Text>
-              </View>
-            </TouchableOpacity>
-          </LinearGradient>
+  const totalRecitations = categories.reduce((sum, cat) => sum + (recitationsByCategory[cat]?.length || 0), 0) + uncategorizedRecitations.length;
 
-          <View style={styles.infoCard}>
-            <View style={styles.infoHeader}>
-              <IconSymbol
-                ios_icon_name="info.circle.fill"
-                android_material_icon_name="info"
-                size={24}
-                color={colors.primary}
-              />
-              <Text style={styles.infoTitle}>What happens during migration?</Text>
-            </View>
-            <View style={styles.infoList}>
-              <View style={styles.infoItem}>
-                <IconSymbol
-                  ios_icon_name="checkmark.circle"
-                  android_material_icon_name="check-circle"
-                  size={20}
-                  color={colors.success}
-                />
-                <Text style={styles.infoItemText}>
-                  All 309 recitations will be imported from the old system
-                </Text>
-              </View>
-              <View style={styles.infoItem}>
-                <IconSymbol
-                  ios_icon_name="checkmark.circle"
-                  android_material_icon_name="check-circle"
-                  size={20}
-                  color={colors.success}
-                />
-                <Text style={styles.infoItemText}>
-                  AI will intelligently categorize each recitation
-                </Text>
-              </View>
-              <View style={styles.infoItem}>
-                <IconSymbol
-                  ios_icon_name="checkmark.circle"
-                  android_material_icon_name="check-circle"
-                  size={20}
-                  color={colors.success}
-                />
-                <Text style={styles.infoItemText}>
-                  Videos will be organized into 8 categories
-                </Text>
-              </View>
-              <View style={styles.infoItem}>
-                <IconSymbol
-                  ios_icon_name="checkmark.circle"
-                  android_material_icon_name="check-circle"
-                  size={20}
-                  color={colors.success}
-                />
-                <Text style={styles.infoItemText}>
-                  Process takes about 5-10 minutes
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.categoriesPreview}>
-            <Text style={styles.categoriesPreviewTitle}>Categories</Text>
-            <View style={styles.categoriesGrid}>
-              {[
-                { name: 'Full Quran', icon: 'book.fill' },
-                { name: 'Juz Recitations', icon: 'book.pages' },
-                { name: 'Surah Recitations', icon: 'text.book.closed' },
-                { name: 'Tilawah', icon: 'music.note' },
-                { name: 'Tajweed Lessons', icon: 'graduationcap.fill' },
-                { name: 'Memorization', icon: 'brain.head.profile' },
-                { name: 'Taraweeh', icon: 'moon.stars.fill' },
-                { name: 'Special Occasions', icon: 'star.fill' },
-              ].map((category, index) => (
-                <View key={index} style={styles.categoryPreviewCard}>
-                  <IconSymbol
-                    ios_icon_name={category.icon}
-                    android_material_icon_name="category"
-                    size={24}
-                    color={colors.primary}
-                  />
-                  <Text style={styles.categoryPreviewName}>{category.name}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        </ScrollView>
-      </View>
-    );
-  }
-
-  if (categories.length === 0) {
+  if (totalRecitations === 0) {
     return (
       <View style={styles.container}>
         <ScrollView
@@ -469,7 +328,9 @@ export default function RecitationsScreen() {
         <View style={styles.headerTop}>
           <View style={styles.headerTextContainer}>
             <Text style={styles.headerTitle}>Quran Recitations</Text>
-            <Text style={styles.headerSubtitle}>Beautiful recitations of the Holy Quran</Text>
+            <Text style={styles.headerSubtitle}>
+              {totalRecitations} recitation{totalRecitations !== 1 ? 's' : ''} • {categories.length} categories
+            </Text>
           </View>
           <View style={styles.headerActions}>
             <TouchableOpacity
@@ -551,37 +412,60 @@ export default function RecitationsScreen() {
                   Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
                 </Text>
                 <View style={styles.searchResultsList}>
-                  {searchResults.map((recitation, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.searchResultItem}
-                      onPress={() => handleRecitationPress(recitation)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.searchResultThumbnail}>
-                        <IconSymbol
-                          ios_icon_name="play.circle.fill"
-                          android_material_icon_name="play-circle"
-                          size={32}
-                          color={colors.primary}
-                        />
-                      </View>
-                      <View style={styles.searchResultInfo}>
-                        <Text style={styles.searchResultTitle} numberOfLines={2}>
-                          {recitation.title}
-                        </Text>
-                        {recitation.reciter_name && (
-                          <Text style={styles.searchResultScholar} numberOfLines={1}>
-                            {recitation.reciter_name}
-                          </Text>
+                  {searchResults.map((recitation, index) => {
+                    const thumbnailUrl = recitation.image_url || (recitation.url ? getYouTubeThumbnailUrl(recitation.url) : '');
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.searchResultItem}
+                        onPress={() => handleRecitationPress(recitation)}
+                        activeOpacity={0.7}
+                      >
+                        {thumbnailUrl ? (
+                          <View style={styles.searchResultThumbnailContainer}>
+                            <Image 
+                              source={{ uri: thumbnailUrl }} 
+                              style={styles.searchResultThumbnailImage}
+                              resizeMode="cover"
+                            />
+                            <View style={styles.searchPlayOverlay}>
+                              <IconSymbol
+                                ios_icon_name="play.circle.fill"
+                                android_material_icon_name="play-circle"
+                                size={32}
+                                color={colors.card}
+                              />
+                            </View>
+                          </View>
+                        ) : (
+                          <View style={styles.searchResultThumbnail}>
+                            <IconSymbol
+                              ios_icon_name="play.circle.fill"
+                              android_material_icon_name="play-circle"
+                              size={32}
+                              color={colors.primary}
+                            />
+                          </View>
                         )}
-                        <View style={styles.searchResultMeta}>
-                          <Text style={styles.searchResultCategory}>{recitation.category}</Text>
-                          <Text style={styles.searchResultViews}> • {recitation.views} views</Text>
+                        <View style={styles.searchResultInfo}>
+                          <Text style={styles.searchResultTitle} numberOfLines={2}>
+                            {recitation.title}
+                          </Text>
+                          {recitation.reciter_name && (
+                            <Text style={styles.searchResultScholar} numberOfLines={1}>
+                              {recitation.reciter_name}
+                            </Text>
+                          )}
+                          <View style={styles.searchResultMeta}>
+                            {recitation.category && (
+                              <Text style={styles.searchResultCategory}>{recitation.category}</Text>
+                            )}
+                            <Text style={styles.searchResultViews}>{recitation.category ? ' • ' : ''}{recitation.views || 0} views</Text>
+                          </View>
                         </View>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </React.Fragment>
             ) : (
@@ -601,6 +485,72 @@ export default function RecitationsScreen() {
           </View>
         ) : (
           <React.Fragment>
+            {/* Show uncategorized recitations */}
+            {uncategorizedRecitations.length > 0 && (
+              <View style={styles.categorySection}>
+                <View style={styles.categoryHeader}>
+                  <Text style={styles.categoryTitle}>Recently Added</Text>
+                  <Text style={styles.categoryCount}>{uncategorizedRecitations.length} recitations</Text>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.recitationsRow}
+                >
+                  {uncategorizedRecitations.map((recitation, recitationIndex) => {
+                    const thumbnailUrl = recitation.image_url || (recitation.url ? getYouTubeThumbnailUrl(recitation.url) : '');
+                    return (
+                      <TouchableOpacity
+                        key={recitationIndex}
+                        style={styles.recitationCard}
+                        onPress={() => handleRecitationPress(recitation)}
+                        activeOpacity={0.7}
+                      >
+                        {thumbnailUrl ? (
+                          <View style={styles.recitationThumbnailContainer}>
+                            <Image 
+                              source={{ uri: thumbnailUrl }} 
+                              style={styles.recitationThumbnailImage}
+                              resizeMode="cover"
+                            />
+                            <View style={styles.playOverlay}>
+                              <IconSymbol
+                                ios_icon_name="play.circle.fill"
+                                android_material_icon_name="play-circle"
+                                size={40}
+                                color={colors.card}
+                              />
+                            </View>
+                          </View>
+                        ) : (
+                          <View style={styles.recitationThumbnail}>
+                            <IconSymbol
+                              ios_icon_name="play.circle.fill"
+                              android_material_icon_name="play-circle"
+                              size={40}
+                              color={colors.primary}
+                            />
+                          </View>
+                        )}
+                        <View style={styles.recitationInfo}>
+                          <Text style={styles.recitationTitle} numberOfLines={2}>
+                            {recitation.title}
+                          </Text>
+                          {recitation.reciter_name && (
+                            <Text style={styles.recitationReciter} numberOfLines={1}>
+                              {recitation.reciter_name}
+                            </Text>
+                          )}
+                          <Text style={styles.recitationViews}>{recitation.views || 0} views</Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Show categorized recitations */}
             {categories.map((category, catIndex) => {
               const recitations = recitationsByCategory[category] || [];
               if (recitations.length === 0) return null;
@@ -616,34 +566,55 @@ export default function RecitationsScreen() {
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.recitationsRow}
                   >
-                    {recitations.map((recitation, recitationIndex) => (
-                      <TouchableOpacity
-                        key={recitationIndex}
-                        style={styles.recitationCard}
-                        onPress={() => handleRecitationPress(recitation)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.recitationThumbnail}>
-                          <IconSymbol
-                            ios_icon_name="play.circle.fill"
-                            android_material_icon_name="play-circle"
-                            size={40}
-                            color={colors.primary}
-                          />
-                        </View>
-                        <View style={styles.recitationInfo}>
-                          <Text style={styles.recitationTitle} numberOfLines={2}>
-                            {recitation.title}
-                          </Text>
-                          {recitation.reciter_name && (
-                            <Text style={styles.recitationReciter} numberOfLines={1}>
-                              {recitation.reciter_name}
-                            </Text>
+                    {recitations.map((recitation, recitationIndex) => {
+                      const thumbnailUrl = recitation.image_url || (recitation.url ? getYouTubeThumbnailUrl(recitation.url) : '');
+                      return (
+                        <TouchableOpacity
+                          key={recitationIndex}
+                          style={styles.recitationCard}
+                          onPress={() => handleRecitationPress(recitation)}
+                          activeOpacity={0.7}
+                        >
+                          {thumbnailUrl ? (
+                            <View style={styles.recitationThumbnailContainer}>
+                              <Image 
+                                source={{ uri: thumbnailUrl }} 
+                                style={styles.recitationThumbnailImage}
+                                resizeMode="cover"
+                              />
+                              <View style={styles.playOverlay}>
+                                <IconSymbol
+                                  ios_icon_name="play.circle.fill"
+                                  android_material_icon_name="play-circle"
+                                  size={40}
+                                  color={colors.card}
+                                />
+                              </View>
+                            </View>
+                          ) : (
+                            <View style={styles.recitationThumbnail}>
+                              <IconSymbol
+                                ios_icon_name="play.circle.fill"
+                                android_material_icon_name="play-circle"
+                                size={40}
+                                color={colors.primary}
+                              />
+                            </View>
                           )}
-                          <Text style={styles.recitationViews}>{recitation.views} views</Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
+                          <View style={styles.recitationInfo}>
+                            <Text style={styles.recitationTitle} numberOfLines={2}>
+                              {recitation.title}
+                            </Text>
+                            {recitation.reciter_name && (
+                              <Text style={styles.recitationReciter} numberOfLines={1}>
+                                {recitation.reciter_name}
+                              </Text>
+                            )}
+                            <Text style={styles.recitationViews}>{recitation.views || 0} views</Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </ScrollView>
                 </View>
               );
@@ -862,6 +833,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: spacing.md,
   },
+  searchResultThumbnailContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    marginRight: spacing.md,
+    position: 'relative',
+  },
+  searchResultThumbnailImage: {
+    width: '100%',
+    height: '100%',
+  },
+  searchPlayOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   searchResultInfo: {
     flex: 1,
     justifyContent: 'center',
@@ -931,131 +924,6 @@ const styles = StyleSheet.create({
     color: colors.card,
     textAlign: 'center',
     lineHeight: 24,
-  },
-  migrationBanner: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.xxxl,
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-    ...shadows.colored,
-  },
-  migrationIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.lg,
-  },
-  migrationTitle: {
-    ...typography.h2,
-    color: colors.card,
-    marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-  migrationDescription: {
-    ...typography.body,
-    color: colors.card,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: spacing.xl,
-  },
-  migrationStats: {
-    flexDirection: 'row',
-    gap: spacing.xxxl,
-    marginBottom: spacing.xl,
-  },
-  migrationStat: {
-    alignItems: 'center',
-  },
-  migrationStatValue: {
-    ...typography.h1,
-    color: colors.card,
-    marginBottom: spacing.xs,
-  },
-  migrationStatLabel: {
-    ...typography.caption,
-    color: colors.card,
-    opacity: 0.9,
-  },
-  migrationButton: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    ...shadows.large,
-  },
-  migrationButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.xxxl,
-  },
-  migrationButtonText: {
-    ...typography.h4,
-    color: colors.primary,
-  },
-  infoCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    marginBottom: spacing.xl,
-    ...shadows.medium,
-  },
-  infoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  infoTitle: {
-    ...typography.h4,
-    color: colors.text,
-  },
-  infoList: {
-    gap: spacing.md,
-  },
-  infoItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-  },
-  infoItemText: {
-    ...typography.body,
-    color: colors.text,
-    flex: 1,
-    lineHeight: 22,
-  },
-  categoriesPreview: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    ...shadows.small,
-  },
-  categoriesPreviewTitle: {
-    ...typography.h4,
-    color: colors.text,
-    marginBottom: spacing.lg,
-  },
-  categoriesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
-  categoryPreviewCard: {
-    width: '47%',
-    backgroundColor: colors.backgroundAlt,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  categoryPreviewName: {
-    ...typography.caption,
-    color: colors.text,
-    textAlign: 'center',
   },
   emptyCard: {
     backgroundColor: colors.card,
@@ -1137,6 +1005,26 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 120,
     backgroundColor: colors.backgroundAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recitationThumbnailContainer: {
+    width: '100%',
+    height: 120,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  recitationThumbnailImage: {
+    width: '100%',
+    height: '100%',
+  },
+  playOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
