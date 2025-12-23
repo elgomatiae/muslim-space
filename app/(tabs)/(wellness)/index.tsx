@@ -1,6 +1,6 @@
 
 import React, { useRef, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
@@ -9,8 +9,8 @@ import * as Haptics from 'expo-haptics';
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
 import { router } from "expo-router";
 
-const HEADER_MAX_HEIGHT = 160;
-const HEADER_MIN_HEIGHT = 60;
+const HEADER_MAX_HEIGHT = 140;
+const HEADER_MIN_HEIGHT = 70;
 const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
 
 type WellnessTab = 'mental' | 'physical';
@@ -84,7 +84,7 @@ export default function WellnessScreen() {
 
   const iconScale = scrollY.interpolate({
     inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [1, 0.6],
+    outputRange: [1, 0.7],
     extrapolate: 'clamp',
   });
 
@@ -94,8 +94,8 @@ export default function WellnessScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Collapsing Header - REDUCED HEIGHT */}
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      {/* Collapsing Header */}
       <Animated.View style={[styles.header, { height: headerHeight }]}>
         <LinearGradient
           colors={colors.gradientOcean}
@@ -108,20 +108,20 @@ export default function WellnessScreen() {
             <IconSymbol
               ios_icon_name="heart.circle.fill"
               android_material_icon_name="favorite"
-              size={24}
+              size={26}
               color={colors.card}
             />
             <Text style={styles.collapsedTitle}>Wellness Hub</Text>
           </Animated.View>
 
-          {/* Expanded Header Content (visible when not scrolled) - SIMPLIFIED */}
+          {/* Expanded Header Content (visible when not scrolled) */}
           <Animated.View style={[styles.expandedHeader, { opacity: headerOpacity }]}>
-            <View style={styles.headerRow}>
+            <View style={styles.headerTop}>
               <Animated.View style={{ transform: [{ scale: iconScale }] }}>
                 <IconSymbol
                   ios_icon_name="heart.circle.fill"
                   android_material_icon_name="favorite"
-                  size={28}
+                  size={32}
                   color={colors.card}
                 />
               </Animated.View>
@@ -145,7 +145,7 @@ export default function WellnessScreen() {
         </LinearGradient>
       </Animated.View>
 
-      {/* Tab Switcher - INCREASED SPACING FROM HEADER */}
+      {/* Tab Switcher */}
       <Animated.View style={[styles.tabSwitcherContainer, { top: headerHeight }]}>
         <View style={styles.tabSwitcher}>
           <TouchableOpacity
@@ -163,7 +163,7 @@ export default function WellnessScreen() {
                 <IconSymbol
                   ios_icon_name="brain.head.profile"
                   android_material_icon_name="psychology"
-                  size={18}
+                  size={20}
                   color={colors.card}
                 />
                 <Text style={styles.tabTextActive}>Mental</Text>
@@ -173,7 +173,7 @@ export default function WellnessScreen() {
                 <IconSymbol
                   ios_icon_name="brain.head.profile"
                   android_material_icon_name="psychology"
-                  size={18}
+                  size={20}
                   color={colors.textSecondary}
                 />
                 <Text style={styles.tabText}>Mental</Text>
@@ -196,7 +196,7 @@ export default function WellnessScreen() {
                 <IconSymbol
                   ios_icon_name="figure.run"
                   android_material_icon_name="directions-run"
-                  size={18}
+                  size={20}
                   color={colors.card}
                 />
                 <Text style={styles.tabTextActive}>Physical</Text>
@@ -206,7 +206,7 @@ export default function WellnessScreen() {
                 <IconSymbol
                   ios_icon_name="figure.run"
                   android_material_icon_name="directions-run"
-                  size={18}
+                  size={20}
                   color={colors.textSecondary}
                 />
                 <Text style={styles.tabText}>Physical</Text>
@@ -227,7 +227,7 @@ export default function WellnessScreen() {
           { useNativeDriver: false }
         )}
       >
-        {/* Add padding at the top to account for header + tabs - DECREASED SPACING */}
+        {/* Add padding at the top to account for header + tabs */}
         <View style={styles.contentTopPadding} />
 
         {activeTab === 'mental' ? (
@@ -247,14 +247,18 @@ export default function WellnessScreen() {
                   end={{ x: 1, y: 1 }}
                   style={styles.cardGradient}
                 >
-                  <IconSymbol
-                    ios_icon_name="book.fill"
-                    android_material_icon_name="menu-book"
-                    size={32}
-                    color={colors.card}
-                  />
-                  <Text style={styles.cardTitle}>Journal</Text>
-                  <Text style={styles.cardSubtitle}>Express thoughts</Text>
+                  <View style={styles.cardIconContainer}>
+                    <IconSymbol
+                      ios_icon_name="book.fill"
+                      android_material_icon_name="menu-book"
+                      size={36}
+                      color={colors.card}
+                    />
+                  </View>
+                  <View style={styles.cardTextContainer}>
+                    <Text style={styles.cardTitle}>Journal</Text>
+                    <Text style={styles.cardSubtitle}>Express thoughts</Text>
+                  </View>
                 </LinearGradient>
               </TouchableOpacity>
 
@@ -272,14 +276,18 @@ export default function WellnessScreen() {
                   end={{ x: 1, y: 1 }}
                   style={styles.cardGradient}
                 >
-                  <IconSymbol
-                    ios_icon_name="leaf.fill"
-                    android_material_icon_name="spa"
-                    size={32}
-                    color={colors.card}
-                  />
-                  <Text style={styles.cardTitle}>Meditation</Text>
-                  <Text style={styles.cardSubtitle}>Find peace</Text>
+                  <View style={styles.cardIconContainer}>
+                    <IconSymbol
+                      ios_icon_name="leaf.fill"
+                      android_material_icon_name="spa"
+                      size={36}
+                      color={colors.card}
+                    />
+                  </View>
+                  <View style={styles.cardTextContainer}>
+                    <Text style={styles.cardTitle}>Meditation</Text>
+                    <Text style={styles.cardSubtitle}>Find peace</Text>
+                  </View>
                 </LinearGradient>
               </TouchableOpacity>
 
@@ -297,14 +305,18 @@ export default function WellnessScreen() {
                   end={{ x: 1, y: 1 }}
                   style={styles.cardGradient}
                 >
-                  <IconSymbol
-                    ios_icon_name="hands.sparkles.fill"
-                    android_material_icon_name="self-improvement"
-                    size={32}
-                    color={colors.card}
-                  />
-                  <Text style={styles.cardTitle}>Healing Duas</Text>
-                  <Text style={styles.cardSubtitle}>Spiritual comfort</Text>
+                  <View style={styles.cardIconContainer}>
+                    <IconSymbol
+                      ios_icon_name="hands.sparkles.fill"
+                      android_material_icon_name="self-improvement"
+                      size={36}
+                      color={colors.card}
+                    />
+                  </View>
+                  <View style={styles.cardTextContainer}>
+                    <Text style={styles.cardTitle}>Healing Duas</Text>
+                    <Text style={styles.cardSubtitle}>Spiritual comfort</Text>
+                  </View>
                 </LinearGradient>
               </TouchableOpacity>
 
@@ -322,14 +334,18 @@ export default function WellnessScreen() {
                   end={{ x: 1, y: 1 }}
                   style={styles.cardGradient}
                 >
-                  <IconSymbol
-                    ios_icon_name="heart.fill"
-                    android_material_icon_name="favorite"
-                    size={32}
-                    color={colors.card}
-                  />
-                  <Text style={styles.cardTitle}>Support</Text>
-                  <Text style={styles.cardSubtitle}>Get guidance</Text>
+                  <View style={styles.cardIconContainer}>
+                    <IconSymbol
+                      ios_icon_name="heart.fill"
+                      android_material_icon_name="favorite"
+                      size={36}
+                      color={colors.card}
+                    />
+                  </View>
+                  <View style={styles.cardTextContainer}>
+                    <Text style={styles.cardTitle}>Support</Text>
+                    <Text style={styles.cardSubtitle}>Get guidance</Text>
+                  </View>
                 </LinearGradient>
               </TouchableOpacity>
 
@@ -347,14 +363,47 @@ export default function WellnessScreen() {
                   end={{ x: 1, y: 1 }}
                   style={styles.cardGradient}
                 >
-                  <IconSymbol
-                    ios_icon_name="book.pages.fill"
-                    android_material_icon_name="auto-stories"
-                    size={32}
-                    color={colors.card}
-                  />
-                  <Text style={styles.cardTitle}>Prophet Stories</Text>
-                  <Text style={styles.cardSubtitle}>Learn & reflect</Text>
+                  <View style={styles.cardIconContainer}>
+                    <IconSymbol
+                      ios_icon_name="book.pages.fill"
+                      android_material_icon_name="auto-stories"
+                      size={36}
+                      color={colors.card}
+                    />
+                  </View>
+                  <View style={styles.cardTextContainer}>
+                    <Text style={styles.cardTitle}>Prophet Stories</Text>
+                    <Text style={styles.cardSubtitle}>Learn & reflect</Text>
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.card}
+                activeOpacity={0.8}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/(tabs)/(wellness)/mood-tracker' as any);
+                }}
+              >
+                <LinearGradient
+                  colors={colors.gradientSunset}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.cardGradient}
+                >
+                  <View style={styles.cardIconContainer}>
+                    <IconSymbol
+                      ios_icon_name="face.smiling"
+                      android_material_icon_name="mood"
+                      size={36}
+                      color={colors.card}
+                    />
+                  </View>
+                  <View style={styles.cardTextContainer}>
+                    <Text style={styles.cardTitle}>Mood Tracker</Text>
+                    <Text style={styles.cardSubtitle}>Track emotions</Text>
+                  </View>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
@@ -376,14 +425,18 @@ export default function WellnessScreen() {
                   end={{ x: 1, y: 1 }}
                   style={styles.cardGradient}
                 >
-                  <IconSymbol
-                    ios_icon_name="figure.mixed.cardio"
-                    android_material_icon_name="fitness-center"
-                    size={32}
-                    color={colors.card}
-                  />
-                  <Text style={styles.cardTitle}>Activity</Text>
-                  <Text style={styles.cardSubtitle}>Log workouts</Text>
+                  <View style={styles.cardIconContainer}>
+                    <IconSymbol
+                      ios_icon_name="figure.mixed.cardio"
+                      android_material_icon_name="fitness-center"
+                      size={36}
+                      color={colors.card}
+                    />
+                  </View>
+                  <View style={styles.cardTextContainer}>
+                    <Text style={styles.cardTitle}>Activity</Text>
+                    <Text style={styles.cardSubtitle}>Log workouts</Text>
+                  </View>
                 </LinearGradient>
               </TouchableOpacity>
 
@@ -401,14 +454,18 @@ export default function WellnessScreen() {
                   end={{ x: 1, y: 1 }}
                   style={styles.cardGradient}
                 >
-                  <IconSymbol
-                    ios_icon_name="moon.stars.fill"
-                    android_material_icon_name="bedtime"
-                    size={32}
-                    color={colors.card}
-                  />
-                  <Text style={styles.cardTitle}>Sleep</Text>
-                  <Text style={styles.cardSubtitle}>Monitor rest</Text>
+                  <View style={styles.cardIconContainer}>
+                    <IconSymbol
+                      ios_icon_name="moon.stars.fill"
+                      android_material_icon_name="bedtime"
+                      size={36}
+                      color={colors.card}
+                    />
+                  </View>
+                  <View style={styles.cardTextContainer}>
+                    <Text style={styles.cardTitle}>Sleep</Text>
+                    <Text style={styles.cardSubtitle}>Monitor rest</Text>
+                  </View>
                 </LinearGradient>
               </TouchableOpacity>
 
@@ -426,14 +483,76 @@ export default function WellnessScreen() {
                   end={{ x: 1, y: 1 }}
                   style={styles.cardGradient}
                 >
-                  <IconSymbol
-                    ios_icon_name="target"
-                    android_material_icon_name="track-changes"
-                    size={32}
-                    color={colors.card}
-                  />
-                  <Text style={styles.cardTitle}>Goals</Text>
-                  <Text style={styles.cardSubtitle}>Set & achieve</Text>
+                  <View style={styles.cardIconContainer}>
+                    <IconSymbol
+                      ios_icon_name="target"
+                      android_material_icon_name="track-changes"
+                      size={36}
+                      color={colors.card}
+                    />
+                  </View>
+                  <View style={styles.cardTextContainer}>
+                    <Text style={styles.cardTitle}>Goals</Text>
+                    <Text style={styles.cardSubtitle}>Set & achieve</Text>
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.card}
+                activeOpacity={0.8}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/(tabs)/(wellness)/nutrition-tracker' as any);
+                }}
+              >
+                <LinearGradient
+                  colors={colors.gradientSuccess}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.cardGradient}
+                >
+                  <View style={styles.cardIconContainer}>
+                    <IconSymbol
+                      ios_icon_name="fork.knife"
+                      android_material_icon_name="restaurant"
+                      size={36}
+                      color={colors.card}
+                    />
+                  </View>
+                  <View style={styles.cardTextContainer}>
+                    <Text style={styles.cardTitle}>Nutrition</Text>
+                    <Text style={styles.cardSubtitle}>Track meals</Text>
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.card}
+                activeOpacity={0.8}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/(tabs)/(wellness)/activity-history' as any);
+                }}
+              >
+                <LinearGradient
+                  colors={colors.gradientPurple}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.cardGradient}
+                >
+                  <View style={styles.cardIconContainer}>
+                    <IconSymbol
+                      ios_icon_name="chart.line.uptrend.xyaxis"
+                      android_material_icon_name="trending-up"
+                      size={36}
+                      color={colors.card}
+                    />
+                  </View>
+                  <View style={styles.cardTextContainer}>
+                    <Text style={styles.cardTitle}>History</Text>
+                    <Text style={styles.cardSubtitle}>View progress</Text>
+                  </View>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
@@ -456,21 +575,23 @@ export default function WellnessScreen() {
             style={styles.crisisGradient}
           >
             <View style={styles.crisisContent}>
-              <IconSymbol
-                ios_icon_name="exclamationmark.triangle.fill"
-                android_material_icon_name="warning"
-                size={28}
-                color={colors.card}
-              />
+              <View style={styles.crisisIconContainer}>
+                <IconSymbol
+                  ios_icon_name="exclamationmark.triangle.fill"
+                  android_material_icon_name="warning"
+                  size={28}
+                  color={colors.card}
+                />
+              </View>
               <View style={styles.crisisText}>
-                <Text style={styles.crisisTitle}>Need Help?</Text>
-                <Text style={styles.crisisSubtitle}>24/7 crisis support</Text>
+                <Text style={styles.crisisTitle}>Need Immediate Help?</Text>
+                <Text style={styles.crisisSubtitle}>24/7 crisis support available</Text>
               </View>
             </View>
             <IconSymbol
               ios_icon_name="arrow.right.circle.fill"
               android_material_icon_name="arrow-forward"
-              size={24}
+              size={28}
               color={colors.card}
             />
           </LinearGradient>
@@ -484,12 +605,14 @@ export default function WellnessScreen() {
             end={{ x: 1, y: 1 }}
             style={styles.quoteGradient}
           >
-            <IconSymbol
-              ios_icon_name="quote.opening"
-              android_material_icon_name="format-quote"
-              size={28}
-              color={colors.card}
-            />
+            <View style={styles.quoteIconContainer}>
+              <IconSymbol
+                ios_icon_name="quote.opening"
+                android_material_icon_name="format-quote"
+                size={32}
+                color={colors.card}
+              />
+            </View>
             <Text style={styles.quoteText}>
               &quot;Verily, with hardship comes ease.&quot;
             </Text>
@@ -502,7 +625,7 @@ export default function WellnessScreen() {
           <IconSymbol
             ios_icon_name="info.circle.fill"
             android_material_icon_name="info"
-            size={18}
+            size={20}
             color={colors.primary}
           />
           <Text style={styles.disclaimerText}>
@@ -529,15 +652,14 @@ const styles = StyleSheet.create({
     zIndex: 10,
     overflow: 'hidden',
     marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    borderRadius: borderRadius.lg,
+    marginTop: spacing.sm,
+    borderRadius: borderRadius.xl,
     ...shadows.large,
   },
   headerGradient: {
     flex: 1,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+    paddingVertical: spacing.md,
   },
   collapsedHeader: {
     position: 'absolute',
@@ -548,21 +670,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   collapsedTitle: {
     ...typography.h4,
     color: colors.card,
+    fontWeight: '700',
   },
   expandedHeader: {
     flex: 1,
     justifyContent: 'space-between',
   },
-  headerRow: {
+  headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   headerTextContainer: {
     flex: 1,
@@ -571,33 +694,36 @@ const styles = StyleSheet.create({
     ...typography.h3,
     color: colors.card,
     marginBottom: spacing.xs,
+    fontWeight: '700',
   },
   headerSubtitle: {
     ...typography.caption,
     color: colors.card,
     opacity: 0.95,
+    fontSize: 13,
   },
   amanahCompact: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: borderRadius.md,
-    padding: spacing.sm,
-    gap: spacing.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    gap: spacing.md,
   },
   amanahScoreCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadows.medium,
   },
   amanahScoreText: {
     ...typography.h4,
     color: colors.primary,
     fontWeight: '800',
-    fontSize: 16,
+    fontSize: 18,
   },
   amanahInfo: {
     flex: 1,
@@ -605,14 +731,14 @@ const styles = StyleSheet.create({
   amanahInfoTitle: {
     ...typography.bodyBold,
     color: colors.card,
-    marginBottom: 2,
-    fontSize: 13,
+    marginBottom: 3,
+    fontSize: 14,
   },
   amanahInfoText: {
     ...typography.caption,
     color: colors.card,
-    opacity: 0.9,
-    fontSize: 11,
+    opacity: 0.95,
+    fontSize: 12,
   },
   tabSwitcherContainer: {
     position: 'absolute',
@@ -620,45 +746,47 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 9,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingTop: spacing.lg,
   },
   tabSwitcher: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xs,
+    ...shadows.medium,
   },
   tab: {
     flex: 1,
     borderRadius: borderRadius.md,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   tabActive: {
-    borderColor: 'transparent',
+    ...shadows.small,
   },
   tabGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
   },
   tabContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.card,
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    backgroundColor: 'transparent',
   },
   tabText: {
     ...typography.bodyBold,
-    fontSize: 14,
+    fontSize: 15,
     color: colors.textSecondary,
   },
   tabTextActive: {
     ...typography.bodyBold,
-    fontSize: 14,
+    fontSize: 15,
     color: colors.card,
   },
   scrollView: {
@@ -668,7 +796,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   contentTopPadding: {
-    height: HEADER_MAX_HEIGHT + 60,
+    height: HEADER_MAX_HEIGHT + 80,
   },
   section: {
     marginBottom: spacing.xl,
@@ -680,33 +808,36 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '48%',
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     overflow: 'hidden',
     ...shadows.medium,
   },
   cardGradient: {
     padding: spacing.lg,
-    minHeight: 120,
-    justifyContent: 'center',
-    alignItems: 'center',
+    minHeight: 140,
+    justifyContent: 'space-between',
+  },
+  cardIconContainer: {
+    marginBottom: spacing.sm,
+  },
+  cardTextContainer: {
+    gap: spacing.xs,
   },
   cardTitle: {
     ...typography.bodyBold,
-    fontSize: 16,
+    fontSize: 17,
     color: colors.card,
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs,
-    textAlign: 'center',
+    fontWeight: '700',
   },
   cardSubtitle: {
     ...typography.small,
     color: colors.card,
-    opacity: 0.9,
-    textAlign: 'center',
+    opacity: 0.95,
+    fontSize: 13,
   },
   crisisCard: {
     marginBottom: spacing.xl,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     overflow: 'hidden',
     ...shadows.large,
   },
@@ -722,6 +853,14 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     flex: 1,
   },
+  crisisIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   crisisText: {
     flex: 1,
   },
@@ -729,15 +868,18 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.card,
     marginBottom: spacing.xs,
+    fontSize: 16,
+    fontWeight: '700',
   },
   crisisSubtitle: {
     ...typography.caption,
     color: colors.card,
-    opacity: 0.9,
+    opacity: 0.95,
+    fontSize: 13,
   },
   quoteSection: {
     marginBottom: spacing.xl,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     overflow: 'hidden',
     ...shadows.medium,
   },
@@ -745,36 +887,41 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     alignItems: 'center',
   },
+  quoteIconContainer: {
+    marginBottom: spacing.md,
+  },
   quoteText: {
     ...typography.h4,
     color: colors.card,
     textAlign: 'center',
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
     fontStyle: 'italic',
+    lineHeight: 28,
   },
   quoteSource: {
     ...typography.bodyBold,
     color: colors.card,
-    opacity: 0.9,
+    opacity: 0.95,
+    fontSize: 14,
   },
   disclaimerCard: {
     backgroundColor: colors.card,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
     ...shadows.small,
+    marginBottom: spacing.md,
   },
   disclaimerText: {
     ...typography.small,
     color: colors.textSecondary,
     flex: 1,
-    lineHeight: 18,
+    lineHeight: 20,
   },
   bottomPadding: {
-    height: 100,
+    height: 120,
   },
 });
