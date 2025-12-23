@@ -49,7 +49,7 @@ export default function LearningScreen() {
       iosIcon: 'book.pages.fill',
       androidIcon: 'auto-stories',
       gradientColors: colors.gradientPurple,
-      route: '',
+      route: '/(tabs)/(wellness)/mental-duas',
     },
   ];
 
@@ -116,7 +116,7 @@ export default function LearningScreen() {
                       <Text style={styles.sectionDescription}>{section.description}</Text>
                       {section.route && (
                         <View style={styles.newBadge}>
-                          <Text style={styles.newBadgeText}>Netflix Style</Text>
+                          <Text style={styles.newBadgeText}>Available</Text>
                         </View>
                       )}
                     </View>
