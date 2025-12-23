@@ -147,7 +147,7 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
   });
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+    <View style={styles.wrapper}>
       <BlurView intensity={80} tint="light" style={styles.blurContainer}>
         <View style={styles.container}>
           <View style={styles.tabsContainer}>
@@ -155,7 +155,7 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
               const isActive = activeTabIndex === index;
               const isCenterTab = index === centerTabIndex;
 
-              // Center tab (Iman) gets special treatment - BIGGER and ELEVATED
+              // Center tab (Iman) gets special treatment - SMALLER and FITS IN TAB BAR
               if (isCenterTab) {
                 return (
                   <React.Fragment key={index}>
@@ -203,7 +203,7 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
           </View>
         </View>
       </BlurView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -233,7 +233,7 @@ function AnimatedCenterTab({
           <IconSymbol
             android_material_icon_name={tab.icon}
             ios_icon_name={tab.iosIcon || tab.icon}
-            size={36}
+            size={28}
             color="#FFFFFF"
           />
         </View>
@@ -280,8 +280,7 @@ function AnimatedRegularTab({
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    backgroundColor: 'transparent',
+  wrapper: {
     ...Platform.select({
       ios: {
         shadowColor: colors.primary,
@@ -313,24 +312,24 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     flexDirection: 'row',
-    height: 110,
+    height: 70,
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: 8,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: 4,
     paddingHorizontal: 4,
   },
   tabContent: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 4,
   },
   iconContainer: {
     width: 36,
@@ -354,51 +353,50 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '700',
   },
-  // Center tab (Iman) special styles - REDUCED SIZE
+  // Center tab (Iman) special styles - SMALLER SIZE TO FIT IN TAB BAR
   centerTabWrapper: {
     flex: 1.2,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 4,
-    marginTop: -35,
   },
   centerTab: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    marginBottom: 6,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    marginBottom: 4,
     ...Platform.select({
       ios: {
         shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.4,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
       },
       android: {
-        elevation: 12,
+        elevation: 8,
       },
       web: {
-        boxShadow: '0px 6px 12px rgba(139, 92, 246, 0.4)',
+        boxShadow: '0px 4px 8px rgba(139, 92, 246, 0.3)',
       },
     }),
   },
   centerTabGradient: {
     width: '100%',
     height: '100%',
-    borderRadius: 35,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 4,
+    borderWidth: 3,
     borderColor: '#FFFFFF',
   },
   centerIconContainer: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
   centerTabLabel: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '600',
     textAlign: 'center',
     color: colors.textSecondary,
