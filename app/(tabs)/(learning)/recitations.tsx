@@ -37,6 +37,7 @@ export default function RecitationsScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [pendingRecitation, setPendingRecitation] = useState<Recitation | null>(null);
+  const [needsMigration, setNeedsMigration] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -58,6 +59,21 @@ export default function RecitationsScreen() {
         recitationsData[category] = recitations;
       }
       setRecitationsByCategory(recitationsData);
+
+      // Check if we have any recitations at all
+      const totalRecitations = Object.values(recitationsData).reduce((sum, arr) => sum + arr.length, 0);
+      
+      // If we have categories but no recitations, check if migration is needed
+      if (fetchedCategories.length > 0 && totalRecitations === 0) {
+        // Check if quran_recitations table has data
+        const { count, error } = await supabase
+          .from('quran_recitations')
+          .select('*', { count: 'exact', head: true });
+        
+        if (!error && count && count > 0) {
+          setNeedsMigration(true);
+        }
+      }
     } catch (error) {
       console.error('Error loading recitations:', error);
     } finally {
@@ -191,6 +207,10 @@ export default function RecitationsScreen() {
     router.push('/(tabs)/(learning)/playlist-import?type=recitation');
   };
 
+  const handleMigrateRecitations = () => {
+    router.push('/(tabs)/(learning)/migrate-recitations');
+  };
+
   const handleClearSearch = () => {
     setSearchQuery('');
     setSearchResults([]);
@@ -250,6 +270,148 @@ export default function RecitationsScreen() {
       <View style={[styles.container, styles.centerContent]}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading recitations...</Text>
+      </View>
+    );
+  }
+
+  // Show migration prompt if needed
+  if (needsMigration) {
+    return (
+      <View style={styles.container}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
+          <LinearGradient
+            colors={['#8B5CF6', '#7C3AED']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.migrationBanner}
+          >
+            <View style={styles.migrationIconContainer}>
+              <IconSymbol
+                ios_icon_name="arrow.triangle.2.circlepath"
+                android_material_icon_name="sync"
+                size={56}
+                color={colors.card}
+              />
+            </View>
+            <Text style={styles.migrationTitle}>Migration Required</Text>
+            <Text style={styles.migrationDescription}>
+              Your Quran recitations need to be migrated to the new system. This is a one-time process that will organize all 309 recitations into proper categories.
+            </Text>
+            <View style={styles.migrationStats}>
+              <View style={styles.migrationStat}>
+                <Text style={styles.migrationStatValue}>309</Text>
+                <Text style={styles.migrationStatLabel}>Videos Ready</Text>
+              </View>
+              <View style={styles.migrationStat}>
+                <Text style={styles.migrationStatValue}>8</Text>
+                <Text style={styles.migrationStatLabel}>Categories</Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.migrationButton}
+              onPress={handleMigrateRecitations}
+              activeOpacity={0.7}
+            >
+              <View style={styles.migrationButtonContent}>
+                <IconSymbol
+                  ios_icon_name="play.circle.fill"
+                  android_material_icon_name="play-circle"
+                  size={24}
+                  color={colors.primary}
+                />
+                <Text style={styles.migrationButtonText}>Start Migration</Text>
+              </View>
+            </TouchableOpacity>
+          </LinearGradient>
+
+          <View style={styles.infoCard}>
+            <View style={styles.infoHeader}>
+              <IconSymbol
+                ios_icon_name="info.circle.fill"
+                android_material_icon_name="info"
+                size={24}
+                color={colors.primary}
+              />
+              <Text style={styles.infoTitle}>What happens during migration?</Text>
+            </View>
+            <View style={styles.infoList}>
+              <View style={styles.infoItem}>
+                <IconSymbol
+                  ios_icon_name="checkmark.circle"
+                  android_material_icon_name="check-circle"
+                  size={20}
+                  color={colors.success}
+                />
+                <Text style={styles.infoItemText}>
+                  All 309 recitations will be imported from the old system
+                </Text>
+              </View>
+              <View style={styles.infoItem}>
+                <IconSymbol
+                  ios_icon_name="checkmark.circle"
+                  android_material_icon_name="check-circle"
+                  size={20}
+                  color={colors.success}
+                />
+                <Text style={styles.infoItemText}>
+                  AI will intelligently categorize each recitation
+                </Text>
+              </View>
+              <View style={styles.infoItem}>
+                <IconSymbol
+                  ios_icon_name="checkmark.circle"
+                  android_material_icon_name="check-circle"
+                  size={20}
+                  color={colors.success}
+                />
+                <Text style={styles.infoItemText}>
+                  Videos will be organized into 8 categories
+                </Text>
+              </View>
+              <View style={styles.infoItem}>
+                <IconSymbol
+                  ios_icon_name="checkmark.circle"
+                  android_material_icon_name="check-circle"
+                  size={20}
+                  color={colors.success}
+                />
+                <Text style={styles.infoItemText}>
+                  Process takes about 5-10 minutes
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.categoriesPreview}>
+            <Text style={styles.categoriesPreviewTitle}>Categories</Text>
+            <View style={styles.categoriesGrid}>
+              {[
+                { name: 'Full Quran', icon: 'book.fill' },
+                { name: 'Juz Recitations', icon: 'book.pages' },
+                { name: 'Surah Recitations', icon: 'text.book.closed' },
+                { name: 'Tilawah', icon: 'music.note' },
+                { name: 'Tajweed Lessons', icon: 'graduationcap.fill' },
+                { name: 'Memorization', icon: 'brain.head.profile' },
+                { name: 'Taraweeh', icon: 'moon.stars.fill' },
+                { name: 'Special Occasions', icon: 'star.fill' },
+              ].map((category, index) => (
+                <View key={index} style={styles.categoryPreviewCard}>
+                  <IconSymbol
+                    ios_icon_name={category.icon}
+                    android_material_icon_name="category"
+                    size={24}
+                    color={colors.primary}
+                  />
+                  <Text style={styles.categoryPreviewName}>{category.name}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </ScrollView>
       </View>
     );
   }
@@ -769,6 +931,131 @@ const styles = StyleSheet.create({
     color: colors.card,
     textAlign: 'center',
     lineHeight: 24,
+  },
+  migrationBanner: {
+    borderRadius: borderRadius.xl,
+    padding: spacing.xxxl,
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+    ...shadows.colored,
+  },
+  migrationIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+  },
+  migrationTitle: {
+    ...typography.h2,
+    color: colors.card,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  migrationDescription: {
+    ...typography.body,
+    color: colors.card,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: spacing.xl,
+  },
+  migrationStats: {
+    flexDirection: 'row',
+    gap: spacing.xxxl,
+    marginBottom: spacing.xl,
+  },
+  migrationStat: {
+    alignItems: 'center',
+  },
+  migrationStatValue: {
+    ...typography.h1,
+    color: colors.card,
+    marginBottom: spacing.xs,
+  },
+  migrationStatLabel: {
+    ...typography.caption,
+    color: colors.card,
+    opacity: 0.9,
+  },
+  migrationButton: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    ...shadows.large,
+  },
+  migrationButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xxxl,
+  },
+  migrationButtonText: {
+    ...typography.h4,
+    color: colors.primary,
+  },
+  infoCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    marginBottom: spacing.xl,
+    ...shadows.medium,
+  },
+  infoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  infoTitle: {
+    ...typography.h4,
+    color: colors.text,
+  },
+  infoList: {
+    gap: spacing.md,
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  infoItemText: {
+    ...typography.body,
+    color: colors.text,
+    flex: 1,
+    lineHeight: 22,
+  },
+  categoriesPreview: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    ...shadows.small,
+  },
+  categoriesPreviewTitle: {
+    ...typography.h4,
+    color: colors.text,
+    marginBottom: spacing.lg,
+  },
+  categoriesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  categoryPreviewCard: {
+    width: '47%',
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  categoryPreviewName: {
+    ...typography.caption,
+    color: colors.text,
+    textAlign: 'center',
   },
   emptyCard: {
     backgroundColor: colors.card,
