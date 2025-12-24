@@ -317,6 +317,18 @@ export default function ImanTrackerScreen() {
           <Text style={styles.header}>Iman Tracker</Text>
           <Text style={styles.subtitle}>Track your spiritual journey daily</Text>
         </View>
+        <TouchableOpacity
+          style={styles.activityButton}
+          onPress={() => router.push('/(tabs)/(iman)/activity')}
+          activeOpacity={0.7}
+        >
+          <IconSymbol
+            ios_icon_name="list.bullet.clipboard.fill"
+            android_material_icon_name="assignment"
+            size={24}
+            color="#FFFFFF"
+          />
+        </TouchableOpacity>
         <View style={styles.headerDecoration}>
           <IconSymbol
             ios_icon_name="moon.stars.fill"
@@ -403,6 +415,28 @@ export default function ImanTrackerScreen() {
             <View style={styles.featuresGrid}>
               <TouchableOpacity
                 style={styles.featureCard}
+                onPress={() => router.push('/(tabs)/(iman)/activity' as any)}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={['#8B5CF6', '#7C3AED']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.featureGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="list.bullet.clipboard.fill"
+                    android_material_icon_name="assignment"
+                    size={32}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.featureTitle}>Activity</Text>
+                  <Text style={styles.featureSubtitle}>View log</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.featureCard}
                 onPress={() => router.push('/(tabs)/(iman)/trends' as any)}
                 activeOpacity={0.7}
               >
@@ -429,7 +463,7 @@ export default function ImanTrackerScreen() {
                 activeOpacity={0.7}
               >
                 <LinearGradient
-                  colors={['#8B5CF6', '#7C3AED']}
+                  colors={['#10B981', '#059669']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.featureGradient}
@@ -832,6 +866,15 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: 'rgba(255, 255, 255, 0.9)',
   },
+  activityButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.sm,
+  },
   headerDecoration: {
     opacity: 0.8,
   },
@@ -889,7 +932,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   featureCard: {
-    width: '48%',
+    width: '31%',
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
     ...shadows.medium,

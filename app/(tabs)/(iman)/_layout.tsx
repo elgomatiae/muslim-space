@@ -5,6 +5,7 @@ export default function ImanLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
+      <Stack.Screen name="activity" />
       <Stack.Screen name="achievements" />
       <Stack.Screen name="communities" />
       <Stack.Screen name="community-detail" />
