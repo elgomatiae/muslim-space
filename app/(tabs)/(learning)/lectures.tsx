@@ -471,7 +471,7 @@ export default function LecturesScreen() {
                     const thumbnailUrl = lecture.thumbnail_url || (lecture.url ? getYouTubeThumbnailUrl(lecture.url) : '');
                     return (
                       <TouchableOpacity
-                        key={index}
+                        key={`search-${lecture.id}-${index}`}
                         style={styles.searchResultItem}
                         onPress={() => handleLecturePress(lecture)}
                         activeOpacity={0.7}
@@ -542,7 +542,7 @@ export default function LecturesScreen() {
           <React.Fragment>
             {/* Show uncategorized lectures */}
             {uncategorizedLectures.length > 0 && (
-              <View style={styles.categorySection}>
+              <View key="uncategorized-section" style={styles.categorySection}>
                 <View style={styles.categoryHeader}>
                   <Text style={styles.categoryTitle}>Recently Added</Text>
                   <Text style={styles.categoryCount}>{uncategorizedLectures.length} lectures</Text>
@@ -556,7 +556,7 @@ export default function LecturesScreen() {
                     const thumbnailUrl = lecture.thumbnail_url || (lecture.url ? getYouTubeThumbnailUrl(lecture.url) : '');
                     return (
                       <TouchableOpacity
-                        key={lectureIndex}
+                        key={`uncategorized-${lecture.id}-${lectureIndex}`}
                         style={styles.lectureCard}
                         onPress={() => handleLecturePress(lecture)}
                         activeOpacity={0.7}
@@ -611,7 +611,7 @@ export default function LecturesScreen() {
               if (lectures.length === 0) return null;
 
               return (
-                <View key={catIndex} style={styles.categorySection}>
+                <View key={`category-${category}-${catIndex}`} style={styles.categorySection}>
                   <View style={styles.categoryHeader}>
                     <Text style={styles.categoryTitle}>{category}</Text>
                     <Text style={styles.categoryCount}>{lectures.length} lectures</Text>
@@ -625,7 +625,7 @@ export default function LecturesScreen() {
                       const thumbnailUrl = lecture.thumbnail_url || (lecture.url ? getYouTubeThumbnailUrl(lecture.url) : '');
                       return (
                         <TouchableOpacity
-                          key={lectureIndex}
+                          key={`${category}-${lecture.id}-${lectureIndex}`}
                           style={styles.lectureCard}
                           onPress={() => handleLecturePress(lecture)}
                           activeOpacity={0.7}
