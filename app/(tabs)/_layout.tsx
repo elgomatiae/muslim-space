@@ -36,13 +36,6 @@ export default function TabLayout() {
       label: 'Wellness',
     },
     {
-      name: '(community)',
-      route: '/(tabs)/(community)/',
-      icon: 'groups',
-      iosIcon: 'person.3.fill',
-      label: 'Community',
-    },
-    {
       name: 'profile',
       route: '/(tabs)/profile',
       icon: 'person',
@@ -65,7 +58,6 @@ export default function TabLayout() {
           <Stack.Screen name="(iman)" />
           <Stack.Screen name="(learning)" />
           <Stack.Screen name="(wellness)" />
-          <Stack.Screen name="(community)" />
           <Stack.Screen name="profile" />
           <Stack.Screen 
             name="admin-panel"
