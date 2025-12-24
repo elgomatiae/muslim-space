@@ -36,33 +36,62 @@ export default function InvitesInboxScreen() {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
+      // Fetch invites - split the query to avoid nested query issues
+      const { data: invitesData, error: invitesError } = await supabase
         .from('community_invites')
-        .select(`
-          id,
-          community_id,
-          created_at,
-          status,
-          communities (
-            name
-          ),
-          invited_by_profile:user_profiles!community_invites_invited_by_fkey (
-            username
-          )
-        `)
+        .select('id, community_id, created_at, status, invited_by')
         .eq('invited_user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (invitesError) {
+        console.error('Error fetching invites:', invitesError);
+        throw invitesError;
+      }
 
-      const formattedInvites: Invite[] = data?.map((invite: any) => ({
+      if (!invitesData || invitesData.length === 0) {
+        setInvites([]);
+        return;
+      }
+
+      // Get unique community IDs and user IDs
+      const communityIds = [...new Set(invitesData.map(i => i.community_id))];
+      const userIds = [...new Set(invitesData.map(i => i.invited_by))];
+
+      // Fetch community names
+      const { data: communitiesData, error: communitiesError } = await supabase
+        .from('communities')
+        .select('id, name')
+        .in('id', communityIds);
+
+      if (communitiesError) {
+        console.error('Error fetching communities:', communitiesError);
+        throw communitiesError;
+      }
+
+      // Fetch user profiles for invited_by usernames
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('user_profiles')
+        .select('user_id, username')
+        .in('user_id', userIds);
+
+      if (profilesError) {
+        console.error('Error fetching profiles:', profilesError);
+        throw profilesError;
+      }
+
+      // Create lookup maps
+      const communityMap = new Map(communitiesData?.map(c => [c.id, c.name]) || []);
+      const usernameMap = new Map(profilesData?.map(p => [p.user_id, p.username]) || []);
+
+      // Format invites
+      const formattedInvites: Invite[] = invitesData.map(invite => ({
         id: invite.id,
         community_id: invite.community_id,
-        community_name: invite.communities?.name || 'Unknown Community',
-        invited_by_username: invite.invited_by_profile?.username || 'Unknown User',
+        community_name: communityMap.get(invite.community_id) || 'Unknown Community',
+        invited_by_username: usernameMap.get(invite.invited_by) || 'Unknown User',
         created_at: invite.created_at,
         status: invite.status,
-      })) || [];
+      }));
 
       setInvites(formattedInvites);
     } catch (error) {

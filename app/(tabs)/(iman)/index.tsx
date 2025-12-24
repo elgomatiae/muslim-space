@@ -156,56 +156,71 @@ export default function ImanTrackerScreen() {
     try {
       setCommunitiesLoading(true);
 
-      // Fetch communities where user is a member
+      // Fetch communities where user is a member - split the query to avoid nested query issues
       const { data: memberData, error: memberError } = await supabase
         .from('community_members')
-        .select(`
-          community_id,
-          is_admin,
-          communities (
-            id,
-            name,
-            created_by,
-            created_at
-          )
-        `)
+        .select('community_id, is_admin')
         .eq('user_id', user.id);
 
-      if (memberError) throw memberError;
+      if (memberError) {
+        console.error('Error fetching community members:', memberError);
+        throw memberError;
+      }
+
+      if (!memberData || memberData.length === 0) {
+        setCommunities([]);
+        setCommunitiesLoading(false);
+        return;
+      }
+
+      // Get community IDs
+      const communityIds = memberData.map(m => m.community_id);
+
+      // Fetch community details separately
+      const { data: communitiesData, error: communitiesError } = await supabase
+        .from('communities')
+        .select('id, name, created_by, created_at')
+        .in('id', communityIds);
+
+      if (communitiesError) {
+        console.error('Error fetching communities:', communitiesError);
+        throw communitiesError;
+      }
 
       // Get member counts for each community
-      const communityIds = memberData?.map(m => m.community_id) || [];
-      
-      if (communityIds.length > 0) {
-        const { data: countData, error: countError } = await supabase
-          .from('community_members')
-          .select('community_id')
-          .in('community_id', communityIds);
+      const { data: countData, error: countError } = await supabase
+        .from('community_members')
+        .select('community_id')
+        .in('community_id', communityIds);
 
-        if (countError) throw countError;
-
-        // Count members per community
-        const memberCounts: Record<string, number> = {};
-        countData?.forEach(item => {
-          memberCounts[item.community_id] = (memberCounts[item.community_id] || 0) + 1;
-        });
-
-        // Format communities
-        const formattedCommunities: Community[] = memberData?.map(m => ({
-          id: m.communities.id,
-          name: m.communities.name,
-          created_by: m.communities.created_by,
-          created_at: m.communities.created_at,
-          member_count: memberCounts[m.community_id] || 0,
-          is_admin: m.is_admin,
-        })) || [];
-
-        setCommunities(formattedCommunities);
-      } else {
-        setCommunities([]);
+      if (countError) {
+        console.error('Error fetching member counts:', countError);
+        throw countError;
       }
+
+      // Count members per community
+      const memberCounts: Record<string, number> = {};
+      countData?.forEach(item => {
+        memberCounts[item.community_id] = (memberCounts[item.community_id] || 0) + 1;
+      });
+
+      // Create a map of community_id to is_admin
+      const adminMap = new Map(memberData.map(m => [m.community_id, m.is_admin]));
+
+      // Format communities
+      const formattedCommunities: Community[] = communitiesData?.map(community => ({
+        id: community.id,
+        name: community.name,
+        created_by: community.created_by,
+        created_at: community.created_at,
+        member_count: memberCounts[community.id] || 0,
+        is_admin: adminMap.get(community.id) || false,
+      })) || [];
+
+      setCommunities(formattedCommunities);
     } catch (error) {
       console.error('Error fetching communities:', error);
+      setCommunities([]);
     } finally {
       setCommunitiesLoading(false);
     }
@@ -221,10 +236,14 @@ export default function ImanTrackerScreen() {
         .eq('invited_user_id', user.id)
         .eq('status', 'pending');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching pending invites:', error);
+        throw error;
+      }
       setPendingInvitesCount(data?.length || 0);
     } catch (error) {
       console.error('Error fetching pending invites:', error);
+      setPendingInvitesCount(0);
     }
   };
 

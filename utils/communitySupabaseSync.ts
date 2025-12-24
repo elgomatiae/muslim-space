@@ -11,19 +11,23 @@ export async function syncImanScoreToDatabase(userId: string): Promise<void> {
     const overallScore = await getOverallImanScore();
     const sectionScores = await getCurrentSectionScores();
 
+    // Get today's date at midnight for consistent recorded_at
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const recordedAt = today.toISOString();
+
     // Insert or update today's score
     const { error } = await supabase
       .from('iman_score_history')
       .upsert({
         user_id: userId,
-        overall_score: overallScore,
+        overall_score: Math.round(overallScore),
         ibadah_score: Math.round(sectionScores.ibadah),
         ilm_score: Math.round(sectionScores.ilm),
         amanah_score: Math.round(sectionScores.amanah),
-        recorded_at: new Date().toISOString(),
+        recorded_at: recordedAt,
       }, {
         onConflict: 'user_id,recorded_at',
-        ignoreDuplicates: false,
       });
 
     if (error) {
