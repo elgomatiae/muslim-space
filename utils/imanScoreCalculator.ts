@@ -1,5 +1,6 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getPrayerTimes } from './prayerTimeService';
 
 // ʿIbādah (Worship) Goals Interface
 export interface IbadahGoals {
@@ -110,14 +111,54 @@ const DECAY_CONFIG = {
   },
 };
 
+// Helper function to determine which prayers have passed
+async function getPrayersThatHavePassed(): Promise<string[]> {
+  try {
+    const prayerTimes = await getPrayerTimes();
+    const now = new Date();
+    const passedPrayers: string[] = [];
+    
+    for (const prayer of prayerTimes) {
+      if (prayer.date <= now) {
+        passedPrayers.push(prayer.name.toLowerCase());
+      }
+    }
+    
+    console.log('Prayers that have passed:', passedPrayers);
+    return passedPrayers;
+  } catch (error) {
+    console.log('Error getting prayer times for score calculation:', error);
+    // Fallback: assume all prayers have passed if we can't get prayer times
+    return ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+  }
+}
+
 // Calculate ʿIbādah (Worship) Score (0-100)
-export function calculateIbadahScore(goals: IbadahGoals): number {
+export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> {
   let totalScore = 0;
   let totalWeight = 0;
   
+  // Get which prayers have passed
+  const passedPrayers = await getPrayersThatHavePassed();
+  const totalPassedPrayers = passedPrayers.length;
+  
   // Salah (55% of ʿIbādah) - INCREASED from 40%
-  const fardCount = Object.values(goals.fardPrayers).filter(Boolean).length;
-  const fardScore = (fardCount / 5) * 45; // 45% for 5 daily prayers - INCREASED from 30%
+  // Only count prayers that have passed
+  let completedPassedPrayers = 0;
+  for (const prayerName of passedPrayers) {
+    const prayerKey = prayerName as keyof typeof goals.fardPrayers;
+    if (goals.fardPrayers[prayerKey]) {
+      completedPassedPrayers++;
+    }
+  }
+  
+  // Calculate fard score based on prayers that have passed
+  const fardScore = totalPassedPrayers > 0 
+    ? (completedPassedPrayers / totalPassedPrayers) * 45 // 45% for prayers that have passed
+    : 45; // If no prayers have passed yet, give full score
+  
+  console.log(`Prayer Score: ${completedPassedPrayers}/${totalPassedPrayers} passed prayers completed = ${fardScore.toFixed(1)}%`);
+  
   totalScore += fardScore;
   totalWeight += 45;
   
@@ -253,13 +294,13 @@ export function calculateAmanahScore(goals: AmanahGoals): number {
 }
 
 // Calculate all section scores
-export function calculateAllSectionScores(
+export async function calculateAllSectionScores(
   ibadahGoals: IbadahGoals,
   ilmGoals: IlmGoals,
   amanahGoals: AmanahGoals
-): SectionScores {
+): Promise<SectionScores> {
   return {
-    ibadah: calculateIbadahScore(ibadahGoals),
+    ibadah: await calculateIbadahScore(ibadahGoals),
     ilm: calculateIlmScore(ilmGoals),
     amanah: calculateAmanahScore(amanahGoals),
   };
@@ -500,7 +541,7 @@ export async function getCurrentSectionScores(): Promise<SectionScores> {
     const ilmGoals = await loadIlmGoals();
     const amanahGoals = await loadAmanahGoals();
     
-    const freshScores = calculateAllSectionScores(ibadahGoals, ilmGoals, amanahGoals);
+    const freshScores = await calculateAllSectionScores(ibadahGoals, ilmGoals, amanahGoals);
     
     const lastUpdated = await AsyncStorage.getItem('sectionScoresLastUpdated');
     const storedScores = await AsyncStorage.getItem('sectionScores');
@@ -546,7 +587,20 @@ async function checkDailyGoalsMet(): Promise<{ ibadah: boolean; ilm: boolean; am
   const ilmGoals = await loadIlmGoals();
   const amanahGoals = await loadAmanahGoals();
   
-  const ibadahMet = Object.values(ibadahGoals.fardPrayers).every(Boolean) && 
+  // Get which prayers have passed
+  const passedPrayers = await getPrayersThatHavePassed();
+  
+  // Check if all passed prayers are completed
+  let allPassedPrayersCompleted = true;
+  for (const prayerName of passedPrayers) {
+    const prayerKey = prayerName as keyof typeof ibadahGoals.fardPrayers;
+    if (!ibadahGoals.fardPrayers[prayerKey]) {
+      allPassedPrayersCompleted = false;
+      break;
+    }
+  }
+  
+  const ibadahMet = allPassedPrayersCompleted && 
                     ibadahGoals.sunnahCompleted >= ibadahGoals.sunnahDailyGoal &&
                     ibadahGoals.dhikrDailyCompleted >= ibadahGoals.dhikrDailyGoal &&
                     ibadahGoals.duaDailyCompleted >= ibadahGoals.duaDailyGoal;
