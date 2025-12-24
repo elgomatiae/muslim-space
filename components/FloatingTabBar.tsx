@@ -61,42 +61,47 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
   const activeTabIndex = React.useMemo(() => {
     console.log('Current pathname:', pathname);
     
-    // Find the best matching tab based on the current pathname
-    let bestMatch = -1;
-    let bestMatchScore = 0;
-
-    tabs.forEach((tab, index) => {
-      let score = 0;
-      const tabRoute = tab.route as string;
-
-      // Exact route match gets highest score
-      if (pathname === tabRoute) {
-        score = 100;
+    // Extract the main tab segment from the pathname
+    // Pathname format: /(tabs)/(tabname)/...
+    const pathSegments = pathname.split('/').filter(Boolean);
+    console.log('Path segments:', pathSegments);
+    
+    // Find which tab matches the current path
+    let matchedIndex = -1;
+    
+    for (let i = 0; i < tabs.length; i++) {
+      const tab = tabs[i];
+      const tabName = tab.name; // e.g., "(home)", "(iman)", "profile"
+      
+      console.log(`Checking tab ${i}: ${tabName}`);
+      
+      // Check if the pathname contains this tab's name
+      // Handle both parenthesized names like "(home)" and regular names like "profile"
+      const cleanTabName = tabName.replace(/[()]/g, ''); // Remove parentheses
+      
+      // Check if pathname includes the tab name
+      if (pathname.includes(`/${tabName}/`) || pathname.includes(`/${tabName}`)) {
+        console.log(`✓ Matched tab ${i} (${tabName}) - exact match`);
+        matchedIndex = i;
+        break;
       }
-      // Check if pathname starts with tab route (for nested routes)
-      else if (pathname.startsWith(tabRoute)) {
-        score = 80;
+      
+      // Also check without parentheses
+      if (pathname.includes(`/${cleanTabName}/`) || pathname.includes(`/${cleanTabName}`)) {
+        console.log(`✓ Matched tab ${i} (${tabName}) - clean name match`);
+        matchedIndex = i;
+        break;
       }
-      // Check if pathname contains the tab name
-      else if (pathname.includes(tab.name)) {
-        score = 60;
-      }
-      // Check for partial matches in the route
-      else if (tabRoute.includes('/(tabs)/') && pathname.includes(tabRoute.split('/(tabs)/')[1])) {
-        score = 40;
-      }
-
-      console.log(`Tab ${tab.name} (${tabRoute}) score: ${score}`);
-
-      if (score > bestMatchScore) {
-        bestMatchScore = score;
-        bestMatch = index;
-      }
-    });
-
-    console.log('Active tab index:', bestMatch);
-    // Default to first tab if no match found
-    return bestMatch >= 0 ? bestMatch : 0;
+    }
+    
+    // If no match found, default to home (index 0)
+    if (matchedIndex === -1) {
+      console.log('No match found, defaulting to home (index 0)');
+      matchedIndex = 0;
+    }
+    
+    console.log('Active tab index:', matchedIndex);
+    return matchedIndex;
   }, [pathname, tabs]);
 
   React.useEffect(() => {
