@@ -29,65 +29,94 @@ interface Community {
 export default function CommunitiesScreen() {
   const { user } = useAuth();
   const [communities, setCommunities] = useState<Community[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [communitiesLoading, setCommunitiesLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newCommunityName, setNewCommunityName] = useState('');
   const [creating, setCreating] = useState(false);
   const [pendingInvitesCount, setPendingInvitesCount] = useState(0);
 
-  const fetchCommunities = useCallback(async () => {
-    if (!user) return;
+  const loadCommunities = useCallback(async () => {
+    if (!user) {
+      setCommunities([]);
+      setCommunitiesLoading(false);
+      setRefreshing(false);
+      return;
+    }
 
     try {
-      // Fetch communities where user is a member
+      console.log('Fetching communities for user:', user.id);
+
+      // Step 1: Get user's memberships
       const { data: memberData, error: memberError } = await supabase
         .from('community_members')
-        .select(`
-          community_id,
-          is_admin,
-          communities (
-            id,
-            name,
-            created_by,
-            created_at
-          )
-        `)
+        .select('community_id, is_admin')
         .eq('user_id', user.id);
 
-      if (memberError) throw memberError;
+      if (memberError) {
+        console.error('Error fetching community members:', memberError);
+        throw memberError;
+      }
 
-      // Get member counts for each community
-      const communityIds = memberData?.map(m => m.community_id) || [];
-      const { data: countData, error: countError } = await supabase
+      console.log('User memberships:', memberData);
+
+      if (!memberData || memberData.length === 0) {
+        setCommunities([]);
+        setCommunitiesLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      const communityIds = memberData.map(m => m.community_id);
+      const membershipMap = new Map(memberData.map(m => [m.community_id, m.is_admin]));
+
+      // Step 2: Fetch community details
+      const { data: communityData, error: communityError } = await supabase
+        .from('communities')
+        .select('id, name, created_by, created_at')
+        .in('id', communityIds);
+
+      if (communityError) {
+        console.error('Error fetching communities:', communityError);
+        throw communityError;
+      }
+
+      console.log('Community data:', communityData);
+
+      // Step 3: Get member counts for each community
+      const { data: allMembers, error: countError } = await supabase
         .from('community_members')
         .select('community_id')
         .in('community_id', communityIds);
 
-      if (countError) throw countError;
+      if (countError) {
+        console.error('Error fetching member counts:', countError);
+        throw countError;
+      }
 
       // Count members per community
       const memberCounts: Record<string, number> = {};
-      countData?.forEach(item => {
+      allMembers?.forEach(item => {
         memberCounts[item.community_id] = (memberCounts[item.community_id] || 0) + 1;
       });
 
       // Format communities
-      const formattedCommunities: Community[] = memberData?.map(m => ({
-        id: m.communities.id,
-        name: m.communities.name,
-        created_by: m.communities.created_by,
-        created_at: m.communities.created_at,
-        member_count: memberCounts[m.community_id] || 0,
-        is_admin: m.is_admin,
+      const formattedCommunities: Community[] = communityData?.map(c => ({
+        id: c.id,
+        name: c.name,
+        created_by: c.created_by,
+        created_at: c.created_at,
+        member_count: memberCounts[c.id] || 0,
+        is_admin: membershipMap.get(c.id) || false,
       })) || [];
 
+      console.log('Formatted communities:', formattedCommunities);
       setCommunities(formattedCommunities);
     } catch (error) {
       console.error('Error fetching communities:', error);
-      Alert.alert('Error', 'Failed to load communities');
+      setCommunities([]);
     } finally {
-      setLoading(false);
+      setCommunitiesLoading(false);
       setRefreshing(false);
     }
   }, [user]);
@@ -110,15 +139,15 @@ export default function CommunitiesScreen() {
   }, [user]);
 
   useEffect(() => {
-    fetchCommunities();
+    loadCommunities();
     fetchPendingInvites();
-  }, [fetchCommunities, fetchPendingInvites]);
+  }, [loadCommunities, fetchPendingInvites]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchCommunities();
+    loadCommunities();
     fetchPendingInvites();
-  }, [fetchCommunities, fetchPendingInvites]);
+  }, [loadCommunities, fetchPendingInvites]);
 
   const handleCreateCommunity = async () => {
     if (!newCommunityName.trim()) {
@@ -156,7 +185,7 @@ export default function CommunitiesScreen() {
       Alert.alert('Success', 'Community created successfully!');
       setNewCommunityName('');
       setShowCreateModal(false);
-      fetchCommunities();
+      loadCommunities();
     } catch (error: any) {
       console.error('Error creating community:', error);
       Alert.alert('Error', error.message || 'Failed to create community');
@@ -172,7 +201,7 @@ export default function CommunitiesScreen() {
     });
   };
 
-  if (loading) {
+  if (communitiesLoading) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
@@ -281,40 +310,41 @@ export default function CommunitiesScreen() {
           </View>
         ) : (
           <View style={styles.communitiesList}>
-            {communities.map((community) => (
-              <TouchableOpacity
-                key={community.id}
-                style={styles.communityCard}
-                onPress={() => handleCommunityPress(community)}
-              >
-                <View style={styles.communityIcon}>
-                  <IconSymbol
-                    ios_icon_name="person.3.fill"
-                    android_material_icon_name="groups"
-                    size={32}
-                    color={colors.primary}
-                  />
-                </View>
-                <View style={styles.communityInfo}>
-                  <View style={styles.communityHeader}>
-                    <Text style={styles.communityName}>{community.name}</Text>
-                    {community.is_admin && (
-                      <View style={styles.adminBadge}>
-                        <Text style={styles.adminBadgeText}>Admin</Text>
-                      </View>
-                    )}
+            {communities.map((community, index) => (
+              <React.Fragment key={index}>
+                <TouchableOpacity
+                  style={styles.communityCard}
+                  onPress={() => handleCommunityPress(community)}
+                >
+                  <View style={styles.communityIcon}>
+                    <IconSymbol
+                      ios_icon_name="person.3.fill"
+                      android_material_icon_name="groups"
+                      size={32}
+                      color={colors.primary}
+                    />
                   </View>
-                  <Text style={styles.communityMembers}>
-                    {community.member_count} {community.member_count === 1 ? 'member' : 'members'}
-                  </Text>
-                </View>
-                <IconSymbol
-                  ios_icon_name="chevron.right"
-                  android_material_icon_name="chevron_right"
-                  size={20}
-                  color={colors.textSecondary}
-                />
-              </TouchableOpacity>
+                  <View style={styles.communityInfo}>
+                    <View style={styles.communityHeader}>
+                      <Text style={styles.communityName}>{community.name}</Text>
+                      {community.is_admin && (
+                        <View style={styles.adminBadge}>
+                          <Text style={styles.adminBadgeText}>Admin</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.communityMembers}>
+                      {community.member_count} {community.member_count === 1 ? 'member' : 'members'}
+                    </Text>
+                  </View>
+                  <IconSymbol
+                    ios_icon_name="chevron.right"
+                    android_material_icon_name="chevron_right"
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              </React.Fragment>
             ))}
           </View>
         )}

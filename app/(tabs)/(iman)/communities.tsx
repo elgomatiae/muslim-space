@@ -29,28 +29,40 @@ interface Community {
 export default function CommunitiesScreen() {
   const { user } = useAuth();
   const [communities, setCommunities] = useState<Community[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [communitiesLoading, setCommunitiesLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newCommunityName, setNewCommunityName] = useState('');
   const [creating, setCreating] = useState(false);
   const [pendingInvitesCount, setPendingInvitesCount] = useState(0);
 
-  const fetchCommunities = useCallback(async () => {
-    if (!user) return;
+  const loadCommunities = useCallback(async () => {
+    if (!user) {
+      setCommunities([]);
+      setCommunitiesLoading(false);
+      setRefreshing(false);
+      return;
+    }
 
     try {
-      // Step 1: Fetch user's memberships
+      console.log('Fetching communities for user:', user.id);
+
+      // Step 1: Get user's memberships
       const { data: memberData, error: memberError } = await supabase
         .from('community_members')
         .select('community_id, is_admin')
         .eq('user_id', user.id);
 
-      if (memberError) throw memberError;
+      if (memberError) {
+        console.error('Error fetching community members:', memberError);
+        throw memberError;
+      }
+
+      console.log('User memberships:', memberData);
 
       if (!memberData || memberData.length === 0) {
         setCommunities([]);
-        setLoading(false);
+        setCommunitiesLoading(false);
         setRefreshing(false);
         return;
       }
@@ -64,7 +76,12 @@ export default function CommunitiesScreen() {
         .select('id, name, created_by, created_at')
         .in('id', communityIds);
 
-      if (communityError) throw communityError;
+      if (communityError) {
+        console.error('Error fetching communities:', communityError);
+        throw communityError;
+      }
+
+      console.log('Community data:', communityData);
 
       // Step 3: Get member counts for each community
       const { data: allMembers, error: countError } = await supabase
@@ -72,7 +89,10 @@ export default function CommunitiesScreen() {
         .select('community_id')
         .in('community_id', communityIds);
 
-      if (countError) throw countError;
+      if (countError) {
+        console.error('Error fetching member counts:', countError);
+        throw countError;
+      }
 
       // Count members per community
       const memberCounts: Record<string, number> = {};
@@ -90,12 +110,13 @@ export default function CommunitiesScreen() {
         is_admin: membershipMap.get(c.id) || false,
       })) || [];
 
+      console.log('Formatted communities:', formattedCommunities);
       setCommunities(formattedCommunities);
     } catch (error) {
       console.error('Error fetching communities:', error);
-      Alert.alert('Error', 'Failed to load communities');
+      setCommunities([]);
     } finally {
-      setLoading(false);
+      setCommunitiesLoading(false);
       setRefreshing(false);
     }
   }, [user]);
@@ -118,15 +139,15 @@ export default function CommunitiesScreen() {
   }, [user]);
 
   useEffect(() => {
-    fetchCommunities();
+    loadCommunities();
     fetchPendingInvites();
-  }, [fetchCommunities, fetchPendingInvites]);
+  }, [loadCommunities, fetchPendingInvites]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchCommunities();
+    loadCommunities();
     fetchPendingInvites();
-  }, [fetchCommunities, fetchPendingInvites]);
+  }, [loadCommunities, fetchPendingInvites]);
 
   const handleCreateCommunity = async () => {
     if (!newCommunityName.trim()) {
@@ -164,7 +185,7 @@ export default function CommunitiesScreen() {
       Alert.alert('Success', 'Community created successfully!');
       setNewCommunityName('');
       setShowCreateModal(false);
-      fetchCommunities();
+      loadCommunities();
     } catch (error: any) {
       console.error('Error creating community:', error);
       Alert.alert('Error', error.message || 'Failed to create community');
@@ -180,7 +201,7 @@ export default function CommunitiesScreen() {
     });
   };
 
-  if (loading) {
+  if (communitiesLoading) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
@@ -190,7 +211,7 @@ export default function CommunitiesScreen() {
           >
             <IconSymbol
               ios_icon_name="chevron.left"
-              android_material_icon_name="arrow-back"
+              android_material_icon_name="arrow_back"
               size={24}
               color={colors.text}
             />
@@ -215,7 +236,7 @@ export default function CommunitiesScreen() {
         >
           <IconSymbol
             ios_icon_name="chevron.left"
-            android_material_icon_name="arrow-back"
+            android_material_icon_name="arrow_back"
             size={24}
             color={colors.text}
           />
