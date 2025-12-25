@@ -155,10 +155,15 @@ export default function CommunitiesScreen() {
       return;
     }
 
-    if (!user) return;
+    if (!user) {
+      Alert.alert('Error', 'You must be logged in to create a community');
+      return;
+    }
 
     setCreating(true);
     try {
+      console.log('Creating community with user ID:', user.id);
+      
       // Create community
       const { data: communityData, error: communityError } = await supabase
         .from('communities')
@@ -169,7 +174,12 @@ export default function CommunitiesScreen() {
         .select()
         .single();
 
-      if (communityError) throw communityError;
+      if (communityError) {
+        console.error('Error creating community:', communityError);
+        throw communityError;
+      }
+
+      console.log('Community created successfully:', communityData);
 
       // Add creator as admin member
       const { error: memberError } = await supabase
@@ -180,7 +190,12 @@ export default function CommunitiesScreen() {
           is_admin: true,
         });
 
-      if (memberError) throw memberError;
+      if (memberError) {
+        console.error('Error adding creator as member:', memberError);
+        throw memberError;
+      }
+
+      console.log('Creator added as admin member successfully');
 
       Alert.alert('Success', 'Community created successfully!');
       setNewCommunityName('');
@@ -188,7 +203,17 @@ export default function CommunitiesScreen() {
       loadCommunities();
     } catch (error: any) {
       console.error('Error creating community:', error);
-      Alert.alert('Error', error.message || 'Failed to create community');
+      
+      // Provide more detailed error message
+      let errorMessage = 'Failed to create community';
+      if (error.message) {
+        errorMessage += ': ' + error.message;
+      }
+      if (error.code) {
+        errorMessage += ' (Error code: ' + error.code + ')';
+      }
+      
+      Alert.alert('Error', errorMessage);
     } finally {
       setCreating(false);
     }
