@@ -43,6 +43,8 @@ const WORKOUT_TYPES = [
   { value: 'sports', label: 'Sports', icon: { ios: 'sportscourt.fill', android: 'sports' } },
 ];
 
+const FARD_PRAYERS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+
 export default function GoalsSettingsScreen() {
   const params = useLocalSearchParams();
   const { user } = useAuth();
@@ -847,8 +849,8 @@ export default function GoalsSettingsScreen() {
               The five daily prayers are obligatory for every Muslim and cannot be disabled. They are:
             </Text>
             <View style={styles.fardList}>
-              {['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].map((prayer) => (
-                <View key={prayer} style={styles.fardItem}>
+              {FARD_PRAYERS.map((prayer, index) => (
+                <View key={`fard-prayer-${prayer}-${index}`} style={styles.fardItem}>
                   <IconSymbol
                     ios_icon_name="checkmark.circle.fill"
                     android_material_icon_name="check-circle"
