@@ -3,25 +3,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getPrayerTimes } from './prayerTimeService';
 
 /**
- * REDESIGNED IMAN SCORE CALCULATION SYSTEM
+ * REDESIGNED IMAN SCORE CALCULATION SYSTEM - FIXED IBADAH RING
  * 
- * This system is designed to:
- * 1. Properly weight daily vs weekly goals
- * 2. Encourage consistent engagement through smart decay
- * 3. Make it easy for users to return and recover their score
- * 4. Accurately reflect progress without giving unearned credit
- * 5. ONLY score goals that are enabled (goal > 0)
- * 6. Show 100% when all enabled goals are completed
- * 7. Quran Pages and Verses are mutually exclusive (only count one)
+ * KEY FIX: Ibadah ring now properly reaches 100% when all goals are completed.
  * 
- * SCORING PHILOSOPHY:
- * - Daily goals are weighted more heavily (they build consistency)
- * - Weekly goals provide flexibility and long-term growth
- * - Decay is gentle but noticeable (encourages return without punishment)
- * - Recovery is fast and rewarding (positive reinforcement)
- * - Disabled goals (set to 0) do NOT affect the score
- * - Completing all enabled goals = 100% for that ring
- * - Quran: Use EITHER pages OR verses, not both (pages takes priority)
+ * CORE PRINCIPLES:
+ * 1. Score is based on ENABLED goals only (goal > 0)
+ * 2. Completing all enabled goals = 100% for that ring
+ * 3. Fard prayers are ALWAYS enabled and count all 5 prayers
+ * 4. Quran Pages and Verses are mutually exclusive (only one counts)
+ * 5. Score calculation is simple: (completed / total) * 100
  */
 
 // ============================================================================
@@ -118,16 +109,12 @@ export interface SectionScores {
 // ============================================================================
 
 /**
- * NEW WEIGHTING SYSTEM
+ * SIMPLIFIED WEIGHTING SYSTEM
  * 
- * Each section has a total of 100 points distributed across:
- * - Daily goals (higher weight - builds consistency)
- * - Weekly goals (lower weight - provides flexibility)
+ * Each activity contributes equally within its category.
+ * The score is simply: (completed activities / total enabled activities) * 100
  * 
- * Within each category, activities are weighted by importance
- * 
- * IMPORTANT: These weights are only applied to ENABLED goals (goal > 0)
- * IMPORTANT: Quran Pages and Verses are mutually exclusive (only one counts)
+ * This ensures that completing all enabled goals = 100%
  */
 
 const IBADAH_WEIGHTS = {
@@ -213,26 +200,6 @@ const DECAY_CONFIG = {
 // HELPER FUNCTIONS
 // ============================================================================
 
-async function getPrayersThatHavePassed(): Promise<string[]> {
-  try {
-    const prayerTimes = await getPrayerTimes();
-    const now = new Date();
-    const passedPrayers: string[] = [];
-    
-    for (const prayer of prayerTimes) {
-      if (prayer.date <= now) {
-        passedPrayers.push(prayer.name.toLowerCase());
-      }
-    }
-    
-    return passedPrayers;
-  } catch (error) {
-    console.log('Error getting prayer times:', error);
-    // Fallback: assume all prayers have passed
-    return ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
-  }
-}
-
 function calculateProgress(completed: number, goal: number): number {
   if (goal === 0) return 0; // No credit if goal not set
   return Math.min(1, completed / goal); // Cap at 100%
@@ -243,12 +210,12 @@ function calculateProgress(completed: number, goal: number): number {
 // ============================================================================
 
 /**
- * Calculate Ibadah (Worship) Score
+ * Calculate Ibadah (Worship) Score - COMPLETELY REWRITTEN
  * 
  * NEW LOGIC:
- * - Only count goals that are enabled (goal > 0)
- * - Calculate total possible weight from enabled goals
- * - Scale score to 0-100 based on enabled goals only
+ * - Fard prayers are ALWAYS counted (all 5 prayers)
+ * - Each enabled goal contributes to the total score
+ * - Score = (sum of all progress percentages) / (number of enabled goals) * 100
  * - If all enabled goals are completed = 100%
  * - Quran Pages and Verses are MUTUALLY EXCLUSIVE (pages takes priority)
  */
@@ -257,42 +224,40 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
   console.log('🕌 IBADAH SCORE CALCULATION START');
   console.log('========================================');
   
-  let earnedPoints = 0;
-  let totalPossiblePoints = 0;
-  const breakdown: Record<string, { earned: number; possible: number; completed: number; goal: number }> = {};
+  let totalProgress = 0; // Sum of all progress percentages (0-1)
+  let enabledGoalsCount = 0; // Number of enabled goals
+  const breakdown: Record<string, { progress: number; completed: number; goal: number; weight: number }> = {};
   
-  // ===== FARD PRAYERS (ALWAYS ENABLED) =====
-  const passedPrayers = await getPrayersThatHavePassed();
-  const totalPassedPrayers = passedPrayers.length;
+  // ===== FARD PRAYERS (ALWAYS ENABLED - ALL 5 PRAYERS) =====
+  console.log(`\n📿 FARD PRAYERS (ALWAYS ENABLED - ALL 5 PRAYERS)`);
   
-  console.log(`\n📿 FARD PRAYERS (ALWAYS ENABLED)`);
-  console.log(`Prayers that have passed: ${passedPrayers.join(', ')}`);
+  const fardPrayersArray = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+  let completedFardPrayers = 0;
   
-  if (totalPassedPrayers > 0) {
-    let completedPassedPrayers = 0;
-    for (const prayerName of passedPrayers) {
-      const prayerKey = prayerName as keyof typeof goals.fardPrayers;
-      if (goals.fardPrayers[prayerKey]) {
-        completedPassedPrayers++;
-        console.log(`  ✅ ${prayerName}: Completed`);
-      } else {
-        console.log(`  ❌ ${prayerName}: Not completed`);
-      }
+  for (const prayerName of fardPrayersArray) {
+    const prayerKey = prayerName as keyof typeof goals.fardPrayers;
+    if (goals.fardPrayers[prayerKey]) {
+      completedFardPrayers++;
+      console.log(`  ✅ ${prayerName}: Completed`);
+    } else {
+      console.log(`  ❌ ${prayerName}: Not completed`);
     }
-    const fardProgress = completedPassedPrayers / totalPassedPrayers;
-    const fardPoints = fardProgress * IBADAH_WEIGHTS.daily.fardPrayers;
-    earnedPoints += fardPoints;
-    totalPossiblePoints += IBADAH_WEIGHTS.daily.fardPrayers;
-    breakdown.fardPrayers = { 
-      earned: fardPoints, 
-      possible: IBADAH_WEIGHTS.daily.fardPrayers,
-      completed: completedPassedPrayers,
-      goal: totalPassedPrayers
-    };
-    console.log(`  Score: ${fardPoints.toFixed(1)}/${IBADAH_WEIGHTS.daily.fardPrayers} points (${(fardProgress * 100).toFixed(0)}%)`);
-  } else {
-    console.log('  ⏳ No prayers have passed yet - not counting in total');
   }
+  
+  const fardProgress = completedFardPrayers / 5; // Always divide by 5
+  totalProgress += fardProgress;
+  enabledGoalsCount += 1;
+  
+  breakdown.fardPrayers = { 
+    progress: fardProgress, 
+    completed: completedFardPrayers,
+    goal: 5,
+    weight: IBADAH_WEIGHTS.daily.fardPrayers
+  };
+  
+  console.log(`  Score: ${completedFardPrayers}/5 prayers = ${(fardProgress * 100).toFixed(0)}% progress`);
+  if (fardProgress >= 1) console.log(`  ✅ COMPLETED`);
+  else console.log(`  ❌ NOT COMPLETED (${5 - completedFardPrayers} remaining)`);
   
   // ===== DAILY ACTIVITIES (OPTIONAL) =====
   
@@ -300,17 +265,16 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
   console.log(`\n🌙 SUNNAH PRAYERS`);
   if (goals.sunnahDailyGoal > 0) {
     const progress = calculateProgress(goals.sunnahCompleted, goals.sunnahDailyGoal);
-    const points = progress * IBADAH_WEIGHTS.daily.sunnahPrayers;
-    earnedPoints += points;
-    totalPossiblePoints += IBADAH_WEIGHTS.daily.sunnahPrayers;
+    totalProgress += progress;
+    enabledGoalsCount += 1;
     breakdown.sunnah = { 
-      earned: points, 
-      possible: IBADAH_WEIGHTS.daily.sunnahPrayers,
+      progress, 
       completed: goals.sunnahCompleted,
-      goal: goals.sunnahDailyGoal
+      goal: goals.sunnahDailyGoal,
+      weight: IBADAH_WEIGHTS.daily.sunnahPrayers
     };
     console.log(`  Goal: ${goals.sunnahCompleted}/${goals.sunnahDailyGoal}`);
-    console.log(`  Score: ${points.toFixed(1)}/${IBADAH_WEIGHTS.daily.sunnahPrayers} points (${(progress * 100).toFixed(0)}%)`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
     if (progress >= 1) console.log(`  ✅ COMPLETED`);
     else console.log(`  ❌ NOT COMPLETED`);
   } else {
@@ -321,33 +285,31 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
   console.log(`\n📖 QURAN READING`);
   if (goals.quranDailyPagesGoal > 0) {
     const progress = calculateProgress(goals.quranDailyPagesCompleted, goals.quranDailyPagesGoal);
-    const points = progress * IBADAH_WEIGHTS.daily.quranPages;
-    earnedPoints += points;
-    totalPossiblePoints += IBADAH_WEIGHTS.daily.quranPages;
+    totalProgress += progress;
+    enabledGoalsCount += 1;
     breakdown.quranPages = { 
-      earned: points, 
-      possible: IBADAH_WEIGHTS.daily.quranPages,
+      progress, 
       completed: goals.quranDailyPagesCompleted,
-      goal: goals.quranDailyPagesGoal
+      goal: goals.quranDailyPagesGoal,
+      weight: IBADAH_WEIGHTS.daily.quranPages
     };
     console.log(`  Pages Goal: ${goals.quranDailyPagesCompleted}/${goals.quranDailyPagesGoal}`);
-    console.log(`  Score: ${points.toFixed(1)}/${IBADAH_WEIGHTS.daily.quranPages} points (${(progress * 100).toFixed(0)}%)`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
     if (progress >= 1) console.log(`  ✅ COMPLETED`);
     else console.log(`  ❌ NOT COMPLETED`);
     console.log(`  ⚪ Verses Goal: Disabled (using Pages instead)`);
   } else if (goals.quranDailyVersesGoal > 0) {
     const progress = calculateProgress(goals.quranDailyVersesCompleted, goals.quranDailyVersesGoal);
-    const points = progress * IBADAH_WEIGHTS.daily.quranVerses;
-    earnedPoints += points;
-    totalPossiblePoints += IBADAH_WEIGHTS.daily.quranVerses;
+    totalProgress += progress;
+    enabledGoalsCount += 1;
     breakdown.quranVerses = { 
-      earned: points, 
-      possible: IBADAH_WEIGHTS.daily.quranVerses,
+      progress, 
       completed: goals.quranDailyVersesCompleted,
-      goal: goals.quranDailyVersesGoal
+      goal: goals.quranDailyVersesGoal,
+      weight: IBADAH_WEIGHTS.daily.quranVerses
     };
     console.log(`  Verses Goal: ${goals.quranDailyVersesCompleted}/${goals.quranDailyVersesGoal}`);
-    console.log(`  Score: ${points.toFixed(1)}/${IBADAH_WEIGHTS.daily.quranVerses} points (${(progress * 100).toFixed(0)}%)`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
     if (progress >= 1) console.log(`  ✅ COMPLETED`);
     else console.log(`  ❌ NOT COMPLETED`);
   } else {
@@ -359,17 +321,16 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
   console.log(`\n📿 DHIKR (DAILY)`);
   if (goals.dhikrDailyGoal > 0) {
     const progress = calculateProgress(goals.dhikrDailyCompleted, goals.dhikrDailyGoal);
-    const points = progress * IBADAH_WEIGHTS.daily.dhikrDaily;
-    earnedPoints += points;
-    totalPossiblePoints += IBADAH_WEIGHTS.daily.dhikrDaily;
+    totalProgress += progress;
+    enabledGoalsCount += 1;
     breakdown.dhikrDaily = { 
-      earned: points, 
-      possible: IBADAH_WEIGHTS.daily.dhikrDaily,
+      progress, 
       completed: goals.dhikrDailyCompleted,
-      goal: goals.dhikrDailyGoal
+      goal: goals.dhikrDailyGoal,
+      weight: IBADAH_WEIGHTS.daily.dhikrDaily
     };
     console.log(`  Goal: ${goals.dhikrDailyCompleted}/${goals.dhikrDailyGoal}`);
-    console.log(`  Score: ${points.toFixed(1)}/${IBADAH_WEIGHTS.daily.dhikrDaily} points (${(progress * 100).toFixed(0)}%)`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
     if (progress >= 1) console.log(`  ✅ COMPLETED`);
     else console.log(`  ❌ NOT COMPLETED`);
   } else {
@@ -380,17 +341,16 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
   console.log(`\n🤲 DUA (DAILY)`);
   if (goals.duaDailyGoal > 0) {
     const progress = calculateProgress(goals.duaDailyCompleted, goals.duaDailyGoal);
-    const points = progress * IBADAH_WEIGHTS.daily.duaDaily;
-    earnedPoints += points;
-    totalPossiblePoints += IBADAH_WEIGHTS.daily.duaDaily;
+    totalProgress += progress;
+    enabledGoalsCount += 1;
     breakdown.duaDaily = { 
-      earned: points, 
-      possible: IBADAH_WEIGHTS.daily.duaDaily,
+      progress, 
       completed: goals.duaDailyCompleted,
-      goal: goals.duaDailyGoal
+      goal: goals.duaDailyGoal,
+      weight: IBADAH_WEIGHTS.daily.duaDaily
     };
     console.log(`  Goal: ${goals.duaDailyCompleted}/${goals.duaDailyGoal}`);
-    console.log(`  Score: ${points.toFixed(1)}/${IBADAH_WEIGHTS.daily.duaDaily} points (${(progress * 100).toFixed(0)}%)`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
     if (progress >= 1) console.log(`  ✅ COMPLETED`);
     else console.log(`  ❌ NOT COMPLETED`);
   } else {
@@ -403,17 +363,16 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
   console.log(`\n🌙 TAHAJJUD (WEEKLY)`);
   if (goals.tahajjudWeeklyGoal > 0) {
     const progress = calculateProgress(goals.tahajjudCompleted, goals.tahajjudWeeklyGoal);
-    const points = progress * IBADAH_WEIGHTS.weekly.tahajjud;
-    earnedPoints += points;
-    totalPossiblePoints += IBADAH_WEIGHTS.weekly.tahajjud;
+    totalProgress += progress;
+    enabledGoalsCount += 1;
     breakdown.tahajjud = { 
-      earned: points, 
-      possible: IBADAH_WEIGHTS.weekly.tahajjud,
+      progress, 
       completed: goals.tahajjudCompleted,
-      goal: goals.tahajjudWeeklyGoal
+      goal: goals.tahajjudWeeklyGoal,
+      weight: IBADAH_WEIGHTS.weekly.tahajjud
     };
     console.log(`  Goal: ${goals.tahajjudCompleted}/${goals.tahajjudWeeklyGoal}`);
-    console.log(`  Score: ${points.toFixed(1)}/${IBADAH_WEIGHTS.weekly.tahajjud} points (${(progress * 100).toFixed(0)}%)`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
     if (progress >= 1) console.log(`  ✅ COMPLETED`);
     else console.log(`  ❌ NOT COMPLETED`);
   } else {
@@ -424,17 +383,16 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
   console.log(`\n📚 QURAN MEMORIZATION (WEEKLY)`);
   if (goals.quranWeeklyMemorizationGoal > 0) {
     const progress = calculateProgress(goals.quranWeeklyMemorizationCompleted, goals.quranWeeklyMemorizationGoal);
-    const points = progress * IBADAH_WEIGHTS.weekly.quranMemorization;
-    earnedPoints += points;
-    totalPossiblePoints += IBADAH_WEIGHTS.weekly.quranMemorization;
+    totalProgress += progress;
+    enabledGoalsCount += 1;
     breakdown.memorization = { 
-      earned: points, 
-      possible: IBADAH_WEIGHTS.weekly.quranMemorization,
+      progress, 
       completed: goals.quranWeeklyMemorizationCompleted,
-      goal: goals.quranWeeklyMemorizationGoal
+      goal: goals.quranWeeklyMemorizationGoal,
+      weight: IBADAH_WEIGHTS.weekly.quranMemorization
     };
     console.log(`  Goal: ${goals.quranWeeklyMemorizationCompleted}/${goals.quranWeeklyMemorizationGoal}`);
-    console.log(`  Score: ${points.toFixed(1)}/${IBADAH_WEIGHTS.weekly.quranMemorization} points (${(progress * 100).toFixed(0)}%)`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
     if (progress >= 1) console.log(`  ✅ COMPLETED`);
     else console.log(`  ❌ NOT COMPLETED`);
   } else {
@@ -445,17 +403,16 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
   console.log(`\n📿 DHIKR (WEEKLY)`);
   if (goals.dhikrWeeklyGoal > 0) {
     const progress = calculateProgress(goals.dhikrWeeklyCompleted, goals.dhikrWeeklyGoal);
-    const points = progress * IBADAH_WEIGHTS.weekly.dhikrWeekly;
-    earnedPoints += points;
-    totalPossiblePoints += IBADAH_WEIGHTS.weekly.dhikrWeekly;
+    totalProgress += progress;
+    enabledGoalsCount += 1;
     breakdown.dhikrWeekly = { 
-      earned: points, 
-      possible: IBADAH_WEIGHTS.weekly.dhikrWeekly,
+      progress, 
       completed: goals.dhikrWeeklyCompleted,
-      goal: goals.dhikrWeeklyGoal
+      goal: goals.dhikrWeeklyGoal,
+      weight: IBADAH_WEIGHTS.weekly.dhikrWeekly
     };
     console.log(`  Goal: ${goals.dhikrWeeklyCompleted}/${goals.dhikrWeeklyGoal}`);
-    console.log(`  Score: ${points.toFixed(1)}/${IBADAH_WEIGHTS.weekly.dhikrWeekly} points (${(progress * 100).toFixed(0)}%)`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
     if (progress >= 1) console.log(`  ✅ COMPLETED`);
     else console.log(`  ❌ NOT COMPLETED`);
   } else {
@@ -466,40 +423,40 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
   console.log(`\n🌙 FASTING (WEEKLY)`);
   if (goals.fastingWeeklyGoal > 0) {
     const progress = calculateProgress(goals.fastingWeeklyCompleted, goals.fastingWeeklyGoal);
-    const points = progress * IBADAH_WEIGHTS.weekly.fasting;
-    earnedPoints += points;
-    totalPossiblePoints += IBADAH_WEIGHTS.weekly.fasting;
+    totalProgress += progress;
+    enabledGoalsCount += 1;
     breakdown.fasting = { 
-      earned: points, 
-      possible: IBADAH_WEIGHTS.weekly.fasting,
+      progress, 
       completed: goals.fastingWeeklyCompleted,
-      goal: goals.fastingWeeklyGoal
+      goal: goals.fastingWeeklyGoal,
+      weight: IBADAH_WEIGHTS.weekly.fasting
     };
     console.log(`  Goal: ${goals.fastingWeeklyCompleted}/${goals.fastingWeeklyGoal}`);
-    console.log(`  Score: ${points.toFixed(1)}/${IBADAH_WEIGHTS.weekly.fasting} points (${(progress * 100).toFixed(0)}%)`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
     if (progress >= 1) console.log(`  ✅ COMPLETED`);
     else console.log(`  ❌ NOT COMPLETED`);
   } else {
     console.log('  ⚪ Goal disabled (0) - not counting');
   }
   
-  // Calculate final score as percentage of enabled goals
+  // Calculate final score as average of all enabled goals
   let finalScore = 0;
-  if (totalPossiblePoints > 0) {
-    finalScore = (earnedPoints / totalPossiblePoints) * 100;
+  if (enabledGoalsCount > 0) {
+    finalScore = (totalProgress / enabledGoalsCount) * 100;
   }
   
   console.log('\n========================================');
   console.log('📊 IBADAH SCORE SUMMARY');
   console.log('========================================');
-  console.log(`Total Earned: ${earnedPoints.toFixed(1)} points`);
-  console.log(`Total Possible: ${totalPossiblePoints.toFixed(1)} points`);
+  console.log(`Total Progress: ${totalProgress.toFixed(2)} (sum of all progress)`);
+  console.log(`Enabled Goals: ${enabledGoalsCount}`);
+  console.log(`Average Progress: ${(totalProgress / enabledGoalsCount).toFixed(2)}`);
   console.log(`Final Score: ${finalScore.toFixed(1)}%`);
   console.log('\n🎯 BREAKDOWN BY ACTIVITY:');
   Object.entries(breakdown).forEach(([key, value]) => {
-    const percentage = value.possible > 0 ? (value.earned / value.possible) * 100 : 0;
+    const percentage = value.progress * 100;
     const status = percentage >= 100 ? '✅' : '❌';
-    console.log(`  ${status} ${key}: ${value.completed}/${value.goal} = ${value.earned.toFixed(1)}/${value.possible} points (${percentage.toFixed(0)}%)`);
+    console.log(`  ${status} ${key}: ${value.completed}/${value.goal} = ${percentage.toFixed(0)}% progress`);
   });
   console.log('========================================\n');
   
@@ -511,70 +468,82 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
  * 
  * NEW LOGIC:
  * - Only count goals that are enabled (goal > 0)
- * - Calculate total possible weight from enabled goals
- * - Scale score to 0-100 based on enabled goals only
+ * - Score = (sum of all progress percentages) / (number of enabled goals) * 100
  */
 export function calculateIlmScore(goals: IlmGoals): number {
-  let earnedPoints = 0;
-  let totalPossiblePoints = 0;
-  const breakdown: Record<string, number> = {};
+  console.log('\n========================================');
+  console.log('📚 ILM SCORE CALCULATION START');
+  console.log('========================================');
+  
+  let totalProgress = 0;
+  let enabledGoalsCount = 0;
+  const breakdown: Record<string, { progress: number; completed: number; goal: number }> = {};
   
   // Lectures
+  console.log(`\n🎓 LECTURES`);
   if (goals.weeklyLecturesGoal > 0) {
     const progress = calculateProgress(goals.weeklyLecturesCompleted, goals.weeklyLecturesGoal);
-    const points = progress * ILM_WEIGHTS.weekly.lectures;
-    earnedPoints += points;
-    totalPossiblePoints += ILM_WEIGHTS.weekly.lectures;
-    breakdown.lectures = points;
-    console.log(`Lectures: ${goals.weeklyLecturesCompleted}/${goals.weeklyLecturesGoal} = ${points.toFixed(1)}/${ILM_WEIGHTS.weekly.lectures} points`);
+    totalProgress += progress;
+    enabledGoalsCount += 1;
+    breakdown.lectures = { progress, completed: goals.weeklyLecturesCompleted, goal: goals.weeklyLecturesGoal };
+    console.log(`  Goal: ${goals.weeklyLecturesCompleted}/${goals.weeklyLecturesGoal}`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
   } else {
-    console.log('Lectures: Goal disabled (0) - not counting');
+    console.log('  ⚪ Goal disabled (0) - not counting');
   }
   
   // Recitations
+  console.log(`\n🎵 RECITATIONS`);
   if (goals.weeklyRecitationsGoal > 0) {
     const progress = calculateProgress(goals.weeklyRecitationsCompleted, goals.weeklyRecitationsGoal);
-    const points = progress * ILM_WEIGHTS.weekly.recitations;
-    earnedPoints += points;
-    totalPossiblePoints += ILM_WEIGHTS.weekly.recitations;
-    breakdown.recitations = points;
-    console.log(`Recitations: ${goals.weeklyRecitationsCompleted}/${goals.weeklyRecitationsGoal} = ${points.toFixed(1)}/${ILM_WEIGHTS.weekly.recitations} points`);
+    totalProgress += progress;
+    enabledGoalsCount += 1;
+    breakdown.recitations = { progress, completed: goals.weeklyRecitationsCompleted, goal: goals.weeklyRecitationsGoal };
+    console.log(`  Goal: ${goals.weeklyRecitationsCompleted}/${goals.weeklyRecitationsGoal}`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
   } else {
-    console.log('Recitations: Goal disabled (0) - not counting');
+    console.log('  ⚪ Goal disabled (0) - not counting');
   }
   
   // Quizzes
+  console.log(`\n❓ QUIZZES`);
   if (goals.weeklyQuizzesGoal > 0) {
     const progress = calculateProgress(goals.weeklyQuizzesCompleted, goals.weeklyQuizzesGoal);
-    const points = progress * ILM_WEIGHTS.weekly.quizzes;
-    earnedPoints += points;
-    totalPossiblePoints += ILM_WEIGHTS.weekly.quizzes;
-    breakdown.quizzes = points;
-    console.log(`Quizzes: ${goals.weeklyQuizzesCompleted}/${goals.weeklyQuizzesGoal} = ${points.toFixed(1)}/${ILM_WEIGHTS.weekly.quizzes} points`);
+    totalProgress += progress;
+    enabledGoalsCount += 1;
+    breakdown.quizzes = { progress, completed: goals.weeklyQuizzesCompleted, goal: goals.weeklyQuizzesGoal };
+    console.log(`  Goal: ${goals.weeklyQuizzesCompleted}/${goals.weeklyQuizzesGoal}`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
   } else {
-    console.log('Quizzes: Goal disabled (0) - not counting');
+    console.log('  ⚪ Goal disabled (0) - not counting');
   }
   
   // Reflection
+  console.log(`\n💭 REFLECTION`);
   if (goals.weeklyReflectionGoal > 0) {
     const progress = calculateProgress(goals.weeklyReflectionCompleted, goals.weeklyReflectionGoal);
-    const points = progress * ILM_WEIGHTS.weekly.reflection;
-    earnedPoints += points;
-    totalPossiblePoints += ILM_WEIGHTS.weekly.reflection;
-    breakdown.reflection = points;
-    console.log(`Reflection: ${goals.weeklyReflectionCompleted}/${goals.weeklyReflectionGoal} = ${points.toFixed(1)}/${ILM_WEIGHTS.weekly.reflection} points`);
+    totalProgress += progress;
+    enabledGoalsCount += 1;
+    breakdown.reflection = { progress, completed: goals.weeklyReflectionCompleted, goal: goals.weeklyReflectionGoal };
+    console.log(`  Goal: ${goals.weeklyReflectionCompleted}/${goals.weeklyReflectionGoal}`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
   } else {
-    console.log('Reflection: Goal disabled (0) - not counting');
+    console.log('  ⚪ Goal disabled (0) - not counting');
   }
   
-  // Calculate final score as percentage of enabled goals
+  // Calculate final score
   let finalScore = 0;
-  if (totalPossiblePoints > 0) {
-    finalScore = (earnedPoints / totalPossiblePoints) * 100;
+  if (enabledGoalsCount > 0) {
+    finalScore = (totalProgress / enabledGoalsCount) * 100;
   }
   
-  console.log('Ilm Score Breakdown:', breakdown);
-  console.log(`Total Ilm Score: ${earnedPoints.toFixed(1)}/${totalPossiblePoints.toFixed(1)} = ${finalScore.toFixed(1)}%`);
+  console.log('\n========================================');
+  console.log('📊 ILM SCORE SUMMARY');
+  console.log('========================================');
+  console.log(`Total Progress: ${totalProgress.toFixed(2)}`);
+  console.log(`Enabled Goals: ${enabledGoalsCount}`);
+  console.log(`Final Score: ${finalScore.toFixed(1)}%`);
+  console.log('========================================\n');
   
   return Math.min(100, Math.round(finalScore));
 }
@@ -584,98 +553,112 @@ export function calculateIlmScore(goals: IlmGoals): number {
  * 
  * NEW LOGIC:
  * - Only count goals that are enabled (goal > 0)
- * - Calculate total possible weight from enabled goals
- * - Scale score to 0-100 based on enabled goals only
+ * - Score = (sum of all progress percentages) / (number of enabled goals) * 100
  */
 export function calculateAmanahScore(goals: AmanahGoals): number {
-  let earnedPoints = 0;
-  let totalPossiblePoints = 0;
-  const breakdown: Record<string, number> = {};
+  console.log('\n========================================');
+  console.log('💪 AMANAH SCORE CALCULATION START');
+  console.log('========================================');
+  
+  let totalProgress = 0;
+  let enabledGoalsCount = 0;
+  const breakdown: Record<string, { progress: number; completed: number; goal: number }> = {};
   
   // ===== DAILY ACTIVITIES =====
   
   // Exercise
+  console.log(`\n🏃 EXERCISE`);
   if (goals.dailyExerciseGoal > 0) {
     const progress = calculateProgress(goals.dailyExerciseCompleted, goals.dailyExerciseGoal);
-    const points = progress * AMANAH_WEIGHTS.daily.exercise;
-    earnedPoints += points;
-    totalPossiblePoints += AMANAH_WEIGHTS.daily.exercise;
-    breakdown.exercise = points;
-    console.log(`Exercise: ${goals.dailyExerciseCompleted}/${goals.dailyExerciseGoal} = ${points.toFixed(1)}/${AMANAH_WEIGHTS.daily.exercise} points`);
+    totalProgress += progress;
+    enabledGoalsCount += 1;
+    breakdown.exercise = { progress, completed: goals.dailyExerciseCompleted, goal: goals.dailyExerciseGoal };
+    console.log(`  Goal: ${goals.dailyExerciseCompleted}/${goals.dailyExerciseGoal} minutes`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
   } else {
-    console.log('Exercise: Goal disabled (0) - not counting');
+    console.log('  ⚪ Goal disabled (0) - not counting');
   }
   
   // Water
+  console.log(`\n💧 WATER`);
   if (goals.dailyWaterGoal > 0) {
     const progress = calculateProgress(goals.dailyWaterCompleted, goals.dailyWaterGoal);
-    const points = progress * AMANAH_WEIGHTS.daily.water;
-    earnedPoints += points;
-    totalPossiblePoints += AMANAH_WEIGHTS.daily.water;
-    breakdown.water = points;
-    console.log(`Water: ${goals.dailyWaterCompleted}/${goals.dailyWaterGoal} = ${points.toFixed(1)}/${AMANAH_WEIGHTS.daily.water} points`);
+    totalProgress += progress;
+    enabledGoalsCount += 1;
+    breakdown.water = { progress, completed: goals.dailyWaterCompleted, goal: goals.dailyWaterGoal };
+    console.log(`  Goal: ${goals.dailyWaterCompleted}/${goals.dailyWaterGoal} glasses`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
   } else {
-    console.log('Water: Goal disabled (0) - not counting');
+    console.log('  ⚪ Goal disabled (0) - not counting');
   }
   
   // Sleep
+  console.log(`\n😴 SLEEP`);
   if (goals.dailySleepGoal > 0) {
     const progress = calculateProgress(goals.dailySleepCompleted, goals.dailySleepGoal);
-    const points = progress * AMANAH_WEIGHTS.daily.sleep;
-    earnedPoints += points;
-    totalPossiblePoints += AMANAH_WEIGHTS.daily.sleep;
-    breakdown.sleep = points;
-    console.log(`Sleep: ${goals.dailySleepCompleted}/${goals.dailySleepGoal} = ${points.toFixed(1)}/${AMANAH_WEIGHTS.daily.sleep} points`);
+    totalProgress += progress;
+    enabledGoalsCount += 1;
+    breakdown.sleep = { progress, completed: goals.dailySleepCompleted, goal: goals.dailySleepGoal };
+    console.log(`  Goal: ${goals.dailySleepCompleted}/${goals.dailySleepGoal} hours`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
   } else {
-    console.log('Sleep: Goal disabled (0) - not counting');
+    console.log('  ⚪ Goal disabled (0) - not counting');
   }
   
   // ===== WEEKLY ACTIVITIES =====
   
   // Workout
+  console.log(`\n🏋️ WORKOUT`);
   if (goals.weeklyWorkoutGoal > 0) {
     const progress = calculateProgress(goals.weeklyWorkoutCompleted, goals.weeklyWorkoutGoal);
-    const points = progress * AMANAH_WEIGHTS.weekly.workout;
-    earnedPoints += points;
-    totalPossiblePoints += AMANAH_WEIGHTS.weekly.workout;
-    breakdown.workout = points;
-    console.log(`Workout: ${goals.weeklyWorkoutCompleted}/${goals.weeklyWorkoutGoal} = ${points.toFixed(1)}/${AMANAH_WEIGHTS.weekly.workout} points`);
+    totalProgress += progress;
+    enabledGoalsCount += 1;
+    breakdown.workout = { progress, completed: goals.weeklyWorkoutCompleted, goal: goals.weeklyWorkoutGoal };
+    console.log(`  Goal: ${goals.weeklyWorkoutCompleted}/${goals.weeklyWorkoutGoal} sessions`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
   } else {
-    console.log('Workout: Goal disabled (0) - not counting');
+    console.log('  ⚪ Goal disabled (0) - not counting');
   }
   
   // Mental Health
+  console.log(`\n🧘 MENTAL HEALTH`);
   if (goals.weeklyMentalHealthGoal > 0) {
     const progress = calculateProgress(goals.weeklyMentalHealthCompleted, goals.weeklyMentalHealthGoal);
-    const points = progress * AMANAH_WEIGHTS.weekly.mentalHealth;
-    earnedPoints += points;
-    totalPossiblePoints += AMANAH_WEIGHTS.weekly.mentalHealth;
-    breakdown.mentalHealth = points;
-    console.log(`Mental Health: ${goals.weeklyMentalHealthCompleted}/${goals.weeklyMentalHealthGoal} = ${points.toFixed(1)}/${AMANAH_WEIGHTS.weekly.mentalHealth} points`);
+    totalProgress += progress;
+    enabledGoalsCount += 1;
+    breakdown.mentalHealth = { progress, completed: goals.weeklyMentalHealthCompleted, goal: goals.weeklyMentalHealthGoal };
+    console.log(`  Goal: ${goals.weeklyMentalHealthCompleted}/${goals.weeklyMentalHealthGoal} sessions`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
   } else {
-    console.log('Mental Health: Goal disabled (0) - not counting');
+    console.log('  ⚪ Goal disabled (0) - not counting');
   }
   
   // Stress Management
+  console.log(`\n🧘 STRESS MANAGEMENT`);
   if (goals.weeklyStressManagementGoal > 0) {
     const progress = calculateProgress(goals.weeklyStressManagementCompleted, goals.weeklyStressManagementGoal);
-    const points = progress * AMANAH_WEIGHTS.weekly.stressManagement;
-    earnedPoints += points;
-    totalPossiblePoints += AMANAH_WEIGHTS.weekly.stressManagement;
-    breakdown.stress = points;
-    console.log(`Stress Management: ${goals.weeklyStressManagementCompleted}/${goals.weeklyStressManagementGoal} = ${points.toFixed(1)}/${AMANAH_WEIGHTS.weekly.stressManagement} points`);
+    totalProgress += progress;
+    enabledGoalsCount += 1;
+    breakdown.stress = { progress, completed: goals.weeklyStressManagementCompleted, goal: goals.weeklyStressManagementGoal };
+    console.log(`  Goal: ${goals.weeklyStressManagementCompleted}/${goals.weeklyStressManagementGoal} sessions`);
+    console.log(`  Progress: ${(progress * 100).toFixed(0)}%`);
   } else {
-    console.log('Stress Management: Goal disabled (0) - not counting');
+    console.log('  ⚪ Goal disabled (0) - not counting');
   }
   
-  // Calculate final score as percentage of enabled goals
+  // Calculate final score
   let finalScore = 0;
-  if (totalPossiblePoints > 0) {
-    finalScore = (earnedPoints / totalPossiblePoints) * 100;
+  if (enabledGoalsCount > 0) {
+    finalScore = (totalProgress / enabledGoalsCount) * 100;
   }
   
-  console.log('Amanah Score Breakdown:', breakdown);
-  console.log(`Total Amanah Score: ${earnedPoints.toFixed(1)}/${totalPossiblePoints.toFixed(1)} = ${finalScore.toFixed(1)}%`);
+  console.log('\n========================================');
+  console.log('📊 AMANAH SCORE SUMMARY');
+  console.log('========================================');
+  console.log(`Total Progress: ${totalProgress.toFixed(2)}`);
+  console.log(`Enabled Goals: ${enabledGoalsCount}`);
+  console.log(`Final Score: ${finalScore.toFixed(1)}%`);
+  console.log('========================================\n');
   
   return Math.min(100, Math.round(finalScore));
 }
