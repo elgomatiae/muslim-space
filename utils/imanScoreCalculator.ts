@@ -12,6 +12,7 @@ import { getPrayerTimes } from './prayerTimeService';
  * 4. Accurately reflect progress without giving unearned credit
  * 5. ONLY score goals that are enabled (goal > 0)
  * 6. Show 100% when all enabled goals are completed
+ * 7. Quran Pages and Verses are mutually exclusive (only count one)
  * 
  * SCORING PHILOSOPHY:
  * - Daily goals are weighted more heavily (they build consistency)
@@ -20,6 +21,7 @@ import { getPrayerTimes } from './prayerTimeService';
  * - Recovery is fast and rewarding (positive reinforcement)
  * - Disabled goals (set to 0) do NOT affect the score
  * - Completing all enabled goals = 100% for that ring
+ * - Quran: Use EITHER pages OR verses, not both (pages takes priority)
  */
 
 // ============================================================================
@@ -125,6 +127,7 @@ export interface SectionScores {
  * Within each category, activities are weighted by importance
  * 
  * IMPORTANT: These weights are only applied to ENABLED goals (goal > 0)
+ * IMPORTANT: Quran Pages and Verses are mutually exclusive (only one counts)
  */
 
 const IBADAH_WEIGHTS = {
@@ -132,9 +135,10 @@ const IBADAH_WEIGHTS = {
   daily: {
     fardPrayers: 40,      // Most important - foundation of Islam (ALWAYS ENABLED)
     sunnahPrayers: 10,    // Recommended daily practice
-    quranPages: 8,        // Daily Quran reading
-    quranVerses: 7,       // Alternative to pages
+    quranPages: 8,        // Daily Quran reading (MUTUALLY EXCLUSIVE with verses)
+    quranVerses: 7,       // Alternative to pages (MUTUALLY EXCLUSIVE with pages)
     dhikrDaily: 5,        // Daily remembrance
+    duaDaily: 7,          // Daily supplications
   },
   
   // WEEKLY ACTIVITIES (30 points total)
@@ -246,6 +250,7 @@ function calculateProgress(completed: number, goal: number): number {
  * - Calculate total possible weight from enabled goals
  * - Scale score to 0-100 based on enabled goals only
  * - If all enabled goals are completed = 100%
+ * - Quran Pages and Verses are MUTUALLY EXCLUSIVE (pages takes priority)
  */
 export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> {
   let earnedPoints = 0;
@@ -289,7 +294,7 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
     console.log('Sunnah: Goal disabled (0) - not counting');
   }
   
-  // Quran Pages
+  // Quran Pages OR Verses (MUTUALLY EXCLUSIVE - Pages takes priority)
   if (goals.quranDailyPagesGoal > 0) {
     const progress = calculateProgress(goals.quranDailyPagesCompleted, goals.quranDailyPagesGoal);
     const points = progress * IBADAH_WEIGHTS.daily.quranPages;
@@ -297,12 +302,8 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
     totalPossiblePoints += IBADAH_WEIGHTS.daily.quranPages;
     breakdown.quranPages = points;
     console.log(`Quran Pages: ${goals.quranDailyPagesCompleted}/${goals.quranDailyPagesGoal} = ${points.toFixed(1)}/${IBADAH_WEIGHTS.daily.quranPages} points`);
-  } else {
-    console.log('Quran Pages: Goal disabled (0) - not counting');
-  }
-  
-  // Quran Verses
-  if (goals.quranDailyVersesGoal > 0) {
+    console.log('Quran Verses: Disabled (using Pages instead) - not counting');
+  } else if (goals.quranDailyVersesGoal > 0) {
     const progress = calculateProgress(goals.quranDailyVersesCompleted, goals.quranDailyVersesGoal);
     const points = progress * IBADAH_WEIGHTS.daily.quranVerses;
     earnedPoints += points;
@@ -310,6 +311,7 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
     breakdown.quranVerses = points;
     console.log(`Quran Verses: ${goals.quranDailyVersesCompleted}/${goals.quranDailyVersesGoal} = ${points.toFixed(1)}/${IBADAH_WEIGHTS.daily.quranVerses} points`);
   } else {
+    console.log('Quran Pages: Goal disabled (0) - not counting');
     console.log('Quran Verses: Goal disabled (0) - not counting');
   }
   
@@ -323,6 +325,18 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
     console.log(`Dhikr Daily: ${goals.dhikrDailyCompleted}/${goals.dhikrDailyGoal} = ${points.toFixed(1)}/${IBADAH_WEIGHTS.daily.dhikrDaily} points`);
   } else {
     console.log('Dhikr Daily: Goal disabled (0) - not counting');
+  }
+  
+  // Daily Dua
+  if (goals.duaDailyGoal > 0) {
+    const progress = calculateProgress(goals.duaDailyCompleted, goals.duaDailyGoal);
+    const points = progress * IBADAH_WEIGHTS.daily.duaDaily;
+    earnedPoints += points;
+    totalPossiblePoints += IBADAH_WEIGHTS.daily.duaDaily;
+    breakdown.duaDaily = points;
+    console.log(`Dua Daily: ${goals.duaDailyCompleted}/${goals.duaDailyGoal} = ${points.toFixed(1)}/${IBADAH_WEIGHTS.daily.duaDaily} points`);
+  } else {
+    console.log('Dua Daily: Goal disabled (0) - not counting');
   }
   
   // ===== WEEKLY ACTIVITIES (OPTIONAL) =====
