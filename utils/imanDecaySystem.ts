@@ -3,14 +3,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { IbadahGoals, IlmGoals, AmanahGoals, SectionScores } from './imanScoreCalculator';
 
 /**
- * SIMPLIFIED DECAY SYSTEM
+ * DECAY SYSTEM - INTEGRATED WITH NEW MOMENTUM SYSTEM
  * 
- * This system is now integrated into the main score calculator.
- * These functions are kept for backward compatibility and activity logging.
+ * The decay logic is now built into imanScoreCalculator.ts
+ * This file provides activity recording for integration with other systems
  */
 
 // ============================================================================
-// ACTIVITY RECORDING (for activity log integration)
+// ACTIVITY RECORDING
 // ============================================================================
 
 export async function recordActivity(
@@ -24,9 +24,9 @@ export async function recordActivity(
     activityLog[section][component] = new Date().toISOString();
     await saveActivityLog(activityLog);
     
-    console.log(`Activity recorded: ${section}.${component} (+${progressAmount})`);
+    console.log(`✅ Activity recorded: ${section}.${component} (+${progressAmount})`);
   } catch (error) {
-    console.log('Error recording activity:', error);
+    console.log('❌ Error recording activity:', error);
   }
 }
 
@@ -89,8 +89,7 @@ async function saveActivityLog(log: ActivityLog): Promise<void> {
 // ============================================================================
 
 /**
- * This function is kept for backward compatibility.
- * The actual decay logic is now in imanScoreCalculator.ts
+ * @deprecated The decay logic is now integrated into imanScoreCalculator.ts
  */
 export async function updateScoresWithDecay(
   currentGoals: {
@@ -100,74 +99,73 @@ export async function updateScoresWithDecay(
   },
   freshScores: SectionScores
 ): Promise<SectionScores> {
-  // The decay is now handled in getCurrentSectionScores()
-  // This function just returns the fresh scores
+  // Decay is now handled automatically in getCurrentSectionScores()
   return freshScores;
 }
 
 /**
- * This function is kept for backward compatibility.
- * The actual decay logic is now in imanScoreCalculator.ts
+ * @deprecated The decay logic is now integrated into imanScoreCalculator.ts
  */
 export async function applyDecayToScores(): Promise<SectionScores> {
-  // The decay is now handled in getCurrentSectionScores()
-  // Return zeros as this function is deprecated
+  // Decay is now handled automatically in getCurrentSectionScores()
   return { ibadah: 0, ilm: 0, amanah: 0 };
 }
 
 /**
- * Reset decay state (for testing or manual reset)
+ * Reset momentum state (for testing or manual reset)
  */
 export async function resetDecayState(): Promise<void> {
   try {
-    const now = new Date().toISOString();
+    const now = Date.now();
     const state = {
-      lastActivityDate: now,
-      lastScoreUpdate: now,
+      lastActivityTimestamp: now,
       consecutiveDaysActive: 0,
-      consecutiveDaysInactive: 0,
+      historicalAverage: 0,
       momentumMultiplier: 1.0,
+      lastScores: { ibadah: 0, ilm: 0, amanah: 0 },
     };
     
-    await AsyncStorage.setItem('imanDecayState', JSON.stringify(state));
-    console.log('Decay state reset');
+    await AsyncStorage.setItem('imanMomentumState', JSON.stringify(state));
+    console.log('✅ Momentum state reset');
   } catch (error) {
-    console.log('Error resetting decay state:', error);
+    console.log('❌ Error resetting momentum state:', error);
   }
 }
 
 /**
- * Get decay diagnostics (for debugging)
+ * Get momentum diagnostics (for debugging)
  */
 export async function getDecayDiagnostics(): Promise<{
-  lastActivityDate: string;
+  lastActivityTimestamp: number;
   hoursSinceActivity: number;
   consecutiveDaysActive: number;
   momentumMultiplier: number;
+  historicalAverage: number;
 }> {
   try {
-    const saved = await AsyncStorage.getItem('imanDecayState');
+    const saved = await AsyncStorage.getItem('imanMomentumState');
     if (saved) {
       const state = JSON.parse(saved);
-      const now = new Date();
-      const lastActivity = new Date(state.lastActivityDate);
-      const hoursSinceActivity = (now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60);
+      const now = Date.now();
+      const hoursSinceActivity = (now - state.lastActivityTimestamp) / (1000 * 60 * 60);
       
       return {
-        lastActivityDate: state.lastActivityDate,
+        lastActivityTimestamp: state.lastActivityTimestamp,
         hoursSinceActivity,
         consecutiveDaysActive: state.consecutiveDaysActive,
         momentumMultiplier: state.momentumMultiplier,
+        historicalAverage: state.historicalAverage,
       };
     }
   } catch (error) {
-    console.log('Error getting decay diagnostics:', error);
+    console.log('Error getting momentum diagnostics:', error);
   }
   
   return {
-    lastActivityDate: new Date().toISOString(),
+    lastActivityTimestamp: Date.now(),
     hoursSinceActivity: 0,
     consecutiveDaysActive: 0,
     momentumMultiplier: 1.0,
+    historicalAverage: 0,
   };
 }
