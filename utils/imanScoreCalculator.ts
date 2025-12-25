@@ -143,7 +143,7 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
   const passedPrayers = await getPrayersThatHavePassed();
   const totalPassedPrayers = passedPrayers.length;
   
-  // Salah (55% of ʿIbādah) - INCREASED from 40%
+  // Salah (55% of ʿIbādah)
   // Only count prayers that have passed
   let completedPassedPrayers = 0;
   for (const prayerName of passedPrayers) {
@@ -163,62 +163,76 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
   totalScore += fardScore;
   totalWeight += 45;
   
+  // FIXED: Only give credit if goal is set AND progress is made
   const sunnahScore = goals.sunnahDailyGoal > 0 
     ? Math.min(1, goals.sunnahCompleted / goals.sunnahDailyGoal) * 7 // 7% for sunnah
-    : 7;
+    : 0; // NO CREDIT if goal not set
   totalScore += sunnahScore;
   totalWeight += 7;
   
   const tahajjudScore = goals.tahajjudWeeklyGoal > 0
     ? Math.min(1, goals.tahajjudCompleted / goals.tahajjudWeeklyGoal) * 3 // 3% for tahajjud
-    : 3;
+    : 0; // NO CREDIT if goal not set
   totalScore += tahajjudScore;
   totalWeight += 3;
   
-  // Quran (23% of ʿIbādah) - DECREASED from 30%
+  // Quran (23% of ʿIbādah)
   const pagesScore = goals.quranDailyPagesGoal > 0
-    ? Math.min(1, goals.quranDailyPagesCompleted / goals.quranDailyPagesGoal) * 9 // 9% - DECREASED from 12%
-    : 0;
+    ? Math.min(1, goals.quranDailyPagesCompleted / goals.quranDailyPagesGoal) * 9 // 9%
+    : 0; // NO CREDIT if goal not set
   totalScore += pagesScore;
   totalWeight += 9;
   
   const versesScore = goals.quranDailyVersesGoal > 0
-    ? Math.min(1, goals.quranDailyVersesCompleted / goals.quranDailyVersesGoal) * 8 // 8% - DECREASED from 10%
-    : 0;
+    ? Math.min(1, goals.quranDailyVersesCompleted / goals.quranDailyVersesGoal) * 8 // 8%
+    : 0; // NO CREDIT if goal not set
   totalScore += versesScore;
   totalWeight += 8;
   
   const memorizationScore = goals.quranWeeklyMemorizationGoal > 0
-    ? Math.min(1, goals.quranWeeklyMemorizationCompleted / goals.quranWeeklyMemorizationGoal) * 6 // 6% - DECREASED from 8%
-    : 6;
+    ? Math.min(1, goals.quranWeeklyMemorizationCompleted / goals.quranWeeklyMemorizationGoal) * 6 // 6%
+    : 0; // NO CREDIT if goal not set
   totalScore += memorizationScore;
   totalWeight += 6;
   
-  // Dhikr & Dua (19% of ʿIbādah) - DECREASED from 25%
+  // Dhikr & Dua (19% of ʿIbādah)
   const dhikrDailyScore = goals.dhikrDailyGoal > 0
-    ? Math.min(1, goals.dhikrDailyCompleted / goals.dhikrDailyGoal) * 8 // 8% - DECREASED from 10%
-    : 0;
+    ? Math.min(1, goals.dhikrDailyCompleted / goals.dhikrDailyGoal) * 8 // 8%
+    : 0; // NO CREDIT if goal not set
   totalScore += dhikrDailyScore;
   totalWeight += 8;
   
   const dhikrWeeklyScore = goals.dhikrWeeklyGoal > 0
-    ? Math.min(1, goals.dhikrWeeklyCompleted / goals.dhikrWeeklyGoal) * 6 // 6% - DECREASED from 8%
-    : 6;
+    ? Math.min(1, goals.dhikrWeeklyCompleted / goals.dhikrWeeklyGoal) * 6 // 6%
+    : 0; // NO CREDIT if goal not set
   totalScore += dhikrWeeklyScore;
   totalWeight += 6;
   
   const duaScore = goals.duaDailyGoal > 0
-    ? Math.min(1, goals.duaDailyCompleted / goals.duaDailyGoal) * 5 // 5% - DECREASED from 7%
-    : 5;
+    ? Math.min(1, goals.duaDailyCompleted / goals.duaDailyGoal) * 5 // 5%
+    : 0; // NO CREDIT if goal not set
   totalScore += duaScore;
   totalWeight += 5;
   
-  // Fasting (3% of ʿIbādah - optional) - DECREASED from 5%
+  // Fasting (3% of ʿIbādah - optional)
   const fastingScore = goals.fastingWeeklyGoal > 0
-    ? Math.min(1, goals.fastingWeeklyCompleted / goals.fastingWeeklyGoal) * 3 // 3% - DECREASED from 5%
-    : 3;
+    ? Math.min(1, goals.fastingWeeklyCompleted / goals.fastingWeeklyGoal) * 3 // 3%
+    : 0; // NO CREDIT if goal not set
   totalScore += fastingScore;
   totalWeight += 3;
+  
+  console.log(`Ibadah Score Breakdown:
+    - Fard Prayers: ${fardScore.toFixed(1)}% (${completedPassedPrayers}/${totalPassedPrayers})
+    - Sunnah: ${sunnahScore.toFixed(1)}% (${goals.sunnahCompleted}/${goals.sunnahDailyGoal})
+    - Tahajjud: ${tahajjudScore.toFixed(1)}% (${goals.tahajjudCompleted}/${goals.tahajjudWeeklyGoal})
+    - Quran Pages: ${pagesScore.toFixed(1)}% (${goals.quranDailyPagesCompleted}/${goals.quranDailyPagesGoal})
+    - Quran Verses: ${versesScore.toFixed(1)}% (${goals.quranDailyVersesCompleted}/${goals.quranDailyVersesGoal})
+    - Memorization: ${memorizationScore.toFixed(1)}% (${goals.quranWeeklyMemorizationCompleted}/${goals.quranWeeklyMemorizationGoal})
+    - Dhikr Daily: ${dhikrDailyScore.toFixed(1)}% (${goals.dhikrDailyCompleted}/${goals.dhikrDailyGoal})
+    - Dhikr Weekly: ${dhikrWeeklyScore.toFixed(1)}% (${goals.dhikrWeeklyCompleted}/${goals.dhikrWeeklyGoal})
+    - Dua: ${duaScore.toFixed(1)}% (${goals.duaDailyCompleted}/${goals.duaDailyGoal})
+    - Fasting: ${fastingScore.toFixed(1)}% (${goals.fastingWeeklyCompleted}/${goals.fastingWeeklyGoal})
+    TOTAL: ${totalScore.toFixed(1)}%`);
   
   return Math.min(100, totalScore);
 }
@@ -227,29 +241,37 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
 export function calculateIlmScore(goals: IlmGoals): number {
   let totalScore = 0;
   
+  // FIXED: Only give credit if goal is set AND progress is made
   // Weekly lectures (35%)
   const lecturesScore = goals.weeklyLecturesGoal > 0
     ? Math.min(1, goals.weeklyLecturesCompleted / goals.weeklyLecturesGoal) * 35
-    : 35;
+    : 0; // NO CREDIT if goal not set
   totalScore += lecturesScore;
   
   // Weekly recitations (30%)
   const recitationsScore = goals.weeklyRecitationsGoal > 0
     ? Math.min(1, goals.weeklyRecitationsCompleted / goals.weeklyRecitationsGoal) * 30
-    : 30;
+    : 0; // NO CREDIT if goal not set
   totalScore += recitationsScore;
   
   // Weekly quizzes (20%)
   const quizzesScore = goals.weeklyQuizzesGoal > 0
     ? Math.min(1, goals.weeklyQuizzesCompleted / goals.weeklyQuizzesGoal) * 20
-    : 20;
+    : 0; // NO CREDIT if goal not set
   totalScore += quizzesScore;
   
   // Weekly reflection (15%)
   const reflectionScore = goals.weeklyReflectionGoal > 0
     ? Math.min(1, goals.weeklyReflectionCompleted / goals.weeklyReflectionGoal) * 15
-    : 15;
+    : 0; // NO CREDIT if goal not set
   totalScore += reflectionScore;
+  
+  console.log(`Ilm Score Breakdown:
+    - Lectures: ${lecturesScore.toFixed(1)}% (${goals.weeklyLecturesCompleted}/${goals.weeklyLecturesGoal})
+    - Recitations: ${recitationsScore.toFixed(1)}% (${goals.weeklyRecitationsCompleted}/${goals.weeklyRecitationsGoal})
+    - Quizzes: ${quizzesScore.toFixed(1)}% (${goals.weeklyQuizzesCompleted}/${goals.weeklyQuizzesGoal})
+    - Reflection: ${reflectionScore.toFixed(1)}% (${goals.weeklyReflectionCompleted}/${goals.weeklyReflectionGoal})
+    TOTAL: ${totalScore.toFixed(1)}%`);
   
   return Math.min(100, totalScore);
 }
@@ -258,38 +280,48 @@ export function calculateIlmScore(goals: IlmGoals): number {
 export function calculateAmanahScore(goals: AmanahGoals): number {
   let totalScore = 0;
   
+  // FIXED: Only give credit if goal is set AND progress is made
   // Physical health (50%)
   const exerciseScore = goals.dailyExerciseGoal > 0
     ? Math.min(1, goals.dailyExerciseCompleted / goals.dailyExerciseGoal) * 20 // 20%
-    : 0;
+    : 0; // NO CREDIT if goal not set
   totalScore += exerciseScore;
   
   const waterScore = goals.dailyWaterGoal > 0
     ? Math.min(1, goals.dailyWaterCompleted / goals.dailyWaterGoal) * 15 // 15%
-    : 0;
+    : 0; // NO CREDIT if goal not set
   totalScore += waterScore;
   
   const workoutScore = goals.weeklyWorkoutGoal > 0
     ? Math.min(1, goals.weeklyWorkoutCompleted / goals.weeklyWorkoutGoal) * 15 // 15%
-    : 15;
+    : 0; // NO CREDIT if goal not set
   totalScore += workoutScore;
   
   // Mental health (30%)
   const mentalHealthScore = goals.weeklyMentalHealthGoal > 0
     ? Math.min(1, goals.weeklyMentalHealthCompleted / goals.weeklyMentalHealthGoal) * 20 // 20%
-    : 20;
+    : 0; // NO CREDIT if goal not set
   totalScore += mentalHealthScore;
   
   const stressScore = goals.weeklyStressManagementGoal > 0
     ? Math.min(1, goals.weeklyStressManagementCompleted / goals.weeklyStressManagementGoal) * 10 // 10%
-    : 10;
+    : 0; // NO CREDIT if goal not set
   totalScore += stressScore;
   
   // Sleep (20%)
   const sleepScore = goals.dailySleepGoal > 0
     ? Math.min(1, goals.dailySleepCompleted / goals.dailySleepGoal) * 20 // 20%
-    : 0;
+    : 0; // NO CREDIT if goal not set
   totalScore += sleepScore;
+  
+  console.log(`Amanah Score Breakdown:
+    - Exercise: ${exerciseScore.toFixed(1)}% (${goals.dailyExerciseCompleted}/${goals.dailyExerciseGoal})
+    - Water: ${waterScore.toFixed(1)}% (${goals.dailyWaterCompleted}/${goals.dailyWaterGoal})
+    - Workout: ${workoutScore.toFixed(1)}% (${goals.weeklyWorkoutCompleted}/${goals.weeklyWorkoutGoal})
+    - Mental Health: ${mentalHealthScore.toFixed(1)}% (${goals.weeklyMentalHealthCompleted}/${goals.weeklyMentalHealthGoal})
+    - Stress: ${stressScore.toFixed(1)}% (${goals.weeklyStressManagementCompleted}/${goals.weeklyStressManagementGoal})
+    - Sleep: ${sleepScore.toFixed(1)}% (${goals.dailySleepCompleted}/${goals.dailySleepGoal})
+    TOTAL: ${totalScore.toFixed(1)}%`);
   
   return Math.min(100, totalScore);
 }
@@ -545,11 +577,15 @@ export async function getCurrentSectionScores(): Promise<SectionScores> {
     // Calculate fresh scores based on current goals
     const freshScores = await calculateAllSectionScores(ibadahGoals, ilmGoals, amanahGoals);
     
+    console.log('Fresh scores calculated:', freshScores);
+    
     // Apply the new momentum-based decay system
     const finalScores = await updateScoresWithDecay(
       { ibadah: ibadahGoals, ilm: ilmGoals, amanah: amanahGoals },
       freshScores
     );
+    
+    console.log('Final scores after decay:', finalScores);
     
     // Store the final scores
     await AsyncStorage.setItem('sectionScores', JSON.stringify(finalScores));
@@ -698,6 +734,7 @@ export async function getOverallImanScore(): Promise<number> {
   const scores = await getCurrentSectionScores();
   // Weighted average: Ibadah 50%, Ilm 25%, Amanah 25%
   const weightedScore = (scores.ibadah * 0.5) + (scores.ilm * 0.25) + (scores.amanah * 0.25);
+  console.log(`Overall Iman Score: ${Math.round(weightedScore)}% (Ibadah: ${scores.ibadah}%, Ilm: ${scores.ilm}%, Amanah: ${scores.amanah}%)`);
   return Math.round(weightedScore);
 }
 
