@@ -19,7 +19,6 @@ import {
   removeMemberFromCommunity,
   updateAllMemberScores,
   LocalCommunity,
-  CommunityMember,
 } from '@/utils/localCommunityStorage';
 
 export default function CommunityDetailScreen() {
@@ -31,18 +30,28 @@ export default function CommunityDetailScreen() {
   const [userRole, setUserRole] = useState<'admin' | 'member'>('member');
 
   const loadCommunityData = useCallback(async () => {
-    if (!communityId || !user) return;
+    if (!communityId || !user) {
+      console.log('ℹ️ Missing communityId or user');
+      setLoading(false);
+      return;
+    }
 
     try {
-      console.log('📥 Loading community data...');
+      console.log('📥 Loading community data for:', communityId);
       
       // Update all member scores
-      await updateAllMemberScores(communityId);
+      try {
+        await updateAllMemberScores(communityId);
+        console.log('✅ Member scores updated');
+      } catch (error) {
+        console.log('ℹ️ Member score update skipped:', error);
+      }
       
       // Load community
       const communityData = await getCommunity(communityId);
       
       if (!communityData) {
+        console.log('❌ Community not found');
         Alert.alert('Error', 'Community not found');
         router.back();
         return;
@@ -54,11 +63,12 @@ export default function CommunityDetailScreen() {
       const userMember = communityData.members.find(m => m.userId === user.id);
       if (userMember) {
         setUserRole(userMember.role);
+        console.log(`✅ User role: ${userMember.role}`);
       }
       
       console.log(`✅ Successfully loaded community: ${communityData.name}`);
     } catch (error) {
-      console.error('❌ Failed to load community data:', error);
+      console.error('❌ Error loading community data:', error);
       Alert.alert('Error', 'Failed to load community data. Please try again.');
     } finally {
       setLoading(false);
@@ -71,6 +81,7 @@ export default function CommunityDetailScreen() {
   }, [loadCommunityData]);
 
   const onRefresh = useCallback(() => {
+    console.log('🔄 Refreshing community data...');
     setRefreshing(true);
     loadCommunityData();
   }, [loadCommunityData]);
@@ -92,6 +103,7 @@ export default function CommunityDetailScreen() {
               await removeMemberFromCommunity(communityId, user.id);
               Alert.alert('Success', 'You have left the community');
               router.back();
+              console.log('✅ Successfully left community');
             } catch (error) {
               console.error('❌ Failed to leave community:', error);
               Alert.alert('Error', 'Failed to leave community. Please try again.');
@@ -119,6 +131,7 @@ export default function CommunityDetailScreen() {
               await removeMemberFromCommunity(communityId, memberId);
               Alert.alert('Success', 'Member removed successfully');
               loadCommunityData();
+              console.log('✅ Member removed successfully');
             } catch (error) {
               console.error('❌ Failed to remove member:', error);
               Alert.alert('Error', 'Failed to remove member. Please try again.');
@@ -146,6 +159,7 @@ export default function CommunityDetailScreen() {
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading community...</Text>
         </View>
       </View>
     );
@@ -308,6 +322,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: spacing.md,
+  },
+  loadingText: {
+    ...typography.body,
+    color: colors.textSecondary,
   },
   scrollView: {
     flex: 1,

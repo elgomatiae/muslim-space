@@ -82,11 +82,29 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [updateTrigger, setUpdateTrigger] = useState(0);
 
+  // Silent Supabase sync - never throws errors
+  const silentSupabaseSync = useCallback(async (userId: string, direction: 'to' | 'from' | 'init') => {
+    try {
+      if (direction === 'init') {
+        await initializeImanTrackerForUser(userId);
+      } else if (direction === 'from') {
+        await syncSupabaseToLocal(userId);
+      } else {
+        await syncLocalToSupabase(userId);
+      }
+    } catch (error) {
+      // Silently fail - Supabase sync is optional
+      console.log('Supabase sync skipped (optional feature)');
+    }
+  }, []);
+
   // Update community scores when Iman score changes
   const updateCommunityScores = useCallback(async () => {
     if (!user) return;
     
     try {
+      console.log('📊 Updating community scores...');
+      
       // Update user's Iman score in local storage
       await updateUserImanScore(user.id);
       
@@ -96,25 +114,30 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
         await updateAllMemberScores(community.id);
       }
       
-      console.log('✅ Community scores updated');
+      console.log('✅ Community scores updated successfully');
     } catch (error) {
-      console.error('❌ Error updating community scores:', error);
+      console.log('ℹ️ Community score update skipped:', error);
       // Don't throw - this is not critical
     }
   }, [user]);
 
   const loadAllData = useCallback(async () => {
     try {
-      console.log('ImanTrackerContext: Loading all data...');
+      console.log('📥 ImanTrackerContext: Loading all data...');
       
       await checkAndHandleResets();
 
       if (user) {
-        await initializeImanTrackerForUser(user.id);
-        await syncSupabaseToLocal(user.id);
+        // Silent Supabase sync - won't cause errors
+        await silentSupabaseSync(user.id, 'init');
+        await silentSupabaseSync(user.id, 'from');
         
         // Check for new achievements
-        await checkAndUnlockAchievements(user.id);
+        try {
+          await checkAndUnlockAchievements(user.id);
+        } catch (error) {
+          console.log('ℹ️ Achievement check skipped');
+        }
       }
       
       await updateSectionScores();
@@ -147,20 +170,20 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
       // Update community scores
       await updateCommunityScores();
       
-      console.log('ImanTrackerContext: Data loaded successfully');
+      console.log('✅ ImanTrackerContext: Data loaded successfully');
     } catch (error) {
-      console.error('ImanTrackerContext: Error loading data:', error);
+      console.error('❌ ImanTrackerContext: Error loading data:', error);
     } finally {
       setLoading(false);
     }
-  }, [user, updateCommunityScores]);
+  }, [user, updateCommunityScores, silentSupabaseSync]);
 
   const refreshData = useCallback(async () => {
     await loadAllData();
   }, [loadAllData]);
 
   const updateIbadahGoals = useCallback(async (goals: IbadahGoals) => {
-    console.log('ImanTrackerContext: Updating ibadah goals...');
+    console.log('📝 ImanTrackerContext: Updating ibadah goals...');
     setIbadahGoals(goals);
     await saveIbadahGoals(goals);
     await updateSectionScores();
@@ -179,19 +202,25 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     setQuranGoals(quran);
     
     if (user) {
-      await syncLocalToSupabase(user.id);
-      // INSTANT achievement check - this ensures badges update immediately
-      console.log('ImanTrackerContext: Checking achievements after ibadah update...');
-      await checkAndUnlockAchievements(user.id);
+      await silentSupabaseSync(user.id, 'to');
+      
+      // INSTANT achievement check
+      try {
+        console.log('🏆 ImanTrackerContext: Checking achievements after ibadah update...');
+        await checkAndUnlockAchievements(user.id);
+      } catch (error) {
+        console.log('ℹ️ Achievement check skipped');
+      }
+      
       // Update community scores
       await updateCommunityScores();
     }
     
-    console.log('ImanTrackerContext: Ibadah goals updated');
-  }, [user, updateCommunityScores]);
+    console.log('✅ ImanTrackerContext: Ibadah goals updated');
+  }, [user, updateCommunityScores, silentSupabaseSync]);
 
   const updateIlmGoals = useCallback(async (goals: IlmGoals) => {
-    console.log('ImanTrackerContext: Updating ilm goals...');
+    console.log('📝 ImanTrackerContext: Updating ilm goals...');
     setIlmGoals(goals);
     await saveIlmGoals(goals);
     await updateSectionScores();
@@ -202,19 +231,25 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     setOverallScore(overall);
     
     if (user) {
-      await syncLocalToSupabase(user.id);
+      await silentSupabaseSync(user.id, 'to');
+      
       // INSTANT achievement check
-      console.log('ImanTrackerContext: Checking achievements after ilm update...');
-      await checkAndUnlockAchievements(user.id);
+      try {
+        console.log('🏆 ImanTrackerContext: Checking achievements after ilm update...');
+        await checkAndUnlockAchievements(user.id);
+      } catch (error) {
+        console.log('ℹ️ Achievement check skipped');
+      }
+      
       // Update community scores
       await updateCommunityScores();
     }
     
-    console.log('ImanTrackerContext: Ilm goals updated');
-  }, [user, updateCommunityScores]);
+    console.log('✅ ImanTrackerContext: Ilm goals updated');
+  }, [user, updateCommunityScores, silentSupabaseSync]);
 
   const updateAmanahGoals = useCallback(async (goals: AmanahGoals) => {
-    console.log('ImanTrackerContext: Updating amanah goals...');
+    console.log('📝 ImanTrackerContext: Updating amanah goals...');
     setAmanahGoals(goals);
     await saveAmanahGoals(goals);
     await updateSectionScores();
@@ -225,19 +260,25 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     setOverallScore(overall);
     
     if (user) {
-      await syncLocalToSupabase(user.id);
+      await silentSupabaseSync(user.id, 'to');
+      
       // INSTANT achievement check
-      console.log('ImanTrackerContext: Checking achievements after amanah update...');
-      await checkAndUnlockAchievements(user.id);
+      try {
+        console.log('🏆 ImanTrackerContext: Checking achievements after amanah update...');
+        await checkAndUnlockAchievements(user.id);
+      } catch (error) {
+        console.log('ℹ️ Achievement check skipped');
+      }
+      
       // Update community scores
       await updateCommunityScores();
     }
     
-    console.log('ImanTrackerContext: Amanah goals updated');
-  }, [user, updateCommunityScores]);
+    console.log('✅ ImanTrackerContext: Amanah goals updated');
+  }, [user, updateCommunityScores, silentSupabaseSync]);
 
   const updatePrayerGoals = useCallback(async (goals: PrayerGoals) => {
-    console.log('ImanTrackerContext: Updating prayer goals...');
+    console.log('📝 ImanTrackerContext: Updating prayer goals...');
     setPrayerGoals(goals);
     await savePrayerGoals(goals);
     await updateSectionScores();
@@ -252,19 +293,25 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     setIbadahGoals(ibadah);
     
     if (user) {
-      await syncLocalToSupabase(user.id);
+      await silentSupabaseSync(user.id, 'to');
+      
       // INSTANT achievement check
-      console.log('ImanTrackerContext: Checking achievements after prayer update...');
-      await checkAndUnlockAchievements(user.id);
+      try {
+        console.log('🏆 ImanTrackerContext: Checking achievements after prayer update...');
+        await checkAndUnlockAchievements(user.id);
+      } catch (error) {
+        console.log('ℹ️ Achievement check skipped');
+      }
+      
       // Update community scores
       await updateCommunityScores();
     }
     
-    console.log('ImanTrackerContext: Prayer goals updated');
-  }, [user, updateCommunityScores]);
+    console.log('✅ ImanTrackerContext: Prayer goals updated');
+  }, [user, updateCommunityScores, silentSupabaseSync]);
 
   const updateDhikrGoals = useCallback(async (goals: DhikrGoals) => {
-    console.log('ImanTrackerContext: Updating dhikr goals...');
+    console.log('📝 ImanTrackerContext: Updating dhikr goals...');
     setDhikrGoals(goals);
     await saveDhikrGoals(goals);
     await updateSectionScores();
@@ -279,19 +326,25 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     setIbadahGoals(ibadah);
     
     if (user) {
-      await syncLocalToSupabase(user.id);
+      await silentSupabaseSync(user.id, 'to');
+      
       // INSTANT achievement check
-      console.log('ImanTrackerContext: Checking achievements after dhikr update...');
-      await checkAndUnlockAchievements(user.id);
+      try {
+        console.log('🏆 ImanTrackerContext: Checking achievements after dhikr update...');
+        await checkAndUnlockAchievements(user.id);
+      } catch (error) {
+        console.log('ℹ️ Achievement check skipped');
+      }
+      
       // Update community scores
       await updateCommunityScores();
     }
     
-    console.log('ImanTrackerContext: Dhikr goals updated');
-  }, [user, updateCommunityScores]);
+    console.log('✅ ImanTrackerContext: Dhikr goals updated');
+  }, [user, updateCommunityScores, silentSupabaseSync]);
 
   const updateQuranGoals = useCallback(async (goals: QuranGoals) => {
-    console.log('ImanTrackerContext: Updating quran goals...');
+    console.log('📝 ImanTrackerContext: Updating quran goals...');
     setQuranGoals(goals);
     await saveQuranGoals(goals);
     await updateSectionScores();
@@ -306,19 +359,25 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     setIbadahGoals(ibadah);
     
     if (user) {
-      await syncLocalToSupabase(user.id);
+      await silentSupabaseSync(user.id, 'to');
+      
       // INSTANT achievement check
-      console.log('ImanTrackerContext: Checking achievements after quran update...');
-      await checkAndUnlockAchievements(user.id);
+      try {
+        console.log('🏆 ImanTrackerContext: Checking achievements after quran update...');
+        await checkAndUnlockAchievements(user.id);
+      } catch (error) {
+        console.log('ℹ️ Achievement check skipped');
+      }
+      
       // Update community scores
       await updateCommunityScores();
     }
     
-    console.log('ImanTrackerContext: Quran goals updated');
-  }, [user, updateCommunityScores]);
+    console.log('✅ ImanTrackerContext: Quran goals updated');
+  }, [user, updateCommunityScores, silentSupabaseSync]);
 
   const forceUpdate = useCallback(() => {
-    console.log('ImanTrackerContext: Force update triggered');
+    console.log('🔄 ImanTrackerContext: Force update triggered');
     setUpdateTrigger(prev => prev + 1);
   }, []);
 
@@ -357,7 +416,12 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
       
       // Check for new achievements periodically
       if (user) {
-        await checkAndUnlockAchievements(user.id);
+        try {
+          await checkAndUnlockAchievements(user.id);
+        } catch (error) {
+          console.log('ℹ️ Achievement check skipped');
+        }
+        
         // Update community scores periodically
         await updateCommunityScores();
       }
@@ -370,11 +434,11 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     if (!user) return;
 
     const syncInterval = setInterval(async () => {
-      await syncLocalToSupabase(user.id);
+      await silentSupabaseSync(user.id, 'to');
     }, 300000);
     
     return () => clearInterval(syncInterval);
-  }, [user]);
+  }, [user, silentSupabaseSync]);
 
   const value: ImanTrackerContextType = {
     ibadahGoals,

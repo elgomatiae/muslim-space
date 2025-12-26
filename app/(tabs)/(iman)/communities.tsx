@@ -38,6 +38,7 @@ export default function CommunitiesScreen() {
 
   const loadCommunities = useCallback(async () => {
     if (!user) {
+      console.log('ℹ️ No user logged in, skipping community load');
       setCommunities([]);
       setLoading(false);
       setRefreshing(false);
@@ -45,10 +46,15 @@ export default function CommunitiesScreen() {
     }
 
     try {
-      console.log('📥 Loading communities...');
+      console.log('📥 Loading communities for user:', user.id);
       
       // Update user's Iman score
-      await updateUserImanScore(user.id);
+      try {
+        await updateUserImanScore(user.id);
+        console.log('✅ User Iman score updated');
+      } catch (error) {
+        console.log('ℹ️ Iman score update skipped:', error);
+      }
       
       // Load communities
       const userCommunities = await getUserCommunities(user.id);
@@ -56,8 +62,10 @@ export default function CommunitiesScreen() {
       
       console.log(`✅ Successfully loaded ${userCommunities.length} communities`);
     } catch (error) {
-      console.error('❌ Failed to load communities:', error);
-      Alert.alert('Error', 'Failed to load communities. Please try again.');
+      console.error('❌ Error loading communities:', error);
+      // Don't show alert - just log the error
+      console.log('ℹ️ Communities will be empty until created');
+      setCommunities([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -65,30 +73,41 @@ export default function CommunitiesScreen() {
   }, [user]);
 
   const fetchPendingInvites = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      console.log('ℹ️ No user logged in, skipping invites fetch');
+      return;
+    }
 
     try {
-      console.log('📥 Fetching pending invites...');
+      console.log('📥 Fetching pending invites for user:', user.id);
       const count = await getPendingInvitesCount(user.id);
       setPendingInvitesCount(count);
       console.log(`✅ Successfully fetched ${count} pending invites`);
     } catch (error) {
-      console.error('❌ Failed to fetch pending invites:', error);
-      // Don't show alert for this - it's not critical
+      console.log('ℹ️ Error fetching pending invites (non-critical):', error);
+      setPendingInvitesCount(0);
     }
   }, [user]);
 
   useEffect(() => {
     const initializeUser = async () => {
       if (user) {
-        // Ensure user profile exists
-        const profile = await getUserProfile();
-        if (!profile) {
-          await saveUserProfile({
-            userId: user.id,
-            username: user.email?.split('@')[0] || 'User',
-            email: user.email || '',
-          });
+        try {
+          // Ensure user profile exists
+          const profile = await getUserProfile();
+          if (!profile) {
+            console.log('📝 Creating user profile...');
+            await saveUserProfile({
+              userId: user.id,
+              username: user.email?.split('@')[0] || 'User',
+              email: user.email || '',
+            });
+            console.log('✅ User profile created');
+          } else {
+            console.log('✅ User profile exists');
+          }
+        } catch (error) {
+          console.log('ℹ️ Error initializing user profile:', error);
         }
       }
     };
@@ -99,6 +118,7 @@ export default function CommunitiesScreen() {
   }, [loadCommunities, fetchPendingInvites, user]);
 
   const onRefresh = useCallback(() => {
+    console.log('🔄 Refreshing communities...');
     setRefreshing(true);
     loadCommunities();
     fetchPendingInvites();
@@ -117,7 +137,7 @@ export default function CommunitiesScreen() {
 
     setCreating(true);
     try {
-      console.log('🏗️ Creating community...');
+      console.log('🏗️ Creating community:', newCommunityName);
       
       const profile = await getUserProfile();
       const username = profile?.username || user.email?.split('@')[0] || 'User';
@@ -134,6 +154,8 @@ export default function CommunitiesScreen() {
       setNewCommunityDescription('');
       setShowCreateModal(false);
       loadCommunities();
+      
+      console.log('✅ Community created successfully');
     } catch (error: any) {
       console.error('❌ Failed to create community:', error);
       Alert.alert('Error', error.message || 'Failed to create community. Please try again.');
@@ -159,6 +181,7 @@ export default function CommunitiesScreen() {
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading communities...</Text>
         </View>
       </View>
     );
@@ -385,6 +408,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: spacing.md,
+  },
+  loadingText: {
+    ...typography.body,
+    color: colors.textSecondary,
   },
   scrollView: {
     flex: 1,

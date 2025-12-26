@@ -29,15 +29,22 @@ export default function InvitesInboxScreen() {
   const [processingInviteId, setProcessingInviteId] = useState<string | null>(null);
 
   const fetchInvites = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      console.log('ℹ️ No user logged in, skipping invites fetch');
+      setInvites([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
 
     try {
+      console.log('📥 Fetching invites for user:', user.id);
       const userInvites = await getUserInvites(user.id);
       setInvites(userInvites);
       console.log(`✅ Loaded ${userInvites.length} invites`);
     } catch (error) {
-      console.error('Error fetching invites:', error);
-      Alert.alert('Error', 'Failed to load invites');
+      console.log('ℹ️ Error fetching invites (non-critical):', error);
+      setInvites([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -49,6 +56,7 @@ export default function InvitesInboxScreen() {
   }, [fetchInvites]);
 
   const onRefresh = useCallback(() => {
+    console.log('🔄 Refreshing invites...');
     setRefreshing(true);
     fetchInvites();
   }, [fetchInvites]);
@@ -58,11 +66,13 @@ export default function InvitesInboxScreen() {
 
     setProcessingInviteId(invite.id);
     try {
+      console.log('✅ Accepting invite:', invite.id);
       await acceptInvite(invite.id);
       Alert.alert('Success', 'You have joined the community!');
       fetchInvites();
+      console.log('✅ Invite accepted successfully');
     } catch (error: any) {
-      console.error('Error accepting invite:', error);
+      console.error('❌ Error accepting invite:', error);
       Alert.alert('Error', error.message || 'Failed to accept invite');
     } finally {
       setProcessingInviteId(null);
@@ -72,11 +82,13 @@ export default function InvitesInboxScreen() {
   const handleDeclineInvite = async (invite: CommunityInvite) => {
     setProcessingInviteId(invite.id);
     try {
+      console.log('❌ Declining invite:', invite.id);
       await declineInvite(invite.id);
       Alert.alert('Success', 'Invite declined');
       fetchInvites();
+      console.log('✅ Invite declined successfully');
     } catch (error: any) {
-      console.error('Error declining invite:', error);
+      console.error('❌ Error declining invite:', error);
       Alert.alert('Error', error.message || 'Failed to decline invite');
     } finally {
       setProcessingInviteId(null);
@@ -100,6 +112,7 @@ export default function InvitesInboxScreen() {
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading invites...</Text>
         </View>
       </View>
     );
@@ -288,6 +301,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: spacing.md,
+  },
+  loadingText: {
+    ...typography.body,
+    color: colors.textSecondary,
   },
   scrollView: {
     flex: 1,
