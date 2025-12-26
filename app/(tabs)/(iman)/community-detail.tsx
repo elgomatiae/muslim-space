@@ -16,107 +16,118 @@ import { useAuth } from '@/contexts/AuthContext';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 
+interface Community {
+  id: string;
+  name: string;
+  description: string | null;
+  created_by: string;
+}
+
 interface Member {
   user_id: string;
   username: string;
-  overall_score: number;
-  ibadah_score: number;
-  ilm_score: number;
-  amanah_score: number;
-  rank: number;
+  role: 'admin' | 'member';
   hide_score: boolean;
-  is_admin: boolean;
+  iman_score: number;
 }
 
-type LeaderboardPeriod = 'today' | 'week';
-
 export default function CommunityDetailScreen() {
-  const { communityId, communityName } = useLocalSearchParams<{
-    communityId: string;
-    communityName: string;
-  }>();
+  const { communityId } = useLocalSearchParams<{ communityId: string }>();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'members' | 'leaderboard'>('leaderboard');
-  const [leaderboardPeriod, setLeaderboardPeriod] = useState<LeaderboardPeriod>('today');
+  const [community, setCommunity] = useState<Community | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState<'admin' | 'member'>('member');
 
-  const fetchMembers = useCallback(async () => {
+  const loadCommunityData = useCallback(async () => {
     if (!communityId || !user) return;
 
     try {
-      // Check if current user is admin
+      // Get community details
+      const { data: communityData, error: communityError } = await supabase
+        .from('communities')
+        .select('id, name, description, created_by')
+        .eq('id', communityId)
+        .single();
+
+      if (communityError) throw communityError;
+      setCommunity(communityData);
+
+      // Get user's role
       const { data: membershipData, error: membershipError } = await supabase
         .from('community_members')
-        .select('is_admin')
+        .select('role')
         .eq('community_id', communityId)
         .eq('user_id', user.id)
         .single();
 
       if (membershipError) throw membershipError;
-      setIsAdmin(membershipData?.is_admin || false);
+      setUserRole(membershipData.role);
 
-      // Fetch members with their admin status
+      // Get all members
       const { data: membersData, error: membersError } = await supabase
         .from('community_members')
         .select(`
           user_id,
+          role,
           hide_score,
-          is_admin,
-          user_profiles!inner (
-            username
-          )
+          user_profiles!inner (username)
         `)
         .eq('community_id', communityId);
 
       if (membersError) throw membersError;
 
-      // Fetch leaderboard data
-      const functionName = leaderboardPeriod === 'today' 
-        ? 'get_community_leaderboard_today'
-        : 'get_community_leaderboard_week';
+      // Get Iman scores from iman_tracker_goals
+      const userIds = membersData?.map(m => m.user_id) || [];
+      const { data: scoresData, error: scoresError } = await supabase
+        .from('iman_tracker_goals')
+        .select('user_id, ibadah_score, ilm_score, amanah_score')
+        .in('user_id', userIds);
 
-      const { data: leaderboardData, error: leaderboardError } = await supabase
-        .rpc(functionName, { community_id_param: communityId });
+      if (scoresError) throw scoresError;
 
-      if (leaderboardError) throw leaderboardError;
+      // Calculate overall scores
+      const scoresMap = new Map(
+        scoresData?.map(s => [
+          s.user_id,
+          Math.round(
+            (Number(s.ibadah_score) || 0) * 0.5 +
+            (Number(s.ilm_score) || 0) * 0.3 +
+            (Number(s.amanah_score) || 0) * 0.2
+          ),
+        ]) || []
+      );
 
-      // Merge data
-      const formattedMembers: Member[] = leaderboardData?.map((lb: any) => {
-        const memberData = membersData?.find(m => m.user_id === lb.user_id);
-        return {
-          user_id: lb.user_id,
-          username: lb.username || 'Unknown',
-          overall_score: lb.overall_score,
-          ibadah_score: lb.ibadah_score,
-          ilm_score: lb.ilm_score,
-          amanah_score: lb.amanah_score,
-          rank: lb.rank,
-          hide_score: lb.hide_score,
-          is_admin: memberData?.is_admin || false,
-        };
-      }) || [];
+      const formattedMembers: Member[] = membersData?.map(m => ({
+        user_id: m.user_id,
+        username: (m.user_profiles as any)?.username || 'Unknown',
+        role: m.role,
+        hide_score: m.hide_score,
+        iman_score: scoresMap.get(m.user_id) || 0,
+      })) || [];
+
+      // Sort by score (highest first)
+      formattedMembers.sort((a, b) => b.iman_score - a.iman_score);
 
       setMembers(formattedMembers);
     } catch (error) {
-      console.error('Error fetching members:', error);
+      console.error('Error loading community data:', error);
       Alert.alert('Error', 'Failed to load community data');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [communityId, user, leaderboardPeriod]);
+  }, [communityId, user]);
 
   useEffect(() => {
-    fetchMembers();
-  }, [fetchMembers]);
+    loadCommunityData();
+  }, [loadCommunityData]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchMembers();
-  }, [fetchMembers]);
+    loadCommunityData();
+  }, [loadCommunityData]);
 
   const handleLeaveCommunity = () => {
     Alert.alert(
@@ -169,7 +180,7 @@ export default function CommunityDetailScreen() {
               if (error) throw error;
 
               Alert.alert('Success', 'Member removed successfully');
-              fetchMembers();
+              loadCommunityData();
             } catch (error) {
               console.error('Error removing member:', error);
               Alert.alert('Error', 'Failed to remove member');
@@ -180,122 +191,7 @@ export default function CommunityDetailScreen() {
     );
   };
 
-  const renderMemberItem = (member: Member, index: number) => {
-    const isCurrentUser = member.user_id === user?.id;
-    const showScore = !member.hide_score || isCurrentUser;
-
-    return (
-      <React.Fragment key={index}>
-        <View style={styles.memberCard}>
-          <View style={styles.memberInfo}>
-            <View style={styles.memberAvatar}>
-              <IconSymbol
-                ios_icon_name="person.fill"
-                android_material_icon_name="person"
-                size={24}
-                color={colors.primary}
-              />
-            </View>
-            <View style={styles.memberDetails}>
-              <View style={styles.memberNameRow}>
-                <Text style={styles.memberName}>{member.username}</Text>
-                {member.is_admin && (
-                  <View style={styles.adminBadge}>
-                    <Text style={styles.adminBadgeText}>Admin</Text>
-                  </View>
-                )}
-                {isCurrentUser && (
-                  <View style={styles.youBadge}>
-                    <Text style={styles.youBadgeText}>You</Text>
-                  </View>
-                )}
-              </View>
-              {showScore ? (
-                <Text style={styles.memberScore}>
-                  Iman Score: {member.overall_score}
-                </Text>
-              ) : (
-                <Text style={styles.memberScoreHidden}>Score Hidden</Text>
-              )}
-            </View>
-          </View>
-          {isAdmin && !isCurrentUser && (
-            <TouchableOpacity
-              style={styles.removeButton}
-              onPress={() => handleRemoveMember(member.user_id, member.username)}
-            >
-              <IconSymbol
-                ios_icon_name="xmark.circle.fill"
-                android_material_icon_name="cancel"
-                size={24}
-                color={colors.error}
-              />
-            </TouchableOpacity>
-          )}
-        </View>
-      </React.Fragment>
-    );
-  };
-
-  const renderLeaderboardItem = (member: Member, index: number) => {
-    const isCurrentUser = member.user_id === user?.id;
-    const showScore = !member.hide_score || isCurrentUser;
-    const isTopThree = index < 3;
-
-    return (
-      <React.Fragment key={index}>
-        <View
-          style={[
-            styles.leaderboardCard,
-            isTopThree && styles.leaderboardCardTopThree,
-            isCurrentUser && styles.leaderboardCardCurrentUser,
-          ]}
-        >
-          <View style={styles.rankContainer}>
-            {isTopThree ? (
-              <View style={[styles.rankBadge, styles[`rankBadge${index + 1}` as keyof typeof styles]]}>
-                <Text style={styles.rankBadgeText}>{index + 1}</Text>
-              </View>
-            ) : (
-              <Text style={styles.rankText}>{member.rank}</Text>
-            )}
-          </View>
-          <View style={styles.leaderboardInfo}>
-            <View style={styles.leaderboardNameRow}>
-              <Text style={styles.leaderboardName}>{member.username}</Text>
-              {isCurrentUser && (
-                <View style={styles.youBadge}>
-                  <Text style={styles.youBadgeText}>You</Text>
-                </View>
-              )}
-            </View>
-            {showScore ? (
-              <React.Fragment>
-                <Text style={styles.leaderboardScore}>
-                  Overall: {member.overall_score}
-                </Text>
-                <View style={styles.scoreBreakdown}>
-                  <Text style={styles.scoreBreakdownText}>
-                    Ibadah: {member.ibadah_score}
-                  </Text>
-                  <Text style={styles.scoreBreakdownText}>
-                    Ilm: {member.ilm_score}
-                  </Text>
-                  <Text style={styles.scoreBreakdownText}>
-                    Amanah: {member.amanah_score}
-                  </Text>
-                </View>
-              </React.Fragment>
-            ) : (
-              <Text style={styles.memberScoreHidden}>Score Hidden</Text>
-            )}
-          </View>
-        </View>
-      </React.Fragment>
-    );
-  };
-
-  if (loading) {
+  if (loading || !community) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
@@ -307,9 +203,7 @@ export default function CommunityDetailScreen() {
               color={colors.text}
             />
           </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {communityName}
-          </Text>
+          <Text style={styles.headerTitle}>Community</Text>
           <View style={styles.headerRight} />
         </View>
         <View style={styles.loadingContainer}>
@@ -321,7 +215,6 @@ export default function CommunityDetailScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol
@@ -332,117 +225,105 @@ export default function CommunityDetailScreen() {
           />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          {communityName}
+          {community.name}
         </Text>
         <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.inviteButton}
-            onPress={() =>
-              router.push({
-                pathname: '/(tabs)/(iman)/invite-user',
-                params: { communityId, communityName },
-              })
-            }
-          >
-            <IconSymbol
-              ios_icon_name="person.badge.plus"
-              android_material_icon_name="person_add"
-              size={24}
-              color={colors.primary}
-            />
-          </TouchableOpacity>
+          {userRole === 'admin' && (
+            <TouchableOpacity
+              style={styles.inviteButton}
+              onPress={() =>
+                router.push({
+                  pathname: '/(tabs)/(iman)/invite-user',
+                  params: { communityId, communityName: community.name },
+                })
+              }
+            >
+              <IconSymbol
+                ios_icon_name="person.badge.plus"
+                android_material_icon_name="person_add"
+                size={24}
+                color={colors.primary}
+              />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
-
-      {/* Tabs */}
-      <View style={styles.tabs}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'leaderboard' && styles.tabActive]}
-          onPress={() => setActiveTab('leaderboard')}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'leaderboard' && styles.tabTextActive,
-            ]}
-          >
-            Leaderboard
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'members' && styles.tabActive]}
-          onPress={() => setActiveTab('members')}
-        >
-          <Text
-            style={[styles.tabText, activeTab === 'members' && styles.tabTextActive]}
-          >
-            Members
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Period Selector (for leaderboard) */}
-      {activeTab === 'leaderboard' && (
-        <View style={styles.periodSelector}>
-          <TouchableOpacity
-            style={[
-              styles.periodButton,
-              leaderboardPeriod === 'today' && styles.periodButtonActive,
-            ]}
-            onPress={() => setLeaderboardPeriod('today')}
-          >
-            <Text
-              style={[
-                styles.periodButtonText,
-                leaderboardPeriod === 'today' && styles.periodButtonTextActive,
-              ]}
-            >
-              Today
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.periodButton,
-              leaderboardPeriod === 'week' && styles.periodButtonActive,
-            ]}
-            onPress={() => setLeaderboardPeriod('week')}
-          >
-            <Text
-              style={[
-                styles.periodButtonText,
-                leaderboardPeriod === 'week' && styles.periodButtonTextActive,
-              ]}
-            >
-              This Week
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {activeTab === 'leaderboard' ? (
-          <View style={styles.leaderboardList}>
-            {members.map((member, index) => renderLeaderboardItem(member, index))}
-          </View>
-        ) : (
-          <View style={styles.membersList}>
-            {members.map((member, index) => renderMemberItem(member, index))}
+        {community.description && (
+          <View style={styles.descriptionCard}>
+            <Text style={styles.descriptionText}>{community.description}</Text>
           </View>
         )}
+
+        <Text style={styles.sectionTitle}>Members ({members.length})</Text>
+
+        <View style={styles.membersList}>
+          {members.map((member, index) => {
+            const isCurrentUser = member.user_id === user?.id;
+            const showScore = !member.hide_score || isCurrentUser;
+            const rank = index + 1;
+
+            return (
+              <React.Fragment key={index}>
+                <View style={styles.memberCard}>
+                  <View style={styles.rankContainer}>
+                    <Text style={styles.rankText}>{rank}</Text>
+                  </View>
+                  <View style={styles.memberAvatar}>
+                    <IconSymbol
+                      ios_icon_name="person.fill"
+                      android_material_icon_name="person"
+                      size={24}
+                      color={colors.primary}
+                    />
+                  </View>
+                  <View style={styles.memberInfo}>
+                    <View style={styles.memberNameRow}>
+                      <Text style={styles.memberName}>{member.username}</Text>
+                      {member.role === 'admin' && (
+                        <View style={styles.adminBadge}>
+                          <Text style={styles.adminBadgeText}>Admin</Text>
+                        </View>
+                      )}
+                      {isCurrentUser && (
+                        <View style={styles.youBadge}>
+                          <Text style={styles.youBadgeText}>You</Text>
+                        </View>
+                      )}
+                    </View>
+                    {showScore ? (
+                      <Text style={styles.memberScore}>Iman Score: {member.iman_score}</Text>
+                    ) : (
+                      <Text style={styles.memberScoreHidden}>Score Hidden</Text>
+                    )}
+                  </View>
+                  {userRole === 'admin' && !isCurrentUser && (
+                    <TouchableOpacity
+                      style={styles.removeButton}
+                      onPress={() => handleRemoveMember(member.user_id, member.username)}
+                    >
+                      <IconSymbol
+                        ios_icon_name="xmark.circle.fill"
+                        android_material_icon_name="cancel"
+                        size={24}
+                        color={colors.error}
+                      />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </React.Fragment>
+            );
+          })}
+        </View>
       </ScrollView>
 
-      {/* Leave Community Button */}
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.leaveButton}
-          onPress={handleLeaveCommunity}
-        >
+        <TouchableOpacity style={styles.leaveButton} onPress={handleLeaveCommunity}>
           <Text style={styles.leaveButtonText}>Leave Community</Text>
         </TouchableOpacity>
       </View>
@@ -477,8 +358,7 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
   },
   headerRight: {
-    flexDirection: 'row',
-    gap: spacing.sm,
+    width: 40,
   },
   inviteButton: {
     padding: spacing.sm,
@@ -488,53 +368,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  tabs: {
-    flexDirection: 'row',
-    backgroundColor: colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  tabActive: {
-    borderBottomColor: colors.primary,
-  },
-  tabText: {
-    ...typography.bodyBold,
-    color: colors.textSecondary,
-  },
-  tabTextActive: {
-    color: colors.primary,
-  },
-  periodSelector: {
-    flexDirection: 'row',
-    padding: spacing.md,
-    gap: spacing.md,
-    backgroundColor: colors.card,
-  },
-  periodButton: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-  },
-  periodButtonActive: {
-    backgroundColor: colors.primary,
-  },
-  periodButtonText: {
-    ...typography.bodyBold,
-    color: colors.text,
-  },
-  periodButtonTextActive: {
-    color: '#fff',
-  },
   scrollView: {
     flex: 1,
   },
@@ -542,23 +375,42 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: spacing.xxxl * 3,
   },
+  descriptionCard: {
+    backgroundColor: colors.card,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.lg,
+    ...shadows.medium,
+  },
+  descriptionText: {
+    ...typography.body,
+    color: colors.textSecondary,
+  },
+  sectionTitle: {
+    ...typography.h3,
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
   membersList: {
     gap: spacing.md,
   },
   memberCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: colors.card,
     padding: spacing.lg,
     borderRadius: borderRadius.lg,
     ...shadows.medium,
-  },
-  memberInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
     gap: spacing.md,
+  },
+  rankContainer: {
+    width: 32,
+    alignItems: 'center',
+  },
+  rankText: {
+    ...typography.h4,
+    color: colors.textSecondary,
+    fontWeight: '700',
   },
   memberAvatar: {
     width: 48,
@@ -568,7 +420,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  memberDetails: {
+  memberInfo: {
     flex: 1,
   },
   memberNameRow: {
@@ -614,81 +466,6 @@ const styles = StyleSheet.create({
   },
   removeButton: {
     padding: spacing.sm,
-  },
-  leaderboardList: {
-    gap: spacing.md,
-  },
-  leaderboardCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    ...shadows.medium,
-    gap: spacing.md,
-  },
-  leaderboardCardTopThree: {
-    borderWidth: 2,
-    borderColor: colors.warning,
-  },
-  leaderboardCardCurrentUser: {
-    backgroundColor: colors.highlight,
-  },
-  rankContainer: {
-    width: 48,
-    alignItems: 'center',
-  },
-  rankBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.round,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  rankBadge1: {
-    backgroundColor: '#FFD700',
-  },
-  rankBadge2: {
-    backgroundColor: '#C0C0C0',
-  },
-  rankBadge3: {
-    backgroundColor: '#CD7F32',
-  },
-  rankBadgeText: {
-    ...typography.h4,
-    color: '#fff',
-    fontWeight: '800',
-  },
-  rankText: {
-    ...typography.h3,
-    color: colors.textSecondary,
-    fontWeight: '700',
-  },
-  leaderboardInfo: {
-    flex: 1,
-  },
-  leaderboardNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  leaderboardName: {
-    ...typography.h4,
-    color: colors.text,
-  },
-  leaderboardScore: {
-    ...typography.bodyBold,
-    color: colors.primary,
-    marginBottom: spacing.xs,
-  },
-  scoreBreakdown: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  scoreBreakdownText: {
-    ...typography.caption,
-    color: colors.textSecondary,
   },
   footer: {
     position: 'absolute',

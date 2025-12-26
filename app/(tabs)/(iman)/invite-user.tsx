@@ -50,7 +50,7 @@ export default function InviteUserScreen() {
       }
 
       // Check if user is already a member
-      const { data: memberData, error: memberError } = await supabase
+      const { data: memberData } = await supabase
         .from('community_members')
         .select('id')
         .eq('community_id', communityId)
@@ -64,7 +64,7 @@ export default function InviteUserScreen() {
       }
 
       // Check if invite already exists
-      const { data: inviteData, error: inviteCheckError } = await supabase
+      const { data: inviteData } = await supabase
         .from('community_invites')
         .select('id, status')
         .eq('community_id', communityId)

@@ -20,103 +20,84 @@ import { IconSymbol } from '@/components/IconSymbol';
 interface Community {
   id: string;
   name: string;
-  created_by: string;
-  created_at: string;
+  description: string | null;
   member_count: number;
-  is_admin: boolean;
+  role: 'admin' | 'member';
 }
 
 export default function CommunitiesScreen() {
-  const { user, session } = useAuth();
+  const { user } = useAuth();
   const [communities, setCommunities] = useState<Community[]>([]);
-  const [communitiesLoading, setCommunitiesLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newCommunityName, setNewCommunityName] = useState('');
+  const [newCommunityDescription, setNewCommunityDescription] = useState('');
   const [creating, setCreating] = useState(false);
   const [pendingInvitesCount, setPendingInvitesCount] = useState(0);
 
   const loadCommunities = useCallback(async () => {
     if (!user) {
       setCommunities([]);
-      setCommunitiesLoading(false);
+      setLoading(false);
       setRefreshing(false);
       return;
     }
 
     try {
-      console.log('Fetching communities for user:', user.id);
-
-      // Step 1: Get user's memberships
-      const { data: memberData, error: memberError } = await supabase
+      // Get user's community memberships
+      const { data: memberships, error: memberError } = await supabase
         .from('community_members')
-        .select('community_id, is_admin')
+        .select('community_id, role')
         .eq('user_id', user.id);
 
-      if (memberError) {
-        console.error('Error fetching community members:', memberError);
-        throw memberError;
-      }
+      if (memberError) throw memberError;
 
-      console.log('User memberships:', memberData);
-
-      if (!memberData || memberData.length === 0) {
+      if (!memberships || memberships.length === 0) {
         setCommunities([]);
-        setCommunitiesLoading(false);
+        setLoading(false);
         setRefreshing(false);
         return;
       }
 
-      const communityIds = memberData.map(m => m.community_id);
-      const membershipMap = new Map(memberData.map(m => [m.community_id, m.is_admin]));
+      const communityIds = memberships.map(m => m.community_id);
+      const roleMap = new Map(memberships.map(m => [m.community_id, m.role]));
 
-      // Step 2: Fetch community details
+      // Get community details
       const { data: communityData, error: communityError } = await supabase
         .from('communities')
-        .select('id, name, created_by, created_at')
+        .select('id, name, description')
         .in('id', communityIds);
 
-      if (communityError) {
-        console.error('Error fetching communities:', communityError);
-        throw communityError;
-      }
+      if (communityError) throw communityError;
 
-      console.log('Community data:', communityData);
-
-      // Step 3: Get member counts for each community
+      // Get member counts
       const { data: allMembers, error: countError } = await supabase
         .from('community_members')
         .select('community_id')
         .in('community_id', communityIds);
 
-      if (countError) {
-        console.error('Error fetching member counts:', countError);
-        throw countError;
-      }
+      if (countError) throw countError;
 
-      // Count members per community
       const memberCounts: Record<string, number> = {};
       allMembers?.forEach(item => {
         memberCounts[item.community_id] = (memberCounts[item.community_id] || 0) + 1;
       });
 
-      // Format communities
       const formattedCommunities: Community[] = communityData?.map(c => ({
         id: c.id,
         name: c.name,
-        created_by: c.created_by,
-        created_at: c.created_at,
+        description: c.description,
         member_count: memberCounts[c.id] || 0,
-        is_admin: membershipMap.get(c.id) || false,
+        role: roleMap.get(c.id) || 'member',
       })) || [];
 
-      console.log('Formatted communities:', formattedCommunities);
       setCommunities(formattedCommunities);
     } catch (error) {
-      console.error('Error fetching communities:', error);
-      setCommunities([]);
+      console.error('Error loading communities:', error);
+      Alert.alert('Error', 'Failed to load communities');
     } finally {
-      setCommunitiesLoading(false);
+      setLoading(false);
       setRefreshing(false);
     }
   }, [user]);
@@ -160,106 +141,50 @@ export default function CommunitiesScreen() {
       return;
     }
 
-    if (!session) {
-      Alert.alert('Error', 'Session expired. Please log in again.');
-      return;
-    }
-
     setCreating(true);
     try {
-      console.log('Creating community...');
-      console.log('User ID:', user.id);
-      console.log('Session exists:', !!session);
-      console.log('Community name:', newCommunityName.trim());
-      
-      // Verify session is still valid
-      const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError || !currentSession) {
-        console.error('Session error:', sessionError);
-        throw new Error('Your session has expired. Please log in again.');
-      }
-
-      console.log('Current session user ID:', currentSession.user.id);
-      
       // Create community
       const { data: communityData, error: communityError } = await supabase
         .from('communities')
         .insert({
           name: newCommunityName.trim(),
-          created_by: currentSession.user.id,
+          description: newCommunityDescription.trim() || null,
+          created_by: user.id,
         })
         .select()
         .single();
 
-      if (communityError) {
-        console.error('Error creating community:', communityError);
-        console.error('Error details:', JSON.stringify(communityError, null, 2));
-        throw communityError;
-      }
+      if (communityError) throw communityError;
 
-      console.log('Community created successfully:', communityData);
-
-      // Add creator as admin member
+      // Add creator as admin
       const { error: memberError } = await supabase
         .from('community_members')
         .insert({
           community_id: communityData.id,
-          user_id: currentSession.user.id,
-          is_admin: true,
+          user_id: user.id,
+          role: 'admin',
         });
 
-      if (memberError) {
-        console.error('Error adding creator as member:', memberError);
-        console.error('Member error details:', JSON.stringify(memberError, null, 2));
-        throw memberError;
-      }
-
-      console.log('Creator added as admin member successfully');
+      if (memberError) throw memberError;
 
       Alert.alert('Success', 'Community created successfully!');
       setNewCommunityName('');
+      setNewCommunityDescription('');
       setShowCreateModal(false);
       loadCommunities();
     } catch (error: any) {
       console.error('Error creating community:', error);
-      
-      // Provide more detailed error message
-      let errorMessage = 'Failed to create community';
-      if (error.message) {
-        errorMessage += ': ' + error.message;
-      }
-      if (error.code) {
-        errorMessage += ' (Error code: ' + error.code + ')';
-      }
-      if (error.details) {
-        errorMessage += '\nDetails: ' + error.details;
-      }
-      if (error.hint) {
-        errorMessage += '\nHint: ' + error.hint;
-      }
-      
-      Alert.alert('Error', errorMessage);
+      Alert.alert('Error', error.message || 'Failed to create community');
     } finally {
       setCreating(false);
     }
   };
 
-  const handleCommunityPress = (community: Community) => {
-    router.push({
-      pathname: '/(tabs)/(iman)/community-detail',
-      params: { communityId: community.id, communityName: community.name },
-    });
-  };
-
-  if (communitiesLoading) {
+  if (loading) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <IconSymbol
               ios_icon_name="chevron.left"
               android_material_icon_name="arrow_back"
@@ -279,12 +204,8 @@ export default function CommunitiesScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <IconSymbol
             ios_icon_name="chevron.left"
             android_material_icon_name="arrow_back"
@@ -314,11 +235,8 @@ export default function CommunitiesScreen() {
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Create Community Section */}
         {!showCreateModal ? (
           <TouchableOpacity
             style={styles.createButton}
@@ -343,12 +261,23 @@ export default function CommunitiesScreen() {
               onChangeText={setNewCommunityName}
               maxLength={50}
             />
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Description (optional)"
+              placeholderTextColor={colors.textSecondary}
+              value={newCommunityDescription}
+              onChangeText={setNewCommunityDescription}
+              maxLength={200}
+              multiline
+              numberOfLines={3}
+            />
             <View style={styles.createModalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => {
                   setShowCreateModal(false);
                   setNewCommunityName('');
+                  setNewCommunityDescription('');
                 }}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -368,7 +297,6 @@ export default function CommunitiesScreen() {
           </View>
         )}
 
-        {/* Communities List */}
         {communities.length === 0 ? (
           <View style={styles.emptyState}>
             <IconSymbol
@@ -388,7 +316,12 @@ export default function CommunitiesScreen() {
               <React.Fragment key={index}>
                 <TouchableOpacity
                   style={styles.communityCard}
-                  onPress={() => handleCommunityPress(community)}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/(tabs)/(iman)/community-detail',
+                      params: { communityId: community.id },
+                    })
+                  }
                 >
                   <View style={styles.communityIcon}>
                     <IconSymbol
@@ -401,12 +334,17 @@ export default function CommunitiesScreen() {
                   <View style={styles.communityInfo}>
                     <View style={styles.communityHeader}>
                       <Text style={styles.communityName}>{community.name}</Text>
-                      {community.is_admin && (
+                      {community.role === 'admin' && (
                         <View style={styles.adminBadge}>
                           <Text style={styles.adminBadgeText}>Admin</Text>
                         </View>
                       )}
                     </View>
+                    {community.description && (
+                      <Text style={styles.communityDescription} numberOfLines={1}>
+                        {community.description}
+                      </Text>
+                    )}
                     <Text style={styles.communityMembers}>
                       {community.member_count} {community.member_count === 1 ? 'member' : 'members'}
                     </Text>
@@ -442,7 +380,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    ...shadows.small,
   },
   backButton: {
     padding: spacing.sm,
@@ -523,11 +460,16 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     ...typography.body,
     color: colors.text,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
   createModalButtons: {
     flexDirection: 'row',
     gap: spacing.md,
+    marginTop: spacing.md,
   },
   modalButton: {
     flex: 1,
@@ -611,6 +553,11 @@ const styles = StyleSheet.create({
     ...typography.small,
     color: '#fff',
     fontWeight: '700',
+  },
+  communityDescription: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
   },
   communityMembers: {
     ...typography.caption,

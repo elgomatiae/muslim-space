@@ -36,54 +36,41 @@ export default function InvitesInboxScreen() {
     if (!user) return;
 
     try {
-      // Fetch invites - split the query to avoid nested query issues
       const { data: invitesData, error: invitesError } = await supabase
         .from('community_invites')
         .select('id, community_id, created_at, status, invited_by')
         .eq('invited_user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (invitesError) {
-        console.error('Error fetching invites:', invitesError);
-        throw invitesError;
-      }
+      if (invitesError) throw invitesError;
 
       if (!invitesData || invitesData.length === 0) {
         setInvites([]);
+        setLoading(false);
+        setRefreshing(false);
         return;
       }
 
-      // Get unique community IDs and user IDs
       const communityIds = [...new Set(invitesData.map(i => i.community_id))];
       const userIds = [...new Set(invitesData.map(i => i.invited_by))];
 
-      // Fetch community names
       const { data: communitiesData, error: communitiesError } = await supabase
         .from('communities')
         .select('id, name')
         .in('id', communityIds);
 
-      if (communitiesError) {
-        console.error('Error fetching communities:', communitiesError);
-        throw communitiesError;
-      }
+      if (communitiesError) throw communitiesError;
 
-      // Fetch user profiles for invited_by usernames
       const { data: profilesData, error: profilesError } = await supabase
         .from('user_profiles')
         .select('user_id, username')
         .in('user_id', userIds);
 
-      if (profilesError) {
-        console.error('Error fetching profiles:', profilesError);
-        throw profilesError;
-      }
+      if (profilesError) throw profilesError;
 
-      // Create lookup maps
       const communityMap = new Map(communitiesData?.map(c => [c.id, c.name]) || []);
       const usernameMap = new Map(profilesData?.map(p => [p.user_id, p.username]) || []);
 
-      // Format invites
       const formattedInvites: Invite[] = invitesData.map(invite => ({
         id: invite.id,
         community_id: invite.community_id,
@@ -134,7 +121,7 @@ export default function InvitesInboxScreen() {
         .insert({
           community_id: invite.community_id,
           user_id: user.id,
-          is_admin: false,
+          role: 'member',
         });
 
       if (memberError) throw memberError;
@@ -170,85 +157,6 @@ export default function InvitesInboxScreen() {
     } finally {
       setProcessingInviteId(null);
     }
-  };
-
-  const renderInvite = (invite: Invite, index: number) => {
-    const isPending = invite.status === 'pending';
-    const isProcessing = processingInviteId === invite.id;
-
-    return (
-      <React.Fragment key={index}>
-        <View style={styles.inviteCard}>
-          <View style={styles.inviteIcon}>
-            <IconSymbol
-              ios_icon_name="person.3.fill"
-              android_material_icon_name="groups"
-              size={32}
-              color={colors.primary}
-            />
-          </View>
-          <View style={styles.inviteInfo}>
-            <Text style={styles.inviteCommunityName}>{invite.community_name}</Text>
-            <Text style={styles.inviteText}>
-              Invited by {invite.invited_by_username}
-            </Text>
-            <Text style={styles.inviteDate}>
-              {new Date(invite.created_at).toLocaleDateString()}
-            </Text>
-            {!isPending && (
-              <View
-                style={[
-                  styles.statusBadge,
-                  invite.status === 'accepted'
-                    ? styles.statusBadgeAccepted
-                    : styles.statusBadgeDeclined,
-                ]}
-              >
-                <Text style={styles.statusBadgeText}>
-                  {invite.status === 'accepted' ? 'Accepted' : 'Declined'}
-                </Text>
-              </View>
-            )}
-          </View>
-          {isPending && (
-            <View style={styles.inviteActions}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.acceptButton]}
-                onPress={() => handleAcceptInvite(invite)}
-                disabled={isProcessing}
-              >
-                {isProcessing ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <IconSymbol
-                    ios_icon_name="checkmark"
-                    android_material_icon_name="check"
-                    size={20}
-                    color="#fff"
-                  />
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.declineButton]}
-                onPress={() => handleDeclineInvite(invite)}
-                disabled={isProcessing}
-              >
-                {isProcessing ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <IconSymbol
-                    ios_icon_name="xmark"
-                    android_material_icon_name="close"
-                    size={20}
-                    color="#fff"
-                  />
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      </React.Fragment>
-    );
   };
 
   if (loading) {
@@ -294,9 +202,7 @@ export default function InvitesInboxScreen() {
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {invites.length === 0 ? (
           <View style={styles.emptyState}>
@@ -317,7 +223,63 @@ export default function InvitesInboxScreen() {
               <React.Fragment>
                 <Text style={styles.sectionTitle}>Pending Invites</Text>
                 <View style={styles.invitesList}>
-                  {pendingInvites.map((invite, index) => renderInvite(invite, index))}
+                  {pendingInvites.map((invite, index) => (
+                    <React.Fragment key={index}>
+                      <View style={styles.inviteCard}>
+                        <View style={styles.inviteIcon}>
+                          <IconSymbol
+                            ios_icon_name="person.3.fill"
+                            android_material_icon_name="groups"
+                            size={32}
+                            color={colors.primary}
+                          />
+                        </View>
+                        <View style={styles.inviteInfo}>
+                          <Text style={styles.inviteCommunityName}>{invite.community_name}</Text>
+                          <Text style={styles.inviteText}>
+                            Invited by {invite.invited_by_username}
+                          </Text>
+                          <Text style={styles.inviteDate}>
+                            {new Date(invite.created_at).toLocaleDateString()}
+                          </Text>
+                        </View>
+                        <View style={styles.inviteActions}>
+                          <TouchableOpacity
+                            style={[styles.actionButton, styles.acceptButton]}
+                            onPress={() => handleAcceptInvite(invite)}
+                            disabled={processingInviteId === invite.id}
+                          >
+                            {processingInviteId === invite.id ? (
+                              <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                              <IconSymbol
+                                ios_icon_name="checkmark"
+                                android_material_icon_name="check"
+                                size={20}
+                                color="#fff"
+                              />
+                            )}
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.actionButton, styles.declineButton]}
+                            onPress={() => handleDeclineInvite(invite)}
+                            disabled={processingInviteId === invite.id}
+                          >
+                            {processingInviteId === invite.id ? (
+                              <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                              <IconSymbol
+                                ios_icon_name="xmark"
+                                android_material_icon_name="close"
+                                size={20}
+                                color="#fff"
+                              />
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </React.Fragment>
+                  ))}
                 </View>
               </React.Fragment>
             )}
@@ -325,7 +287,41 @@ export default function InvitesInboxScreen() {
               <React.Fragment>
                 <Text style={styles.sectionTitle}>Past Invites</Text>
                 <View style={styles.invitesList}>
-                  {respondedInvites.map((invite, index) => renderInvite(invite, index))}
+                  {respondedInvites.map((invite, index) => (
+                    <React.Fragment key={index}>
+                      <View style={styles.inviteCard}>
+                        <View style={styles.inviteIcon}>
+                          <IconSymbol
+                            ios_icon_name="person.3.fill"
+                            android_material_icon_name="groups"
+                            size={32}
+                            color={colors.primary}
+                          />
+                        </View>
+                        <View style={styles.inviteInfo}>
+                          <Text style={styles.inviteCommunityName}>{invite.community_name}</Text>
+                          <Text style={styles.inviteText}>
+                            Invited by {invite.invited_by_username}
+                          </Text>
+                          <Text style={styles.inviteDate}>
+                            {new Date(invite.created_at).toLocaleDateString()}
+                          </Text>
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              invite.status === 'accepted'
+                                ? styles.statusBadgeAccepted
+                                : styles.statusBadgeDeclined,
+                            ]}
+                          >
+                            <Text style={styles.statusBadgeText}>
+                              {invite.status === 'accepted' ? 'Accepted' : 'Declined'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </React.Fragment>
+                  ))}
                 </View>
               </React.Fragment>
             )}
