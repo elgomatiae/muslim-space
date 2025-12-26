@@ -234,7 +234,7 @@ export default function CommunitiesScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* My Communities Section - Show first if user has communities */}
+        {/* My Communities Section - Always show this section first if user has communities */}
         {communities.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>My Communities</Text>
@@ -294,7 +294,7 @@ export default function CommunitiesScreen() {
           </View>
         )}
 
-        {/* Create Community Button */}
+        {/* Create Community Button - Show after communities list */}
         {!showCreateModal ? (
           <TouchableOpacity
             style={styles.createButton}
@@ -355,8 +355,8 @@ export default function CommunitiesScreen() {
           </View>
         )}
 
-        {/* Empty State - Only show if no communities */}
-        {communities.length === 0 && (
+        {/* Empty State - Only show if no communities AND not showing create modal */}
+        {communities.length === 0 && !showCreateModal && (
           <View style={styles.emptyState}>
             <IconSymbol
               ios_icon_name="person.3.fill"
