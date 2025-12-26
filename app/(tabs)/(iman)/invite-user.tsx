@@ -12,10 +12,14 @@ import {
   Platform,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { supabase } from '@/app/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
+import {
+  createInvite,
+  getUserProfile,
+  getCommunity,
+} from '@/utils/localCommunityStorage';
 
 export default function InviteUserScreen() {
   const { communityId, communityName } = useLocalSearchParams<{
@@ -36,64 +40,42 @@ export default function InviteUserScreen() {
 
     setLoading(true);
     try {
-      // Find user by username
-      const { data: userData, error: userError } = await supabase
-        .from('user_profiles')
-        .select('user_id')
-        .eq('username', username.trim())
-        .single();
-
-      if (userError || !userData) {
-        Alert.alert('Error', 'User not found');
+      const currentUserProfile = await getUserProfile();
+      if (!currentUserProfile) {
+        Alert.alert('Error', 'User profile not found');
         setLoading(false);
         return;
       }
-
+      
+      // For demo purposes, we'll create a mock invited user
+      // In a real app, you'd look up the user in a user directory
+      const invitedUserId = `user_${username.toLowerCase().replace(/\s/g, '_')}`;
+      
       // Check if user is already a member
-      const { data: memberData } = await supabase
-        .from('community_members')
-        .select('id')
-        .eq('community_id', communityId)
-        .eq('user_id', userData.user_id)
-        .single();
-
-      if (memberData) {
-        Alert.alert('Error', 'User is already a member of this community');
-        setLoading(false);
-        return;
-      }
-
-      // Check if invite already exists
-      const { data: inviteData } = await supabase
-        .from('community_invites')
-        .select('id, status')
-        .eq('community_id', communityId)
-        .eq('invited_user_id', userData.user_id)
-        .single();
-
-      if (inviteData) {
-        if (inviteData.status === 'pending') {
-          Alert.alert('Error', 'An invite has already been sent to this user');
-        } else {
-          Alert.alert('Error', 'This user has already responded to an invite');
+      const community = await getCommunity(communityId);
+      if (community) {
+        const existingMember = community.members.find(m => m.username === username.trim());
+        if (existingMember) {
+          Alert.alert('Error', 'User is already a member of this community');
+          setLoading(false);
+          return;
         }
-        setLoading(false);
-        return;
       }
-
+      
       // Create invite
-      const { error: createError } = await supabase
-        .from('community_invites')
-        .insert({
-          community_id: communityId,
-          invited_by: user.id,
-          invited_user_id: userData.user_id,
-          status: 'pending',
-        });
+      await createInvite(
+        communityId,
+        communityName,
+        user.id,
+        currentUserProfile.username,
+        invitedUserId,
+        username.trim()
+      );
 
-      if (createError) throw createError;
-
-      Alert.alert('Success', 'Invite sent successfully!');
+      Alert.alert(
+        'Success',
+        `Invite sent to ${username}!\n\nNote: In this demo, invites are stored locally. The invited user would need to use the same device to see and accept the invite.`
+      );
       setUsername('');
       router.back();
     } catch (error: any) {
@@ -134,6 +116,11 @@ export default function InviteUserScreen() {
           <Text style={styles.infoText}>
             Enter the username of the person you want to invite to this community.
           </Text>
+          <View style={styles.demoNote}>
+            <Text style={styles.demoNoteText}>
+              📱 Demo Mode: Invites are stored locally on this device
+            </Text>
+          </View>
         </View>
 
         <View style={styles.inputCard}>
@@ -223,6 +210,18 @@ const styles = StyleSheet.create({
   infoText: {
     ...typography.body,
     color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  demoNote: {
+    backgroundColor: colors.highlight,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginTop: spacing.sm,
+  },
+  demoNoteText: {
+    ...typography.caption,
+    color: colors.text,
     textAlign: 'center',
   },
   inputCard: {

@@ -31,6 +31,7 @@ import { useAuth } from './AuthContext';
 import { syncLocalToSupabase, syncSupabaseToLocal, initializeImanTrackerForUser } from '@/utils/imanSupabaseSync';
 import { sendImanTrackerMilestone } from '@/utils/notificationService';
 import { checkAndUnlockAchievements } from '@/utils/achievementService';
+import { updateUserImanScore, getUserCommunities, updateAllMemberScores } from '@/utils/localCommunityStorage';
 
 interface ImanTrackerContextType {
   // New ring structure
@@ -81,6 +82,26 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [updateTrigger, setUpdateTrigger] = useState(0);
 
+  // Update community scores when Iman score changes
+  const updateCommunityScores = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      // Update user's Iman score in local storage
+      await updateUserImanScore(user.id);
+      
+      // Update scores in all communities the user is part of
+      const communities = await getUserCommunities(user.id);
+      for (const community of communities) {
+        await updateAllMemberScores(community.id);
+      }
+      
+      console.log('✅ Community scores updated');
+    } catch (error) {
+      console.log('Error updating community scores:', error);
+    }
+  }, [user]);
+
   const loadAllData = useCallback(async () => {
     try {
       console.log('ImanTrackerContext: Loading all data...');
@@ -122,13 +143,16 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
       setSectionScores(scores);
       setOverallScore(overall);
       
+      // Update community scores
+      await updateCommunityScores();
+      
       console.log('ImanTrackerContext: Data loaded successfully');
     } catch (error) {
       console.log('ImanTrackerContext: Error loading data:', error);
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, updateCommunityScores]);
 
   const refreshData = useCallback(async () => {
     await loadAllData();
@@ -158,10 +182,12 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
       // INSTANT achievement check - this ensures badges update immediately
       console.log('ImanTrackerContext: Checking achievements after ibadah update...');
       await checkAndUnlockAchievements(user.id);
+      // Update community scores
+      await updateCommunityScores();
     }
     
     console.log('ImanTrackerContext: Ibadah goals updated');
-  }, [user]);
+  }, [user, updateCommunityScores]);
 
   const updateIlmGoals = useCallback(async (goals: IlmGoals) => {
     console.log('ImanTrackerContext: Updating ilm goals...');
@@ -179,10 +205,12 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
       // INSTANT achievement check
       console.log('ImanTrackerContext: Checking achievements after ilm update...');
       await checkAndUnlockAchievements(user.id);
+      // Update community scores
+      await updateCommunityScores();
     }
     
     console.log('ImanTrackerContext: Ilm goals updated');
-  }, [user]);
+  }, [user, updateCommunityScores]);
 
   const updateAmanahGoals = useCallback(async (goals: AmanahGoals) => {
     console.log('ImanTrackerContext: Updating amanah goals...');
@@ -200,10 +228,12 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
       // INSTANT achievement check
       console.log('ImanTrackerContext: Checking achievements after amanah update...');
       await checkAndUnlockAchievements(user.id);
+      // Update community scores
+      await updateCommunityScores();
     }
     
     console.log('ImanTrackerContext: Amanah goals updated');
-  }, [user]);
+  }, [user, updateCommunityScores]);
 
   const updatePrayerGoals = useCallback(async (goals: PrayerGoals) => {
     console.log('ImanTrackerContext: Updating prayer goals...');
@@ -225,10 +255,12 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
       // INSTANT achievement check
       console.log('ImanTrackerContext: Checking achievements after prayer update...');
       await checkAndUnlockAchievements(user.id);
+      // Update community scores
+      await updateCommunityScores();
     }
     
     console.log('ImanTrackerContext: Prayer goals updated');
-  }, [user]);
+  }, [user, updateCommunityScores]);
 
   const updateDhikrGoals = useCallback(async (goals: DhikrGoals) => {
     console.log('ImanTrackerContext: Updating dhikr goals...');
@@ -250,10 +282,12 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
       // INSTANT achievement check
       console.log('ImanTrackerContext: Checking achievements after dhikr update...');
       await checkAndUnlockAchievements(user.id);
+      // Update community scores
+      await updateCommunityScores();
     }
     
     console.log('ImanTrackerContext: Dhikr goals updated');
-  }, [user]);
+  }, [user, updateCommunityScores]);
 
   const updateQuranGoals = useCallback(async (goals: QuranGoals) => {
     console.log('ImanTrackerContext: Updating quran goals...');
@@ -275,10 +309,12 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
       // INSTANT achievement check
       console.log('ImanTrackerContext: Checking achievements after quran update...');
       await checkAndUnlockAchievements(user.id);
+      // Update community scores
+      await updateCommunityScores();
     }
     
     console.log('ImanTrackerContext: Quran goals updated');
-  }, [user]);
+  }, [user, updateCommunityScores]);
 
   const forceUpdate = useCallback(() => {
     console.log('ImanTrackerContext: Force update triggered');
@@ -321,11 +357,13 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
       // Check for new achievements periodically
       if (user) {
         await checkAndUnlockAchievements(user.id);
+        // Update community scores periodically
+        await updateCommunityScores();
       }
     }, 30000);
     
     return () => clearInterval(scoreInterval);
-  }, [overallScore, user]);
+  }, [overallScore, user, updateCommunityScores]);
 
   useEffect(() => {
     if (!user) return;

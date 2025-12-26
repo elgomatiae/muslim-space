@@ -11,31 +11,21 @@ import {
   RefreshControl,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { supabase } from '@/app/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
-
-interface Community {
-  id: string;
-  name: string;
-  description: string | null;
-  created_by: string;
-}
-
-interface Member {
-  user_id: string;
-  username: string;
-  role: 'admin' | 'member';
-  hide_score: boolean;
-  iman_score: number;
-}
+import {
+  getCommunity,
+  removeMemberFromCommunity,
+  updateAllMemberScores,
+  LocalCommunity,
+  CommunityMember,
+} from '@/utils/localCommunityStorage';
 
 export default function CommunityDetailScreen() {
   const { communityId } = useLocalSearchParams<{ communityId: string }>();
   const { user } = useAuth();
-  const [community, setCommunity] = useState<Community | null>(null);
-  const [members, setMembers] = useState<Member[]>([]);
+  const [community, setCommunity] = useState<LocalCommunity | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userRole, setUserRole] = useState<'admin' | 'member'>('member');
@@ -44,73 +34,27 @@ export default function CommunityDetailScreen() {
     if (!communityId || !user) return;
 
     try {
-      // Get community details
-      const { data: communityData, error: communityError } = await supabase
-        .from('communities')
-        .select('id, name, description, created_by')
-        .eq('id', communityId)
-        .single();
-
-      if (communityError) throw communityError;
+      // Update all member scores
+      await updateAllMemberScores(communityId);
+      
+      // Load community
+      const communityData = await getCommunity(communityId);
+      
+      if (!communityData) {
+        Alert.alert('Error', 'Community not found');
+        router.back();
+        return;
+      }
+      
       setCommunity(communityData);
-
+      
       // Get user's role
-      const { data: membershipData, error: membershipError } = await supabase
-        .from('community_members')
-        .select('role')
-        .eq('community_id', communityId)
-        .eq('user_id', user.id)
-        .single();
-
-      if (membershipError) throw membershipError;
-      setUserRole(membershipData.role);
-
-      // Get all members
-      const { data: membersData, error: membersError } = await supabase
-        .from('community_members')
-        .select(`
-          user_id,
-          role,
-          hide_score,
-          user_profiles!inner (username)
-        `)
-        .eq('community_id', communityId);
-
-      if (membersError) throw membersError;
-
-      // Get Iman scores from iman_tracker_goals
-      const userIds = membersData?.map(m => m.user_id) || [];
-      const { data: scoresData, error: scoresError } = await supabase
-        .from('iman_tracker_goals')
-        .select('user_id, ibadah_score, ilm_score, amanah_score')
-        .in('user_id', userIds);
-
-      if (scoresError) throw scoresError;
-
-      // Calculate overall scores
-      const scoresMap = new Map(
-        scoresData?.map(s => [
-          s.user_id,
-          Math.round(
-            (Number(s.ibadah_score) || 0) * 0.5 +
-            (Number(s.ilm_score) || 0) * 0.3 +
-            (Number(s.amanah_score) || 0) * 0.2
-          ),
-        ]) || []
-      );
-
-      const formattedMembers: Member[] = membersData?.map(m => ({
-        user_id: m.user_id,
-        username: (m.user_profiles as any)?.username || 'Unknown',
-        role: m.role,
-        hide_score: m.hide_score,
-        iman_score: scoresMap.get(m.user_id) || 0,
-      })) || [];
-
-      // Sort by score (highest first)
-      formattedMembers.sort((a, b) => b.iman_score - a.iman_score);
-
-      setMembers(formattedMembers);
+      const userMember = communityData.members.find(m => m.userId === user.id);
+      if (userMember) {
+        setUserRole(userMember.role);
+      }
+      
+      console.log(`✅ Loaded community: ${communityData.name}`);
     } catch (error) {
       console.error('Error loading community data:', error);
       Alert.alert('Error', 'Failed to load community data');
@@ -140,14 +84,9 @@ export default function CommunityDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const { error } = await supabase
-                .from('community_members')
-                .delete()
-                .eq('community_id', communityId)
-                .eq('user_id', user?.id);
-
-              if (error) throw error;
-
+              if (!user || !communityId) return;
+              
+              await removeMemberFromCommunity(communityId, user.id);
               Alert.alert('Success', 'You have left the community');
               router.back();
             } catch (error) {
@@ -171,14 +110,9 @@ export default function CommunityDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const { error } = await supabase
-                .from('community_members')
-                .delete()
-                .eq('community_id', communityId)
-                .eq('user_id', memberId);
-
-              if (error) throw error;
-
+              if (!communityId) return;
+              
+              await removeMemberFromCommunity(communityId, memberId);
               Alert.alert('Success', 'Member removed successfully');
               loadCommunityData();
             } catch (error) {
@@ -212,6 +146,9 @@ export default function CommunityDetailScreen() {
       </View>
     );
   }
+
+  // Sort members by score (highest first)
+  const sortedMembers = [...community.members].sort((a, b) => b.imanScore - a.imanScore);
 
   return (
     <View style={styles.container}>
@@ -260,12 +197,12 @@ export default function CommunityDetailScreen() {
           </View>
         )}
 
-        <Text style={styles.sectionTitle}>Members ({members.length})</Text>
+        <Text style={styles.sectionTitle}>Members ({community.members.length})</Text>
 
         <View style={styles.membersList}>
-          {members.map((member, index) => {
-            const isCurrentUser = member.user_id === user?.id;
-            const showScore = !member.hide_score || isCurrentUser;
+          {sortedMembers.map((member, index) => {
+            const isCurrentUser = member.userId === user?.id;
+            const showScore = !member.hideScore || isCurrentUser;
             const rank = index + 1;
 
             return (
@@ -297,7 +234,7 @@ export default function CommunityDetailScreen() {
                       )}
                     </View>
                     {showScore ? (
-                      <Text style={styles.memberScore}>Iman Score: {member.iman_score}</Text>
+                      <Text style={styles.memberScore}>Iman Score: {member.imanScore}</Text>
                     ) : (
                       <Text style={styles.memberScoreHidden}>Score Hidden</Text>
                     )}
@@ -305,7 +242,7 @@ export default function CommunityDetailScreen() {
                   {userRole === 'admin' && !isCurrentUser && (
                     <TouchableOpacity
                       style={styles.removeButton}
-                      onPress={() => handleRemoveMember(member.user_id, member.username)}
+                      onPress={() => handleRemoveMember(member.userId, member.username)}
                     >
                       <IconSymbol
                         ios_icon_name="xmark.circle.fill"

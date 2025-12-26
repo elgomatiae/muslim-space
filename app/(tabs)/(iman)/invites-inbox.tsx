@@ -11,23 +11,19 @@ import {
   RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
-import { supabase } from '@/app/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
-
-interface Invite {
-  id: string;
-  community_id: string;
-  community_name: string;
-  invited_by_username: string;
-  created_at: string;
-  status: 'pending' | 'accepted' | 'declined';
-}
+import {
+  getUserInvites,
+  acceptInvite,
+  declineInvite,
+  CommunityInvite,
+} from '@/utils/localCommunityStorage';
 
 export default function InvitesInboxScreen() {
   const { user } = useAuth();
-  const [invites, setInvites] = useState<Invite[]>([]);
+  const [invites, setInvites] = useState<CommunityInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [processingInviteId, setProcessingInviteId] = useState<string | null>(null);
@@ -36,51 +32,9 @@ export default function InvitesInboxScreen() {
     if (!user) return;
 
     try {
-      const { data: invitesData, error: invitesError } = await supabase
-        .from('community_invites')
-        .select('id, community_id, created_at, status, invited_by')
-        .eq('invited_user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (invitesError) throw invitesError;
-
-      if (!invitesData || invitesData.length === 0) {
-        setInvites([]);
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-
-      const communityIds = [...new Set(invitesData.map(i => i.community_id))];
-      const userIds = [...new Set(invitesData.map(i => i.invited_by))];
-
-      const { data: communitiesData, error: communitiesError } = await supabase
-        .from('communities')
-        .select('id, name')
-        .in('id', communityIds);
-
-      if (communitiesError) throw communitiesError;
-
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('user_profiles')
-        .select('user_id, username')
-        .in('user_id', userIds);
-
-      if (profilesError) throw profilesError;
-
-      const communityMap = new Map(communitiesData?.map(c => [c.id, c.name]) || []);
-      const usernameMap = new Map(profilesData?.map(p => [p.user_id, p.username]) || []);
-
-      const formattedInvites: Invite[] = invitesData.map(invite => ({
-        id: invite.id,
-        community_id: invite.community_id,
-        community_name: communityMap.get(invite.community_id) || 'Unknown Community',
-        invited_by_username: usernameMap.get(invite.invited_by) || 'Unknown User',
-        created_at: invite.created_at,
-        status: invite.status,
-      }));
-
-      setInvites(formattedInvites);
+      const userInvites = await getUserInvites(user.id);
+      setInvites(userInvites);
+      console.log(`✅ Loaded ${userInvites.length} invites`);
     } catch (error) {
       console.error('Error fetching invites:', error);
       Alert.alert('Error', 'Failed to load invites');
@@ -99,33 +53,12 @@ export default function InvitesInboxScreen() {
     fetchInvites();
   }, [fetchInvites]);
 
-  const handleAcceptInvite = async (invite: Invite) => {
+  const handleAcceptInvite = async (invite: CommunityInvite) => {
     if (!user) return;
 
     setProcessingInviteId(invite.id);
     try {
-      // Update invite status
-      const { error: updateError } = await supabase
-        .from('community_invites')
-        .update({
-          status: 'accepted',
-          responded_at: new Date().toISOString(),
-        })
-        .eq('id', invite.id);
-
-      if (updateError) throw updateError;
-
-      // Add user to community
-      const { error: memberError } = await supabase
-        .from('community_members')
-        .insert({
-          community_id: invite.community_id,
-          user_id: user.id,
-          role: 'member',
-        });
-
-      if (memberError) throw memberError;
-
+      await acceptInvite(invite.id);
       Alert.alert('Success', 'You have joined the community!');
       fetchInvites();
     } catch (error: any) {
@@ -136,19 +69,10 @@ export default function InvitesInboxScreen() {
     }
   };
 
-  const handleDeclineInvite = async (invite: Invite) => {
+  const handleDeclineInvite = async (invite: CommunityInvite) => {
     setProcessingInviteId(invite.id);
     try {
-      const { error } = await supabase
-        .from('community_invites')
-        .update({
-          status: 'declined',
-          responded_at: new Date().toISOString(),
-        })
-        .eq('id', invite.id);
-
-      if (error) throw error;
-
+      await declineInvite(invite.id);
       Alert.alert('Success', 'Invite declined');
       fetchInvites();
     } catch (error: any) {
@@ -235,12 +159,12 @@ export default function InvitesInboxScreen() {
                           />
                         </View>
                         <View style={styles.inviteInfo}>
-                          <Text style={styles.inviteCommunityName}>{invite.community_name}</Text>
+                          <Text style={styles.inviteCommunityName}>{invite.communityName}</Text>
                           <Text style={styles.inviteText}>
-                            Invited by {invite.invited_by_username}
+                            Invited by {invite.invitedByUsername}
                           </Text>
                           <Text style={styles.inviteDate}>
-                            {new Date(invite.created_at).toLocaleDateString()}
+                            {new Date(invite.createdAt).toLocaleDateString()}
                           </Text>
                         </View>
                         <View style={styles.inviteActions}>
@@ -299,12 +223,12 @@ export default function InvitesInboxScreen() {
                           />
                         </View>
                         <View style={styles.inviteInfo}>
-                          <Text style={styles.inviteCommunityName}>{invite.community_name}</Text>
+                          <Text style={styles.inviteCommunityName}>{invite.communityName}</Text>
                           <Text style={styles.inviteText}>
-                            Invited by {invite.invited_by_username}
+                            Invited by {invite.invitedByUsername}
                           </Text>
                           <Text style={styles.inviteDate}>
-                            {new Date(invite.created_at).toLocaleDateString()}
+                            {new Date(invite.createdAt).toLocaleDateString()}
                           </Text>
                           <View
                             style={[

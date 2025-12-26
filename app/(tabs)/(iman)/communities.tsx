@@ -12,22 +12,22 @@ import {
   RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
-import { supabase } from '@/app/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
-
-interface Community {
-  id: string;
-  name: string;
-  description: string | null;
-  member_count: number;
-  role: 'admin' | 'member';
-}
+import {
+  getUserCommunities,
+  createCommunity,
+  getPendingInvitesCount,
+  updateUserImanScore,
+  getUserProfile,
+  saveUserProfile,
+  LocalCommunity,
+} from '@/utils/localCommunityStorage';
 
 export default function CommunitiesScreen() {
   const { user } = useAuth();
-  const [communities, setCommunities] = useState<Community[]>([]);
+  const [communities, setCommunities] = useState<LocalCommunity[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -45,54 +45,14 @@ export default function CommunitiesScreen() {
     }
 
     try {
-      // Get user's community memberships
-      const { data: memberships, error: memberError } = await supabase
-        .from('community_members')
-        .select('community_id, role')
-        .eq('user_id', user.id);
-
-      if (memberError) throw memberError;
-
-      if (!memberships || memberships.length === 0) {
-        setCommunities([]);
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-
-      const communityIds = memberships.map(m => m.community_id);
-      const roleMap = new Map(memberships.map(m => [m.community_id, m.role]));
-
-      // Get community details
-      const { data: communityData, error: communityError } = await supabase
-        .from('communities')
-        .select('id, name, description')
-        .in('id', communityIds);
-
-      if (communityError) throw communityError;
-
-      // Get member counts
-      const { data: allMembers, error: countError } = await supabase
-        .from('community_members')
-        .select('community_id')
-        .in('community_id', communityIds);
-
-      if (countError) throw countError;
-
-      const memberCounts: Record<string, number> = {};
-      allMembers?.forEach(item => {
-        memberCounts[item.community_id] = (memberCounts[item.community_id] || 0) + 1;
-      });
-
-      const formattedCommunities: Community[] = communityData?.map(c => ({
-        id: c.id,
-        name: c.name,
-        description: c.description,
-        member_count: memberCounts[c.id] || 0,
-        role: roleMap.get(c.id) || 'member',
-      })) || [];
-
-      setCommunities(formattedCommunities);
+      // Update user's Iman score
+      await updateUserImanScore(user.id);
+      
+      // Load communities
+      const userCommunities = await getUserCommunities(user.id);
+      setCommunities(userCommunities);
+      
+      console.log(`✅ Loaded ${userCommunities.length} communities`);
     } catch (error) {
       console.error('Error loading communities:', error);
       Alert.alert('Error', 'Failed to load communities');
@@ -106,23 +66,32 @@ export default function CommunitiesScreen() {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
-        .from('community_invites')
-        .select('id')
-        .eq('invited_user_id', user.id)
-        .eq('status', 'pending');
-
-      if (error) throw error;
-      setPendingInvitesCount(data?.length || 0);
+      const count = await getPendingInvitesCount(user.id);
+      setPendingInvitesCount(count);
     } catch (error) {
       console.error('Error fetching pending invites:', error);
     }
   }, [user]);
 
   useEffect(() => {
+    const initializeUser = async () => {
+      if (user) {
+        // Ensure user profile exists
+        const profile = await getUserProfile();
+        if (!profile) {
+          await saveUserProfile({
+            userId: user.id,
+            username: user.email?.split('@')[0] || 'User',
+            email: user.email || '',
+          });
+        }
+      }
+    };
+    
+    initializeUser();
     loadCommunities();
     fetchPendingInvites();
-  }, [loadCommunities, fetchPendingInvites]);
+  }, [loadCommunities, fetchPendingInvites, user]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -143,29 +112,15 @@ export default function CommunitiesScreen() {
 
     setCreating(true);
     try {
-      // Create community
-      const { data: communityData, error: communityError } = await supabase
-        .from('communities')
-        .insert({
-          name: newCommunityName.trim(),
-          description: newCommunityDescription.trim() || null,
-          created_by: user.id,
-        })
-        .select()
-        .single();
-
-      if (communityError) throw communityError;
-
-      // Add creator as admin
-      const { error: memberError } = await supabase
-        .from('community_members')
-        .insert({
-          community_id: communityData.id,
-          user_id: user.id,
-          role: 'admin',
-        });
-
-      if (memberError) throw memberError;
+      const profile = await getUserProfile();
+      const username = profile?.username || user.email?.split('@')[0] || 'User';
+      
+      await createCommunity(
+        newCommunityName.trim(),
+        newCommunityDescription.trim() || null,
+        user.id,
+        username
+      );
 
       Alert.alert('Success', 'Community created successfully!');
       setNewCommunityName('');
@@ -312,52 +267,57 @@ export default function CommunitiesScreen() {
           </View>
         ) : (
           <View style={styles.communitiesList}>
-            {communities.map((community, index) => (
-              <React.Fragment key={index}>
-                <TouchableOpacity
-                  style={styles.communityCard}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/(tabs)/(iman)/community-detail',
-                      params: { communityId: community.id },
-                    })
-                  }
-                >
-                  <View style={styles.communityIcon}>
-                    <IconSymbol
-                      ios_icon_name="person.3.fill"
-                      android_material_icon_name="groups"
-                      size={32}
-                      color={colors.primary}
-                    />
-                  </View>
-                  <View style={styles.communityInfo}>
-                    <View style={styles.communityHeader}>
-                      <Text style={styles.communityName}>{community.name}</Text>
-                      {community.role === 'admin' && (
-                        <View style={styles.adminBadge}>
-                          <Text style={styles.adminBadgeText}>Admin</Text>
-                        </View>
-                      )}
+            {communities.map((community, index) => {
+              const userMember = community.members.find(m => m.userId === user?.id);
+              const isAdmin = userMember?.role === 'admin';
+              
+              return (
+                <React.Fragment key={index}>
+                  <TouchableOpacity
+                    style={styles.communityCard}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/(tabs)/(iman)/community-detail',
+                        params: { communityId: community.id },
+                      })
+                    }
+                  >
+                    <View style={styles.communityIcon}>
+                      <IconSymbol
+                        ios_icon_name="person.3.fill"
+                        android_material_icon_name="groups"
+                        size={32}
+                        color={colors.primary}
+                      />
                     </View>
-                    {community.description && (
-                      <Text style={styles.communityDescription} numberOfLines={1}>
-                        {community.description}
+                    <View style={styles.communityInfo}>
+                      <View style={styles.communityHeader}>
+                        <Text style={styles.communityName}>{community.name}</Text>
+                        {isAdmin && (
+                          <View style={styles.adminBadge}>
+                            <Text style={styles.adminBadgeText}>Admin</Text>
+                          </View>
+                        )}
+                      </View>
+                      {community.description && (
+                        <Text style={styles.communityDescription} numberOfLines={1}>
+                          {community.description}
+                        </Text>
+                      )}
+                      <Text style={styles.communityMembers}>
+                        {community.members.length} {community.members.length === 1 ? 'member' : 'members'}
                       </Text>
-                    )}
-                    <Text style={styles.communityMembers}>
-                      {community.member_count} {community.member_count === 1 ? 'member' : 'members'}
-                    </Text>
-                  </View>
-                  <IconSymbol
-                    ios_icon_name="chevron.right"
-                    android_material_icon_name="chevron_right"
-                    size={20}
-                    color={colors.textSecondary}
-                  />
-                </TouchableOpacity>
-              </React.Fragment>
-            ))}
+                    </View>
+                    <IconSymbol
+                      ios_icon_name="chevron.right"
+                      android_material_icon_name="chevron_right"
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                </React.Fragment>
+              );
+            })}
           </View>
         )}
       </ScrollView>
