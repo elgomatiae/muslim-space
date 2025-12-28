@@ -1,12 +1,11 @@
 
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal } from "react-native";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 interface Achievement {
@@ -23,6 +22,8 @@ interface Achievement {
   unlocked_at?: string;
   progress: number;
   current_value: number;
+  unlock_message?: string;
+  next_steps?: string;
 }
 
 export default function AchievementsBadges() {
@@ -30,6 +31,8 @@ export default function AchievementsBadges() {
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [recentAchievements, setRecentAchievements] = useState<Achievement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
+  const [detailsModalVisible, setDetailsModalVisible] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -145,11 +148,27 @@ export default function AchievementsBadges() {
     }
   };
 
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case 'ibadah': return '#10B981';
+      case 'ilm': return '#3B82F6';
+      case 'amanah': return '#F59E0B';
+      default: return colors.primary;
+    }
+  };
+
   const unlockedCount = achievements.filter(a => a.unlocked).length;
 
-  const handleViewDetails = () => {
+  const openAchievementDetails = (achievement: Achievement) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelectedAchievement(achievement);
+    setDetailsModalVisible(true);
+  };
+
+  const closeAchievementDetails = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/(tabs)/(iman)/achievements' as any);
+    setDetailsModalVisible(false);
+    setTimeout(() => setSelectedAchievement(null), 300);
   };
 
   const renderAchievementCard = (achievement: Achievement, index: number) => {
@@ -162,7 +181,7 @@ export default function AchievementsBadges() {
             styles.achievementCard,
             !achievement.unlocked && styles.achievementCardLocked
           ]}
-          onPress={handleViewDetails}
+          onPress={() => openAchievementDetails(achievement)}
           activeOpacity={0.7}
         >
           <LinearGradient
@@ -345,19 +364,6 @@ export default function AchievementsBadges() {
       <View style={styles.allAchievementsSection}>
         <View style={styles.allAchievementsHeader}>
           <Text style={styles.allAchievementsTitle}>All Achievements</Text>
-          <TouchableOpacity
-            style={styles.viewDetailsButton}
-            onPress={handleViewDetails}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.viewDetailsText}>View Details</Text>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron-right"
-              size={16}
-              color={colors.primary}
-            />
-          </TouchableOpacity>
         </View>
         <ScrollView 
           horizontal 
@@ -368,6 +374,216 @@ export default function AchievementsBadges() {
           {achievements.map((achievement, index) => renderAchievementCard(achievement, index))}
         </ScrollView>
       </View>
+
+      {/* Achievement Details Modal */}
+      <Modal
+        visible={detailsModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeAchievementDetails}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {selectedAchievement && (
+              <>
+                <View style={styles.modalHeader}>
+                  <TouchableOpacity
+                    style={styles.modalCloseButton}
+                    onPress={closeAchievementDetails}
+                    activeOpacity={0.7}
+                  >
+                    <IconSymbol
+                      ios_icon_name="xmark"
+                      android_material_icon_name="close"
+                      size={24}
+                      color={colors.text}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <LinearGradient
+                    colors={selectedAchievement.unlocked 
+                      ? [getTierColor(selectedAchievement.tier) + '40', getTierColor(selectedAchievement.tier) + '20']
+                      : [colors.card, colors.card]
+                    }
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.modalAchievementHeader}
+                  >
+                    <View style={[
+                      styles.modalAchievementIcon,
+                      { backgroundColor: selectedAchievement.unlocked ? getTierColor(selectedAchievement.tier) : colors.border },
+                    ]}>
+                      <IconSymbol
+                        ios_icon_name={selectedAchievement.unlocked ? 'star.fill' : 'lock.fill'}
+                        android_material_icon_name={selectedAchievement.unlocked ? 'star' : 'lock'}
+                        size={64}
+                        color={selectedAchievement.unlocked ? colors.card : colors.textSecondary}
+                      />
+                    </View>
+
+                    <Text style={styles.modalAchievementTitle}>{selectedAchievement.title}</Text>
+                    
+                    <View style={styles.modalBadgesRow}>
+                      <View style={[styles.modalTierBadge, { backgroundColor: getTierColor(selectedAchievement.tier) }]}>
+                        <Text style={styles.modalTierBadgeText}>{selectedAchievement.tier}</Text>
+                      </View>
+                      <View style={[styles.modalCategoryBadge, { backgroundColor: getCategoryColor(selectedAchievement.category) + '20' }]}>
+                        <Text style={[styles.modalCategoryBadgeText, { color: getCategoryColor(selectedAchievement.category) }]}>
+                          {selectedAchievement.category}
+                        </Text>
+                      </View>
+                    </View>
+                  </LinearGradient>
+
+                  <View style={styles.modalDetailsSection}>
+                    <View style={styles.modalDetailRow}>
+                      <IconSymbol
+                        ios_icon_name="doc.text.fill"
+                        android_material_icon_name="description"
+                        size={24}
+                        color={colors.primary}
+                      />
+                      <View style={styles.modalDetailContent}>
+                        <Text style={styles.modalDetailLabel}>Description</Text>
+                        <Text style={styles.modalDetailText}>{selectedAchievement.description}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.modalDetailRow}>
+                      <IconSymbol
+                        ios_icon_name="target"
+                        android_material_icon_name="flag"
+                        size={24}
+                        color={colors.success}
+                      />
+                      <View style={styles.modalDetailContent}>
+                        <Text style={styles.modalDetailLabel}>Requirement</Text>
+                        <Text style={styles.modalDetailText}>
+                          {selectedAchievement.requirement_type.replace(/_/g, ' ')}: {selectedAchievement.requirement_value}
+                        </Text>
+                        {!selectedAchievement.unlocked && (
+                          <Text style={styles.modalDetailProgress}>
+                            Current: {selectedAchievement.current_value} ({Math.round(selectedAchievement.progress)}%)
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+
+                    <View style={styles.modalDetailRow}>
+                      <IconSymbol
+                        ios_icon_name="star.fill"
+                        android_material_icon_name="star"
+                        size={24}
+                        color={colors.warning}
+                      />
+                      <View style={styles.modalDetailContent}>
+                        <Text style={styles.modalDetailLabel}>Reward</Text>
+                        <Text style={styles.modalDetailText}>{selectedAchievement.points} points</Text>
+                      </View>
+                    </View>
+
+                    {selectedAchievement.unlocked && selectedAchievement.unlocked_at && (
+                      <>
+                        <View style={styles.modalDetailRow}>
+                          <IconSymbol
+                            ios_icon_name="calendar.badge.checkmark"
+                            android_material_icon_name="event-available"
+                            size={24}
+                            color={colors.success}
+                          />
+                          <View style={styles.modalDetailContent}>
+                            <Text style={styles.modalDetailLabel}>Unlocked On</Text>
+                            <Text style={styles.modalDetailText}>
+                              {new Date(selectedAchievement.unlocked_at).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                              })}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {selectedAchievement.unlock_message && (
+                          <View style={styles.modalCelebrationCard}>
+                            <IconSymbol
+                              ios_icon_name="party.popper.fill"
+                              android_material_icon_name="celebration"
+                              size={24}
+                              color={getTierColor(selectedAchievement.tier)}
+                            />
+                            <View style={styles.modalCelebrationContent}>
+                              <Text style={styles.modalCelebrationTitle}>Congratulations!</Text>
+                              <Text style={styles.modalCelebrationText}>
+                                {selectedAchievement.unlock_message}
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+                      </>
+                    )}
+
+                    {!selectedAchievement.unlocked && (
+                      <>
+                        {selectedAchievement.progress > 0 && (
+                          <View style={styles.modalProgressCard}>
+                            <View style={styles.modalProgressHeader}>
+                              <IconSymbol
+                                ios_icon_name="chart.bar.fill"
+                                android_material_icon_name="bar-chart"
+                                size={24}
+                                color={getTierColor(selectedAchievement.tier)}
+                              />
+                              <Text style={styles.modalProgressTitle}>Your Progress</Text>
+                            </View>
+                            <View style={styles.modalProgressBarContainer}>
+                              <View style={styles.modalProgressBarBackground}>
+                                <View 
+                                  style={[
+                                    styles.modalProgressBarFill, 
+                                    { 
+                                      width: `${selectedAchievement.progress}%`,
+                                      backgroundColor: getTierColor(selectedAchievement.tier)
+                                    }
+                                  ]} 
+                                />
+                              </View>
+                              <Text style={styles.modalProgressPercentage}>
+                                {Math.round(selectedAchievement.progress)}%
+                              </Text>
+                            </View>
+                            <Text style={styles.modalProgressSubtext}>
+                              {selectedAchievement.requirement_value - selectedAchievement.current_value} more to go!
+                            </Text>
+                          </View>
+                        )}
+
+                        {selectedAchievement.next_steps && (
+                          <View style={styles.modalTipCard}>
+                            <IconSymbol
+                              ios_icon_name="lightbulb.fill"
+                              android_material_icon_name="lightbulb"
+                              size={24}
+                              color={colors.warning}
+                            />
+                            <View style={styles.modalTipContent}>
+                              <Text style={styles.modalTipTitle}>Next Steps</Text>
+                              <Text style={styles.modalTipText}>
+                                {selectedAchievement.next_steps}
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+                      </>
+                    )}
+                  </View>
+                </ScrollView>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -445,18 +661,6 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.text,
     fontSize: 15,
-  },
-  viewDetailsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  viewDetailsText: {
-    ...typography.caption,
-    color: colors.primary,
-    fontWeight: '600',
   },
   achievementsScroll: {
     marginHorizontal: -spacing.xl,
@@ -561,5 +765,195 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '600',
     fontSize: 10,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: borderRadius.xxl,
+    borderTopRightRadius: borderRadius.xxl,
+    maxHeight: '90%',
+    paddingBottom: spacing.xxl,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: spacing.lg,
+  },
+  modalCloseButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.md,
+  },
+  modalAchievementHeader: {
+    alignItems: 'center',
+    padding: spacing.xl,
+    marginHorizontal: spacing.lg,
+    borderRadius: borderRadius.xl,
+    marginBottom: spacing.lg,
+  },
+  modalAchievementIcon: {
+    width: 120,
+    height: 120,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+  },
+  modalAchievementTitle: {
+    ...typography.h2,
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  modalBadgesRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  modalTierBadge: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  modalTierBadgeText: {
+    ...typography.body,
+    color: colors.card,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  modalCategoryBadge: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  modalCategoryBadgeText: {
+    ...typography.body,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  modalDetailsSection: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.lg,
+  },
+  modalDetailRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    backgroundColor: colors.card,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modalDetailContent: {
+    flex: 1,
+  },
+  modalDetailLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+  },
+  modalDetailText: {
+    ...typography.body,
+    color: colors.text,
+  },
+  modalDetailProgress: {
+    ...typography.caption,
+    color: colors.primary,
+    marginTop: spacing.xs,
+    fontWeight: '600',
+  },
+  modalCelebrationCard: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    backgroundColor: colors.success + '10',
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.success + '30',
+  },
+  modalCelebrationContent: {
+    flex: 1,
+  },
+  modalCelebrationTitle: {
+    ...typography.bodyBold,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  modalCelebrationText: {
+    ...typography.caption,
+    color: colors.text,
+    lineHeight: 18,
+  },
+  modalProgressCard: {
+    backgroundColor: colors.card,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modalProgressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  modalProgressTitle: {
+    ...typography.bodyBold,
+    color: colors.text,
+  },
+  modalProgressBarContainer: {
+    marginBottom: spacing.sm,
+  },
+  modalProgressBarBackground: {
+    height: 12,
+    backgroundColor: colors.border,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    marginBottom: spacing.sm,
+  },
+  modalProgressBarFill: {
+    height: '100%',
+    borderRadius: borderRadius.md,
+  },
+  modalProgressPercentage: {
+    ...typography.h3,
+    color: colors.text,
+    textAlign: 'center',
+    fontWeight: '800',
+  },
+  modalProgressSubtext: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  modalTipCard: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    backgroundColor: colors.warning + '10',
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.warning + '30',
+  },
+  modalTipContent: {
+    flex: 1,
+  },
+  modalTipTitle: {
+    ...typography.bodyBold,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  modalTipText: {
+    ...typography.caption,
+    color: colors.text,
+    lineHeight: 18,
   },
 });
