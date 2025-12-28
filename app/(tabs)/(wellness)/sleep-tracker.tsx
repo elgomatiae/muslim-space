@@ -21,6 +21,7 @@ export default function SleepTrackerScreen() {
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [tempGoal, setTempGoal] = useState('7');
   const [customHours, setCustomHours] = useState('');
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
 
   // Animation values
   const pulseAnim = useMemo(() => new Animated.Value(1), []);
@@ -83,7 +84,8 @@ export default function SleepTrackerScreen() {
         .eq('date', today)
         .single();
       
-      setTodaySleepHours(sleepData?.sleep_hours ? parseFloat(sleepData.sleep_hours) : 0);
+      const hours = sleepData?.sleep_hours ? parseFloat(sleepData.sleep_hours) : 0;
+      setTodaySleepHours(hours);
     } catch (error) {
       console.error('Error loading sleep data:', error);
     }
@@ -112,10 +114,15 @@ export default function SleepTrackerScreen() {
       });
 
     if (!error) {
-      await loadData();
-      await updateGoalsProgress();
+      setTodaySleepHours(hours);
+      await updateGoalsProgress(hours);
       await refreshData();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      // Show completion modal if goal reached
+      if (amanahGoals && hours >= amanahGoals.dailySleepGoal && todaySleepHours < amanahGoals.dailySleepGoal) {
+        setShowCompletionModal(true);
+      }
     }
   };
 
@@ -133,12 +140,14 @@ export default function SleepTrackerScreen() {
     Alert.alert('Success', `Logged ${hours} hours of sleep!`);
   };
 
-  const updateGoalsProgress = async () => {
+  const updateGoalsProgress = async (hours: number) => {
     if (!user || !amanahGoals) return;
 
+    console.log('😴 Updating Iman Tracker with sleep progress:', hours, 'hours');
+    
     await updateAmanahGoals({
       ...amanahGoals,
-      dailySleepCompleted: todaySleepHours,
+      dailySleepCompleted: hours,
     });
   };
 
@@ -682,6 +691,43 @@ export default function SleepTrackerScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Goal Completion Modal */}
+      <Modal
+        visible={showCompletionModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowCompletionModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.completionModalContent}>
+            <LinearGradient
+              colors={colors.gradientSuccess}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.completionGradient}
+            >
+              <IconSymbol
+                ios_icon_name="checkmark.circle.fill"
+                android_material_icon_name="check-circle"
+                size={64}
+                color={colors.card}
+              />
+              <Text style={styles.completionTitle}>Goal Achieved!</Text>
+              <Text style={styles.completionMessage}>
+                Masha&apos;Allah! You&apos;ve met your sleep goal. Your progress has been updated in the Iman Tracker.
+              </Text>
+              <TouchableOpacity
+                style={styles.completionButton}
+                onPress={() => setShowCompletionModal(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.completionButtonText}>Continue</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1007,6 +1053,39 @@ const styles = StyleSheet.create({
   },
   goalsModalButtonText: {
     ...typography.bodyBold,
+    color: colors.card,
+  },
+  completionModalContent: {
+    marginHorizontal: spacing.xl,
+    borderRadius: borderRadius.xxl,
+    overflow: 'hidden',
+    ...shadows.large,
+  },
+  completionGradient: {
+    padding: spacing.xxxl,
+    alignItems: 'center',
+  },
+  completionTitle: {
+    ...typography.h1,
+    color: colors.card,
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  completionMessage: {
+    ...typography.body,
+    color: colors.card,
+    textAlign: 'center',
+    marginBottom: spacing.xl,
+    lineHeight: 24,
+  },
+  completionButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xxxl,
+    borderRadius: borderRadius.lg,
+  },
+  completionButtonText: {
+    ...typography.h4,
     color: colors.card,
   },
 });

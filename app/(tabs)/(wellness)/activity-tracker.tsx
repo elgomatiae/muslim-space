@@ -36,6 +36,7 @@ export default function ActivityTrackerScreen() {
   const [workoutDurations, setWorkoutDurations] = useState<WorkoutDurations>({});
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [tempGoal, setTempGoal] = useState('30');
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
 
   // Animation values
   const pulseAnim = useMemo(() => new Animated.Value(1), []);
@@ -152,10 +153,16 @@ export default function ActivityTrackerScreen() {
       });
 
     if (!error) {
-      await loadData();
-      await updateGoalsProgress();
+      const newTotal = todayExerciseMinutes + minutes;
+      setTodayExerciseMinutes(newTotal);
+      await updateGoalsProgress(newTotal);
       await refreshData();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      // Show completion modal if goal reached
+      if (amanahGoals && newTotal >= amanahGoals.dailyExerciseGoal && todayExerciseMinutes < amanahGoals.dailyExerciseGoal) {
+        setShowCompletionModal(true);
+      }
     }
   };
 
@@ -185,21 +192,29 @@ export default function ActivityTrackerScreen() {
 
     if (!error) {
       setShowWorkoutModal(false);
-      await loadData();
-      await updateGoalsProgress();
+      const newTotal = todayExerciseMinutes + totalDuration;
+      setTodayExerciseMinutes(newTotal);
+      await updateGoalsProgress(newTotal);
       await refreshData();
       Alert.alert('Success', `Logged ${totalDuration} minutes of exercise!`);
+      
+      // Show completion modal if goal reached
+      if (amanahGoals && newTotal >= amanahGoals.dailyExerciseGoal && todayExerciseMinutes < amanahGoals.dailyExerciseGoal) {
+        setShowCompletionModal(true);
+      }
     } else {
       Alert.alert('Error', 'Failed to log workout. Please try again.');
     }
   };
 
-  const updateGoalsProgress = async () => {
+  const updateGoalsProgress = async (newTotal: number) => {
     if (!user || !amanahGoals) return;
 
+    console.log('💪 Updating Iman Tracker with exercise progress:', newTotal, 'minutes');
+    
     await updateAmanahGoals({
       ...amanahGoals,
-      dailyExerciseCompleted: todayExerciseMinutes,
+      dailyExerciseCompleted: newTotal,
     });
   };
 
@@ -710,6 +725,43 @@ export default function ActivityTrackerScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Goal Completion Modal */}
+      <Modal
+        visible={showCompletionModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowCompletionModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.completionModalContent}>
+            <LinearGradient
+              colors={colors.gradientSuccess}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.completionGradient}
+            >
+              <IconSymbol
+                ios_icon_name="checkmark.circle.fill"
+                android_material_icon_name="check-circle"
+                size={64}
+                color={colors.card}
+              />
+              <Text style={styles.completionTitle}>Goal Achieved!</Text>
+              <Text style={styles.completionMessage}>
+                Masha&apos;Allah! You&apos;ve completed your daily activity goal. Your progress has been updated in the Iman Tracker.
+              </Text>
+              <TouchableOpacity
+                style={styles.completionButton}
+                onPress={() => setShowCompletionModal(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.completionButtonText}>Continue</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1073,6 +1125,39 @@ const styles = StyleSheet.create({
   },
   goalsModalButtonText: {
     ...typography.bodyBold,
+    color: colors.card,
+  },
+  completionModalContent: {
+    marginHorizontal: spacing.xl,
+    borderRadius: borderRadius.xxl,
+    overflow: 'hidden',
+    ...shadows.large,
+  },
+  completionGradient: {
+    padding: spacing.xxxl,
+    alignItems: 'center',
+  },
+  completionTitle: {
+    ...typography.h1,
+    color: colors.card,
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  completionMessage: {
+    ...typography.body,
+    color: colors.card,
+    textAlign: 'center',
+    marginBottom: spacing.xl,
+    lineHeight: 24,
+  },
+  completionButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xxxl,
+    borderRadius: borderRadius.lg,
+  },
+  completionButtonText: {
+    ...typography.h4,
     color: colors.card,
   },
 });
