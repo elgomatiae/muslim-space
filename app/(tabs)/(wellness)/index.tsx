@@ -201,14 +201,6 @@ export default function WellnessScreen() {
       gradient: colors.gradientInfo,
       route: '/(tabs)/(wellness)/prophet-stories',
     },
-    {
-      title: 'Mood Tracker',
-      subtitle: 'Track emotions',
-      icon: 'face.smiling',
-      androidIcon: 'mood',
-      gradient: colors.gradientSunset,
-      route: '/(tabs)/(wellness)/mood-tracker',
-    },
   ];
 
   const physicalHealthCards = [
@@ -416,42 +408,6 @@ export default function WellnessScreen() {
             />
           ))}
         </View>
-
-        {/* Crisis Support Banner */}
-        <TouchableOpacity
-          style={styles.crisisCard}
-          activeOpacity={0.85}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            router.push('/(tabs)/(wellness)/crisis-support' as any);
-          }}
-        >
-          <LinearGradient
-            colors={['#FF6B6B', '#EE5A6F']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.crisisGradient}
-          >
-            <View style={styles.crisisIconWrapper}>
-              <IconSymbol
-                ios_icon_name="exclamationmark.triangle.fill"
-                android_material_icon_name="warning"
-                size={28}
-                color={colors.card}
-              />
-            </View>
-            <View style={styles.crisisContent}>
-              <Text style={styles.crisisTitle}>Need Immediate Help?</Text>
-              <Text style={styles.crisisSubtitle}>24/7 crisis support available</Text>
-            </View>
-            <IconSymbol
-              ios_icon_name="arrow.right.circle.fill"
-              android_material_icon_name="arrow-forward"
-              size={28}
-              color={colors.card}
-            />
-          </LinearGradient>
-        </TouchableOpacity>
 
         {/* Inspirational Quote */}
         <View style={styles.quoteCard}>
@@ -685,41 +641,6 @@ const styles = StyleSheet.create({
   cardArrow: {
     alignSelf: 'flex-end',
     marginTop: spacing.xs,
-  },
-  crisisCard: {
-    marginBottom: spacing.xl,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    ...shadows.large,
-  },
-  crisisGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  crisisIconWrapper: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  crisisContent: {
-    flex: 1,
-  },
-  crisisTitle: {
-    ...typography.bodyBold,
-    color: colors.card,
-    marginBottom: spacing.xs,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  crisisSubtitle: {
-    ...typography.caption,
-    color: colors.card,
-    opacity: 0.95,
   },
   quoteCard: {
     marginBottom: spacing.xl,

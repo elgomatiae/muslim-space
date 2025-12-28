@@ -17,22 +17,10 @@ interface JournalEntry {
   id: string;
   title: string;
   content: string;
-  mood: string;
   tags: string[];
   created_at: string;
   updated_at: string;
 }
-
-const MOODS = [
-  { emoji: '😊', label: 'Happy', value: 'happy', color: colors.gradientSuccess },
-  { emoji: '😌', label: 'Peaceful', value: 'peaceful', color: colors.gradientTeal },
-  { emoji: '🙏', label: 'Grateful', value: 'grateful', color: colors.gradientPurple },
-  { emoji: '😔', label: 'Sad', value: 'sad', color: colors.gradientInfo },
-  { emoji: '😰', label: 'Anxious', value: 'anxious', color: colors.gradientWarning },
-  { emoji: '😤', label: 'Frustrated', value: 'frustrated', color: colors.gradientRed },
-  { emoji: '🤔', label: 'Reflective', value: 'reflective', color: colors.gradientOcean },
-  { emoji: '💪', label: 'Motivated', value: 'motivated', color: colors.gradientAccent },
-];
 
 const SUGGESTED_TAGS = [
   'Gratitude', 'Prayer', 'Reflection', 'Goals', 'Challenges',
@@ -59,13 +47,11 @@ export default function JournalScreen() {
   // Form states
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [selectedMood, setSelectedMood] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [customTag, setCustomTag] = useState('');
   
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterMood, setFilterMood] = useState('');
   const [filterTag, setFilterTag] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
@@ -75,7 +61,7 @@ export default function JournalScreen() {
 
   useEffect(() => {
     applyFilters();
-  }, [entries, searchQuery, filterMood, filterTag]);
+  }, [entries, searchQuery, filterTag]);
 
   const loadEntries = async () => {
     if (!user) return;
@@ -111,10 +97,6 @@ export default function JournalScreen() {
       );
     }
 
-    if (filterMood) {
-      filtered = filtered.filter(entry => entry.mood === filterMood);
-    }
-
     if (filterTag) {
       filtered = filtered.filter(entry => entry.tags?.includes(filterTag));
     }
@@ -128,7 +110,6 @@ export default function JournalScreen() {
     setSelectedEntry(null);
     setTitle('');
     setContent('');
-    setSelectedMood('');
     setSelectedTags([]);
     setShowEntryModal(true);
   };
@@ -139,7 +120,6 @@ export default function JournalScreen() {
     setSelectedEntry(entry);
     setTitle(entry.title || '');
     setContent(entry.content || '');
-    setSelectedMood(entry.mood || '');
     setSelectedTags(entry.tags || []);
     setShowEntryModal(true);
   };
@@ -162,7 +142,6 @@ export default function JournalScreen() {
         user_id: user.id,
         title: title.trim() || 'Untitled Entry',
         content: content.trim(),
-        mood: selectedMood,
         tags: selectedTags,
         updated_at: new Date().toISOString(),
       };
@@ -282,24 +261,13 @@ export default function JournalScreen() {
     });
   };
 
-  const getMoodEmoji = (mood: string) => {
-    const moodObj = MOODS.find(m => m.value === mood);
-    return moodObj ? moodObj.emoji : '📝';
-  };
-
-  const getMoodColor = (mood: string) => {
-    const moodObj = MOODS.find(m => m.value === mood);
-    return moodObj ? moodObj.color : colors.gradientPrimary;
-  };
-
   const clearFilters = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSearchQuery('');
-    setFilterMood('');
     setFilterTag('');
   };
 
-  const hasActiveFilters = searchQuery || filterMood || filterTag;
+  const hasActiveFilters = searchQuery || filterTag;
 
   const allTags = Array.from(new Set(entries.flatMap(e => e.tags || [])));
 
@@ -441,57 +409,32 @@ export default function JournalScreen() {
         </View>
 
         {/* Expandable Filters */}
-        {showFilters && (
+        {showFilters && allTags.length > 0 && (
           <View style={styles.filtersExpanded}>
-            <Text style={styles.filterSectionTitle}>Filter by Mood</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.moodFilterScroll}>
-              {MOODS.map((mood, index) => (
+            <Text style={styles.filterSectionTitle}>Filter by Tag</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagFilterScroll}>
+              {allTags.map((tag, index) => (
                 <React.Fragment key={index}>
                   <TouchableOpacity
                     style={[
-                      styles.moodFilterChip,
-                      filterMood === mood.value && styles.moodFilterChipActive,
+                      styles.tagFilterChip,
+                      filterTag === tag && styles.tagFilterChipActive,
                     ]}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setFilterMood(filterMood === mood.value ? '' : mood.value);
+                      setFilterTag(filterTag === tag ? '' : tag);
                     }}
                   >
-                    <Text style={styles.moodFilterEmoji}>{mood.emoji}</Text>
-                    <Text style={styles.moodFilterLabel}>{mood.label}</Text>
+                    <Text style={[
+                      styles.tagFilterText,
+                      filterTag === tag && styles.tagFilterTextActive,
+                    ]}>
+                      {tag}
+                    </Text>
                   </TouchableOpacity>
                 </React.Fragment>
               ))}
             </ScrollView>
-
-            {allTags.length > 0 && (
-              <React.Fragment>
-                <Text style={styles.filterSectionTitle}>Filter by Tag</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagFilterScroll}>
-                  {allTags.map((tag, index) => (
-                    <React.Fragment key={index}>
-                      <TouchableOpacity
-                        style={[
-                          styles.tagFilterChip,
-                          filterTag === tag && styles.tagFilterChipActive,
-                        ]}
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          setFilterTag(filterTag === tag ? '' : tag);
-                        }}
-                      >
-                        <Text style={[
-                          styles.tagFilterText,
-                          filterTag === tag && styles.tagFilterTextActive,
-                        ]}>
-                          {tag}
-                        </Text>
-                      </TouchableOpacity>
-                    </React.Fragment>
-                  ))}
-                </ScrollView>
-              </React.Fragment>
-            )}
           </View>
         )}
       </View>
@@ -556,12 +499,17 @@ export default function JournalScreen() {
                   onPress={() => openEditEntry(entry)}
                 >
                   <LinearGradient
-                    colors={getMoodColor(entry.mood)}
+                    colors={colors.gradientPrimary}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.entryCardHeader}
                   >
-                    <Text style={styles.entryMoodEmoji}>{getMoodEmoji(entry.mood)}</Text>
+                    <IconSymbol
+                      ios_icon_name="book.fill"
+                      android_material_icon_name="menu-book"
+                      size={28}
+                      color={colors.card}
+                    />
                     <View style={styles.entryCardHeaderText}>
                       <Text style={styles.entryCardDate}>{formatDate(entry.created_at)}</Text>
                       <Text style={styles.entryCardTime}>{formatTime(entry.created_at)}</Text>
@@ -644,33 +592,6 @@ export default function JournalScreen() {
             contentContainerStyle={styles.modalContent}
             showsVerticalScrollIndicator={false}
           >
-            {/* Mood Selection */}
-            <Text style={styles.formLabel}>Mood (Optional)</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.moodScroll}
-              contentContainerStyle={styles.moodScrollContent}
-            >
-              {MOODS.map((mood, index) => (
-                <React.Fragment key={index}>
-                  <TouchableOpacity
-                    style={[
-                      styles.moodOption,
-                      selectedMood === mood.value && styles.moodOptionSelected,
-                    ]}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setSelectedMood(selectedMood === mood.value ? '' : mood.value);
-                    }}
-                  >
-                    <Text style={styles.moodOptionEmoji}>{mood.emoji}</Text>
-                    <Text style={styles.moodOptionLabel}>{mood.label}</Text>
-                  </TouchableOpacity>
-                </React.Fragment>
-              ))}
-            </ScrollView>
-
             {/* Title Input */}
             <Text style={styles.formLabel}>Title (Optional)</Text>
             <TextInput
@@ -931,32 +852,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.sm,
   },
-  moodFilterScroll: {
-    marginBottom: spacing.md,
-  },
-  moodFilterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.highlight,
-    marginRight: spacing.sm,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  moodFilterChipActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary + '20',
-  },
-  moodFilterEmoji: {
-    fontSize: 20,
-  },
-  moodFilterLabel: {
-    ...typography.caption,
-    color: colors.text,
-  },
   tagFilterScroll: {
     marginBottom: spacing.sm,
   },
@@ -1035,9 +930,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.md,
     gap: spacing.md,
-  },
-  entryMoodEmoji: {
-    fontSize: 32,
   },
   entryCardHeaderText: {
     flex: 1,
@@ -1139,33 +1031,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.sm,
     marginTop: spacing.md,
-  },
-  moodScroll: {
-    marginBottom: spacing.md,
-  },
-  moodScrollContent: {
-    gap: spacing.sm,
-  },
-  moodOption: {
-    alignItems: 'center',
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.card,
-    borderWidth: 2,
-    borderColor: colors.border,
-    minWidth: 80,
-  },
-  moodOptionSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.highlight,
-  },
-  moodOptionEmoji: {
-    fontSize: 32,
-    marginBottom: spacing.xs,
-  },
-  moodOptionLabel: {
-    ...typography.caption,
-    color: colors.text,
   },
   titleInput: {
     backgroundColor: colors.card,

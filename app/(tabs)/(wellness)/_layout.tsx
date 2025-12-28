@@ -16,10 +16,13 @@ export default function WellnessLayout() {
       <Stack.Screen name="journal-prompts" />
       <Stack.Screen name="prophet-stories" />
       <Stack.Screen name="mental-duas" />
-      <Stack.Screen name="mood-tracker" />
       <Stack.Screen name="emotional-support" />
       <Stack.Screen name="meditation" />
-      <Stack.Screen name="crisis-support" />
+      <Stack.Screen name="physical-health" />
+      <Stack.Screen name="activity-tracker" />
+      <Stack.Screen name="sleep-tracker" />
+      <Stack.Screen name="physical-goals" />
+      <Stack.Screen name="activity-history" />
     </Stack>
   );
 }
