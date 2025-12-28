@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal } from "react-native";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
@@ -7,6 +7,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import * as Haptics from 'expo-haptics';
+import { useFocusEffect } from 'expo-router';
 
 interface Achievement {
   id: string;
@@ -33,79 +34,82 @@ export default function AchievementsBadges() {
   const [loading, setLoading] = useState(true);
   const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
+  const cacheRef = useRef<{ data: Achievement[]; timestamp: number } | null>(null);
+  const CACHE_DURATION = 30000; // 30 seconds cache
 
-  useEffect(() => {
-    if (user) {
-      loadAchievements();
-      
-      // Set up real-time refresh interval
-      const interval = setInterval(() => {
+  // Load achievements only when screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user) {
         loadAchievements();
-      }, 5000); // Refresh every 5 seconds for instant updates
-      
-      return () => clearInterval(interval);
-    }
-  }, [user]);
+      }
+    }, [user])
+  );
 
   const loadAchievements = async () => {
     if (!user) return;
 
     try {
-      console.log('🏆 Loading achievements for user:', user.id);
-
-      // Load all achievements
-      const { data: allAchievements, error: achievementsError } = await supabase
-        .from('achievements')
-        .select('*')
-        .eq('is_active', true)
-        .order('order_index', { ascending: true });
-
-      if (achievementsError) {
-        console.log('❌ Error loading achievements:', achievementsError);
+      // Check cache first
+      const now = Date.now();
+      if (cacheRef.current && (now - cacheRef.current.timestamp) < CACHE_DURATION) {
+        console.log('🏆 Using cached achievements data');
+        setAchievements(cacheRef.current.data);
+        updateRecentAchievements(cacheRef.current.data);
         setLoading(false);
         return;
       }
 
-      console.log('✅ Loaded achievements:', allAchievements?.length || 0);
+      console.log('🏆 Loading achievements for user:', user.id);
 
-      // Load user's unlocked achievements
-      const { data: userAchievements, error: userError } = await supabase
-        .from('user_achievements')
-        .select('achievement_id, unlocked_at')
-        .eq('user_id', user.id);
+      // Load all data in parallel for better performance
+      const [achievementsResult, userAchievementsResult, progressResult] = await Promise.all([
+        supabase
+          .from('achievements')
+          .select('*')
+          .eq('is_active', true)
+          .order('order_index', { ascending: true }),
+        supabase
+          .from('user_achievements')
+          .select('achievement_id, unlocked_at')
+          .eq('user_id', user.id),
+        supabase
+          .from('achievement_progress')
+          .select('achievement_id, current_value')
+          .eq('user_id', user.id)
+      ]);
 
-      if (userError) {
-        console.log('⚠️ Error loading user achievements:', userError);
-      } else {
-        console.log('✅ User unlocked achievements:', userAchievements?.length || 0);
+      if (achievementsResult.error) {
+        console.log('❌ Error loading achievements:', achievementsResult.error);
+        setLoading(false);
+        return;
       }
 
-      // Load progress for locked achievements
-      const { data: progressData, error: progressError } = await supabase
-        .from('achievement_progress')
-        .select('achievement_id, current_value')
-        .eq('user_id', user.id);
+      console.log('✅ Loaded achievements:', achievementsResult.data?.length || 0);
 
-      if (progressError) {
-        console.log('⚠️ Error loading progress:', progressError);
-      } else {
-        console.log('✅ Progress data loaded:', progressData?.length || 0);
-      }
+      const allAchievements = achievementsResult.data || [];
+      const userAchievements = userAchievementsResult.data || [];
+      const progressData = progressResult.data || [];
 
-      // Merge data
-      const unlockedIds = new Set(userAchievements?.map(ua => ua.achievement_id) || []);
-      const progressMap = new Map(progressData?.map(p => [p.achievement_id, p.current_value]) || []);
-      const unlockedAtMap = new Map(userAchievements?.map(ua => [ua.achievement_id, ua.unlocked_at]) || []);
+      // Create lookup maps for O(1) access
+      const unlockedMap = new Map(
+        userAchievements.map(ua => [ua.achievement_id, ua.unlocked_at])
+      );
+      const progressMap = new Map(
+        progressData.map(p => [p.achievement_id, p.current_value])
+      );
 
-      const mergedAchievements = (allAchievements || []).map((achievement) => {
-        const unlocked = unlockedIds.has(achievement.id);
+      // Merge data synchronously (no async operations in map)
+      const mergedAchievements = allAchievements.map((achievement) => {
+        const unlockedAt = unlockedMap.get(achievement.id);
+        const unlocked = !!unlockedAt;
         const currentValue = progressMap.get(achievement.id) || 0;
         const progress = unlocked ? 100 : Math.min(100, (currentValue / achievement.requirement_value) * 100);
 
         return {
           ...achievement,
           unlocked,
-          unlocked_at: unlockedAtMap.get(achievement.id),
+          unlocked_at: unlockedAt,
           progress,
           current_value: currentValue,
         };
@@ -113,29 +117,37 @@ export default function AchievementsBadges() {
 
       console.log('✅ Merged achievements:', mergedAchievements.length);
       console.log('📊 Unlocked count:', mergedAchievements.filter(a => a.unlocked).length);
-      console.log('📊 Locked count:', mergedAchievements.filter(a => !a.unlocked).length);
+
+      // Update cache
+      cacheRef.current = {
+        data: mergedAchievements,
+        timestamp: Date.now()
+      };
 
       setAchievements(mergedAchievements);
-
-      // Get recent achievements (unlocked in the last 7 days)
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      
-      const recent = mergedAchievements
-        .filter(a => a.unlocked && a.unlocked_at && new Date(a.unlocked_at) >= sevenDaysAgo)
-        .sort((a, b) => {
-          if (!a.unlocked_at || !b.unlocked_at) return 0;
-          return new Date(b.unlocked_at).getTime() - new Date(a.unlocked_at).getTime();
-        })
-        .slice(0, 5); // Show top 5 recent achievements
-
-      console.log('✅ Recent achievements:', recent.length);
-      setRecentAchievements(recent);
+      updateRecentAchievements(mergedAchievements);
     } catch (error) {
       console.log('❌ Error in loadAchievements:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const updateRecentAchievements = (allAchievements: Achievement[]) => {
+    // Get recent achievements (unlocked in the last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const recent = allAchievements
+      .filter(a => a.unlocked && a.unlocked_at && new Date(a.unlocked_at) >= sevenDaysAgo)
+      .sort((a, b) => {
+        if (!a.unlocked_at || !b.unlocked_at) return 0;
+        return new Date(b.unlocked_at).getTime() - new Date(a.unlocked_at).getTime();
+      })
+      .slice(0, 5); // Show top 5 recent achievements
+
+    console.log('✅ Recent achievements:', recent.length);
+    setRecentAchievements(recent);
   };
 
   const getTierColor = (tier: string) => {

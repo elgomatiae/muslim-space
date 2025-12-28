@@ -1,15 +1,14 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { checkAndUnlockAchievements, calculateAchievementProgress } from '@/utils/achievementService';
 
 interface Achievement {
   id: string;
@@ -38,23 +37,32 @@ export default function AchievementsScreen() {
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'ibadah' | 'ilm' | 'amanah' | 'general'>('all');
   const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
-  const [celebrationModalVisible, setCelebrationModalVisible] = useState(false);
-  const [newlyUnlockedAchievement, setNewlyUnlockedAchievement] = useState<Achievement | null>(null);
+  const cacheRef = useRef<{ data: Achievement[]; timestamp: number } | null>(null);
+  const CACHE_DURATION = 30000; // 30 seconds cache
 
-  useEffect(() => {
-    loadAchievements();
-  }, [user]);
+  // Load achievements when screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user) {
+        loadAchievements();
+      }
+    }, [user])
+  );
 
   const loadAchievements = async () => {
     if (!user) return;
 
     try {
-      setLoading(true);
+      // Check cache first
+      const now = Date.now();
+      if (cacheRef.current && (now - cacheRef.current.timestamp) < CACHE_DURATION) {
+        console.log('🏆 Using cached achievements data');
+        setAchievements(cacheRef.current.data);
+        setLoading(false);
+        return;
+      }
 
-      // Run achievement check in background (don't await)
-      checkAndUnlockAchievements(user.id).catch(err => 
-        console.log('Background achievement check error:', err)
-      );
+      setLoading(true);
 
       // Load all data in parallel for better performance
       const [achievementsResult, userAchievementsResult, progressResult] = await Promise.all([
@@ -105,6 +113,12 @@ export default function AchievementsScreen() {
           current_value: currentValue,
         };
       });
+
+      // Update cache
+      cacheRef.current = {
+        data: mergedAchievements,
+        timestamp: Date.now()
+      };
 
       setAchievements(mergedAchievements);
     } catch (error) {
