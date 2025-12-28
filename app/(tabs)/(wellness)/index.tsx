@@ -237,14 +237,6 @@ export default function WellnessScreen() {
       route: '/(tabs)/(wellness)/physical-goals',
     },
     {
-      title: 'Nutrition',
-      subtitle: 'Track meals',
-      icon: 'fork.knife',
-      androidIcon: 'restaurant',
-      gradient: colors.gradientSuccess,
-      route: '/(tabs)/(wellness)/nutrition-tracker',
-    },
-    {
       title: 'History',
       subtitle: 'View progress',
       icon: 'chart.line.uptrend.xyaxis',
