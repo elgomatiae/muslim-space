@@ -14,27 +14,9 @@ import ImanRingsDisplay from "@/components/iman/ImanRingsDisplay";
 import IbadahSection from "./ibadah-section";
 import IlmSection from "./ilm-section";
 import AmanahSection from "./amanah-section";
+import AchievementsBadges from "@/components/iman/AchievementsBadges";
 
 type TabType = 'tracker' | 'achievements' | 'communities';
-
-interface Achievement {
-  id: string;
-  title: string;
-  description: string;
-  icon_name: string;
-  requirement_type: string;
-  requirement_value: number;
-  points: number;
-  category: string;
-  tier: 'bronze' | 'silver' | 'gold' | 'platinum';
-  order_index: number;
-  unlock_message: string;
-  next_steps: string;
-  unlocked: boolean;
-  unlocked_at?: string;
-  progress: number;
-  current_value: number;
-}
 
 interface Community {
   id: string;
@@ -51,10 +33,6 @@ export default function ImanTrackerScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('tracker');
   const [refreshing, setRefreshing] = React.useState(false);
 
-  // Achievements state
-  const [achievements, setAchievements] = useState<Achievement[]>([]);
-  const [achievementsLoading, setAchievementsLoading] = useState(false);
-
   // Communities state
   const [communities, setCommunities] = useState<Community[]>([]);
   const [communitiesLoading, setCommunitiesLoading] = useState(false);
@@ -63,20 +41,11 @@ export default function ImanTrackerScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refreshData();
-    if (activeTab === 'achievements') {
-      await loadAchievements();
-    } else if (activeTab === 'communities') {
+    if (activeTab === 'communities') {
       await loadCommunities();
     }
     setRefreshing(false);
   }, [refreshData, activeTab]);
-
-  // Load achievements when tab is selected
-  useEffect(() => {
-    if (activeTab === 'achievements' && achievements.length === 0) {
-      loadAchievements();
-    }
-  }, [activeTab]);
 
   // Load communities when tab is selected
   useEffect(() => {
@@ -85,70 +54,6 @@ export default function ImanTrackerScreen() {
       loadPendingInvites();
     }
   }, [activeTab]);
-
-  const loadAchievements = async () => {
-    if (!user) return;
-
-    try {
-      setAchievementsLoading(true);
-
-      // Load all data in parallel for better performance
-      const [achievementsResult, userAchievementsResult, progressResult] = await Promise.all([
-        supabase
-          .from('achievements')
-          .select('*')
-          .eq('is_active', true)
-          .order('order_index', { ascending: true }),
-        supabase
-          .from('user_achievements')
-          .select('achievement_id, unlocked_at')
-          .eq('user_id', user.id),
-        supabase
-          .from('achievement_progress')
-          .select('achievement_id, current_value')
-          .eq('user_id', user.id)
-      ]);
-
-      if (achievementsResult.error) {
-        console.log('Error loading achievements:', achievementsResult.error);
-        return;
-      }
-
-      const allAchievements = achievementsResult.data || [];
-      const userAchievements = userAchievementsResult.data || [];
-      const progressData = progressResult.data || [];
-
-      // Create lookup maps for O(1) access
-      const unlockedMap = new Map(
-        userAchievements.map(ua => [ua.achievement_id, ua.unlocked_at])
-      );
-      const progressMap = new Map(
-        progressData.map(p => [p.achievement_id, p.current_value])
-      );
-
-      // Merge data synchronously
-      const mergedAchievements = allAchievements.map((achievement) => {
-        const unlockedAt = unlockedMap.get(achievement.id);
-        const unlocked = !!unlockedAt;
-        const currentValue = progressMap.get(achievement.id) || 0;
-        const progress = unlocked ? 100 : Math.min(100, (currentValue / achievement.requirement_value) * 100);
-
-        return {
-          ...achievement,
-          unlocked,
-          unlocked_at: unlockedAt,
-          progress,
-          current_value: currentValue,
-        };
-      });
-
-      setAchievements(mergedAchievements);
-    } catch (error) {
-      console.log('Error in loadAchievements:', error);
-    } finally {
-      setAchievementsLoading(false);
-    }
-  };
 
   const loadCommunities = async () => {
     if (!user) return;
@@ -238,25 +143,6 @@ export default function ImanTrackerScreen() {
     }
   };
 
-  const getTierColor = (tier: string) => {
-    switch (tier) {
-      case 'platinum': return '#A78BFA';
-      case 'gold': return '#FBBF24';
-      case 'silver': return '#9CA3AF';
-      case 'bronze': return '#CD7F32';
-      default: return colors.textSecondary;
-    }
-  };
-
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'ibadah': return '#10B981';
-      case 'ilm': return '#3B82F6';
-      case 'amanah': return '#F59E0B';
-      default: return colors.primary;
-    }
-  };
-
   const handleCommunityPress = (community: Community) => {
     router.push({
       pathname: '/(tabs)/(iman)/community-detail',
@@ -267,15 +153,6 @@ export default function ImanTrackerScreen() {
   const handleCreateCommunity = () => {
     router.push('/(tabs)/(iman)/communities');
   };
-
-  const unlockedCount = achievements.filter(a => a.unlocked).length;
-  const totalPoints = achievements
-    .filter(a => a.unlocked)
-    .reduce((sum, a) => sum + a.points, 0);
-
-  const nextAchievement = achievements
-    .filter(a => !a.unlocked && a.progress > 0)
-    .sort((a, b) => b.progress - a.progress)[0];
 
   if (loading) {
     return (
@@ -485,193 +362,8 @@ export default function ImanTrackerScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
         >
-          {achievementsLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={styles.loadingText}>Loading achievements...</Text>
-            </View>
-          ) : (
-            <>
-              {/* Stats Card */}
-              <LinearGradient
-                colors={colors.gradientPrimary}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.statsCard}
-              >
-                <View style={styles.statsRow}>
-                  <View style={styles.statItem}>
-                    <IconSymbol
-                      ios_icon_name="trophy.fill"
-                      android_material_icon_name="emoji-events"
-                      size={32}
-                      color={colors.card}
-                    />
-                    <Text style={styles.statValue}>{unlockedCount}/{achievements.length}</Text>
-                    <Text style={styles.statLabel}>Unlocked</Text>
-                  </View>
-
-                  <View style={styles.statDivider} />
-
-                  <View style={styles.statItem}>
-                    <IconSymbol
-                      ios_icon_name="star.fill"
-                      android_material_icon_name="star"
-                      size={32}
-                      color={colors.card}
-                    />
-                    <Text style={styles.statValue}>{totalPoints}</Text>
-                    <Text style={styles.statLabel}>Total Points</Text>
-                  </View>
-                </View>
-
-                <Text style={styles.statsSubtext}>
-                  {unlockedCount === 0 
-                    ? 'Start your journey to unlock achievements!'
-                    : unlockedCount === achievements.length
-                    ? 'Masha\'Allah! You\'ve unlocked all achievements!'
-                    : `Keep going! ${achievements.length - unlockedCount} more to unlock`}
-                </Text>
-              </LinearGradient>
-
-              {/* Next Achievement Card */}
-              {nextAchievement && (
-                <TouchableOpacity
-                  style={styles.nextAchievementCard}
-                  onPress={() => router.push('/(tabs)/(iman)/achievements')}
-                  activeOpacity={0.7}
-                >
-                  <LinearGradient
-                    colors={[getTierColor(nextAchievement.tier) + '20', getTierColor(nextAchievement.tier) + '10']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.nextAchievementGradient}
-                  >
-                    <View style={styles.nextAchievementHeader}>
-                      <IconSymbol
-                        ios_icon_name="target"
-                        android_material_icon_name="flag"
-                        size={20}
-                        color={getTierColor(nextAchievement.tier)}
-                      />
-                      <Text style={styles.nextAchievementTitle}>Next Achievement</Text>
-                    </View>
-
-                    <View style={styles.nextAchievementContent}>
-                      <View style={[styles.nextAchievementIcon, { backgroundColor: getTierColor(nextAchievement.tier) }]}>
-                        <IconSymbol
-                          ios_icon_name="lock.fill"
-                          android_material_icon_name="lock"
-                          size={24}
-                          color={colors.card}
-                        />
-                      </View>
-
-                      <View style={styles.nextAchievementInfo}>
-                        <Text style={styles.nextAchievementName}>{nextAchievement.title}</Text>
-                        <Text style={styles.nextAchievementDesc} numberOfLines={1}>
-                          {nextAchievement.description}
-                        </Text>
-
-                        <View style={styles.progressBarContainer}>
-                          <View style={styles.progressBarBackground}>
-                            <View 
-                              style={[
-                                styles.progressBarFill, 
-                                { 
-                                  width: `${nextAchievement.progress}%`,
-                                  backgroundColor: getTierColor(nextAchievement.tier)
-                                }
-                              ]} 
-                            />
-                          </View>
-                          <Text style={styles.progressText}>
-                            {nextAchievement.current_value}/{nextAchievement.requirement_value} ({Math.round(nextAchievement.progress)}%)
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-
-                    <Text style={styles.nextAchievementMotivation}>
-                      You're {Math.round(100 - nextAchievement.progress)}% away from unlocking this! Keep going! 💪
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              )}
-
-              {/* Recent Achievements */}
-              <View style={styles.achievementsSection}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Recent Achievements</Text>
-                  <TouchableOpacity
-                    onPress={() => router.push('/(tabs)/(iman)/achievements')}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.viewAllText}>View All</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {achievements.slice(0, 5).map((achievement, index) => {
-                  const tierColor = getTierColor(achievement.tier);
-                  const categoryColor = getCategoryColor(achievement.category);
-
-                  return (
-                    <React.Fragment key={index}>
-                      <TouchableOpacity
-                        style={[
-                          styles.achievementCard,
-                          achievement.unlocked && styles.achievementCardUnlocked,
-                        ]}
-                        onPress={() => router.push('/(tabs)/(iman)/achievements')}
-                        activeOpacity={0.7}
-                      >
-                        <LinearGradient
-                          colors={achievement.unlocked ? [tierColor + '40', tierColor + '20'] : [colors.card, colors.card]}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={styles.achievementGradient}
-                        >
-                          <View style={[
-                            styles.achievementIcon,
-                            { backgroundColor: achievement.unlocked ? tierColor : colors.border },
-                          ]}>
-                            <IconSymbol
-                              ios_icon_name={achievement.unlocked ? 'star.fill' : 'lock.fill'}
-                              android_material_icon_name={achievement.unlocked ? 'star' : 'lock'}
-                              size={24}
-                              color={achievement.unlocked ? colors.card : colors.textSecondary}
-                            />
-                          </View>
-
-                          <View style={styles.achievementContent}>
-                            <Text style={[
-                              styles.achievementTitle,
-                              !achievement.unlocked && styles.achievementTitleLocked,
-                            ]} numberOfLines={1}>
-                              {achievement.title}
-                            </Text>
-                            <Text style={[
-                              styles.achievementDescription,
-                              !achievement.unlocked && styles.achievementDescriptionLocked,
-                            ]} numberOfLines={1}>
-                              {achievement.description}
-                            </Text>
-                          </View>
-
-                          <IconSymbol
-                            ios_icon_name="chevron.right"
-                            android_material_icon_name="chevron-right"
-                            size={20}
-                            color={colors.textSecondary}
-                          />
-                        </LinearGradient>
-                      </TouchableOpacity>
-                    </React.Fragment>
-                  );
-                })}
-              </View>
-            </>
-          )}
+          {/* Use the AchievementsBadges component which shows all achievements by default */}
+          <AchievementsBadges />
 
           <View style={styles.bottomPadding} />
         </ScrollView>
@@ -946,172 +638,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     textAlign: 'center',
   },
-  statsCard: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    marginBottom: spacing.lg,
-    ...shadows.large,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    ...typography.h2,
-    color: colors.card,
-    fontWeight: '800',
-    marginTop: spacing.sm,
-  },
-  statLabel: {
-    ...typography.caption,
-    color: colors.card,
-    marginTop: spacing.xs,
-  },
-  statDivider: {
-    width: 1,
-    height: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  statsSubtext: {
-    ...typography.body,
-    color: colors.card,
-    textAlign: 'center',
-    opacity: 0.9,
-  },
-  nextAchievementCard: {
-    borderRadius: borderRadius.xl,
-    overflow: 'hidden',
-    marginBottom: spacing.lg,
-    ...shadows.medium,
-  },
-  nextAchievementGradient: {
-    padding: spacing.lg,
-  },
-  nextAchievementHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  nextAchievementTitle: {
-    ...typography.bodyBold,
-    color: colors.text,
-  },
-  nextAchievementContent: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  nextAchievementIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nextAchievementInfo: {
-    flex: 1,
-  },
-  nextAchievementName: {
-    ...typography.h4,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  nextAchievementDesc: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
-  nextAchievementMotivation: {
-    ...typography.caption,
-    color: colors.text,
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  progressBarContainer: {
-    marginBottom: spacing.sm,
-  },
-  progressBarBackground: {
-    height: 6,
-    backgroundColor: colors.border,
-    borderRadius: borderRadius.sm,
-    overflow: 'hidden',
-    marginBottom: spacing.xs,
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: borderRadius.sm,
-  },
-  progressText: {
-    ...typography.small,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  achievementsSection: {
-    marginBottom: spacing.lg,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  sectionTitle: {
-    ...typography.h3,
-    color: colors.text,
-  },
-  viewAllText: {
-    ...typography.body,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  achievementCard: {
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: colors.border,
-    ...shadows.medium,
-    marginBottom: spacing.md,
-  },
-  achievementCardUnlocked: {
-    borderColor: 'transparent',
-  },
-  achievementGradient: {
-    flexDirection: 'row',
-    padding: spacing.md,
-    gap: spacing.md,
-    alignItems: 'center',
-  },
-  achievementIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  achievementContent: {
-    flex: 1,
-  },
-  achievementTitle: {
-    ...typography.bodyBold,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  achievementTitleLocked: {
-    color: colors.textSecondary,
-  },
-  achievementDescription: {
-    ...typography.caption,
-    color: colors.text,
-  },
-  achievementDescriptionLocked: {
-    color: colors.textSecondary,
-  },
   communityActions: {
     flexDirection: 'row',
     gap: spacing.md,
@@ -1187,6 +713,11 @@ const styles = StyleSheet.create({
   },
   communitiesList: {
     gap: spacing.md,
+  },
+  sectionTitle: {
+    ...typography.h3,
+    color: colors.text,
+    marginBottom: spacing.md,
   },
   communityCard: {
     flexDirection: 'row',
