@@ -117,14 +117,13 @@ export default function RecitationsScreen() {
     }
 
     try {
-      // For recitations from the videos table, we can use video_id
-      // Check if this recitation is already tracked
+      // Check if this recitation is already tracked (using video_url as identifier)
       const { data: existingTracking, error: checkError } = await supabase
         .from('tracked_content')
         .select('id')
         .eq('user_id', user.id)
         .eq('content_type', 'recitation')
-        .eq('video_id', recitation.id)
+        .eq('video_url', recitation.url)
         .maybeSingle();
 
       if (checkError) {
@@ -148,13 +147,13 @@ export default function RecitationsScreen() {
           return;
         }
       } else {
-        // Not tracked yet, insert new record
+        // Not tracked yet, insert new record (video_id can be null for quran_recitations)
         const { error: insertError } = await supabase
           .from('tracked_content')
           .insert({
             user_id: user.id,
             content_type: 'recitation',
-            video_id: recitation.id,
+            video_id: null, // quran_recitations doesn't have UUID ids
             video_title: recitation.title,
             video_url: recitation.url,
             reciter_name: recitation.reciter_name,
