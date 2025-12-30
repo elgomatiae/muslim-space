@@ -2,97 +2,131 @@
 # Quran Recitations Categorization Summary
 
 ## Overview
-I have analyzed all 309 videos in the `quran_recitations` table and categorized them into 9 meaningful categories based on their titles, content, and characteristics.
+I have analyzed all 309 videos in the `quran_recitations` table and categorized them into 10 well-balanced categories based on their titles, content, and characteristics. This new categorization ensures a more even distribution of videos across categories.
 
 ## Categories Created
 
-### 1. **Specific Surah Recitations** (181 videos)
-Videos focused on complete or partial recitation of specific Surahs from the Quran.
-- Examples:
-  - "Surah Al-Baqarah 1-25 - Moutasem Al-Hameedi"
-  - "Surah Yasin(full)-shaikh Mishary Rashid Al Afasy"
-  - "سورة النساء بصوت الشيخ ياسر الدوسري"
-
-### 2. **Emotional & Heart-Touching** (53 videos)
+### 1. **Emotional & Heart-Touching** (53 videos - 17.2%)
 Recitations specifically noted for their emotional impact and ability to touch hearts.
 - Examples:
   - "(Extremely Emotional) Nasser Al-Qatami - Heart Touching Recitation"
   - "Beautiful Quran Recitation | Heart Soothing Voice"
   - "BEAUTIFUL QURAN RECITATION (POWERFUL VERSES)"
+  - "Try not to cry because of Idris Abkar's reading"
 
-### 3. **General Recitations** (33 videos)
-High-quality recitations that don't fit into other specific categories.
+### 2. **General Recitations** (47 videos - 15.2%)
+High-quality recitations that don't fit into other specific categories, including live performances and thematic recitations.
 - Examples:
   - "Beautiful Quran | Heart Soothing Voice - Qari Fatih Seferagic"
   - "Amazing Quran Recitation Qari Ismail Al Nouri"
+  - "Allah wants to forgive you - Sheikh Mansour Al Salimi"
+  - "The Believing Man's Speech | Powerful Quran Recitation"
 
-### 4. **Taraweeh & Ramadan** (14 videos)
+### 3. **Story Surahs (Yusuf, Maryam, Kahf)** (40 videos - 12.9%)
+Recitations focusing on Surahs with prominent stories and narratives, including specific story-focused recitations.
+- Examples:
+  - "Surah Yusuf - Moutasem Al-Hameedi"
+  - "Surah Maryam | Moutasem Al-Hameedi"
+  - "Surah Kahf | Ahmed al Ajmi"
+  - "Story of Prophet Hud in Quran by reciter Raad Muhammad Alkurdi"
+  - "Prophet Ya'qub loses his second son | Story of Prophet Yusuf"
+
+### 4. **Shorter Surahs (Luqman to Hadid)** (37 videos - 12.0%)
+Recitations of shorter to medium-length Surahs from Surah Luqman (31) to Surah Hadid (57).
+- Examples:
+  - "Surah Az-Zumar (39) - Emotional - Mishary Al Afasy"
+  - "Surah Ghafir Yahya Raaby Recitation"
+  - "Surah Hashr - Sheikh Muhammad Siddiq Al - Minshawi"
+  - "Surah Qaf - Calming Recitation"
+
+### 5. **Medium Surahs (Yunus to Ankabut)** (36 videos - 11.7%)
+Recitations of medium-length Surahs from Surah Yunus (10) to Surah Ankabut (29).
+- Examples:
+  - "Surah Yunus - Mishary Rashid Al Afasy"
+  - "Surah Hud - Sheikh Abdul Aziz Az Zahrani"
+  - "Surah Ibrahim - Mishary Rashid Alafasy"
+  - "Surah Isra [17] full Mesmerizing Recitation - Yasser Al Dosari"
+  - "Surah Al Furqan (The Criterion) | Saad Al Ghamdi"
+
+### 6. **Long Surahs (Al-Baqarah to At-Tawbah)** (34 videos - 11.0%)
+Recitations of the longest Surahs in the Quran, from Al-Baqarah (2) to At-Tawbah (9).
+- Examples:
+  - "Surah Al-Baqarah 1-25 - Moutasem Al-Hameedi"
+  - "Surah Ali Imran Wonderful Recitation By Sheikh Maher Al Muaiqly"
+  - "Surah An-Nisa - Yasser Al-Dosari"
+  - "Surah Al-Ma'ida - Mishary Rashid Alafasy"
+
+### 7. **Popular Surahs (Yasin, Mulk, Rahman)** (18 videos - 5.8%)
+Recitations of the most commonly recited and beloved Surahs.
+- Examples:
+  - "Surah Yasin(full)-shaikh Mishary Rashid Al Afasy"
+  - "Surah Mulk - Calming Recitation"
+  - "Surah Ar-Rahman (Complete) | Maqam Ajam | Sheikh Yasser al-Dosari"
+  - "Surah Al-Waqi'ah (10-26) | Sheikh Mansour As-Salimi"
+
+### 8. **Compilations & Special Styles** (15 videos - 4.9%)
+Collections, compilations, historical recordings, and recitations in specific Maqam styles.
+- Examples:
+  - "5 Hours of Salman Al-Utaybi"
+  - "TOP 5 QARIS IN THE WORLD - QURAN"
+  - "*RARE* LIVE VIDEO RECITATION :: Sheikh Muhammad Siddiq Al - Minshawi"
+  - "Sheikh Husary - Maqam Nahawand - sura Ahzab"
+  - "Mustafa ismail-The Best voice in the world- Recorded 1958"
+
+### 9. **Juz Amma Surahs** (15 videos - 4.9%)
+Recitations of shorter Surahs from the last Juz (30th part) of the Quran.
+- Examples:
+  - "Surah Al-Insan | Sheikh Yasser Dossary"
+  - "Surah An-Nazi'at | Qari Fatih Seferagic"
+  - "Surah Abasa with English Translation | Fatih Seferagic"
+  - "Surah Nuh - Calming Recitation"
+
+### 10. **Taraweeh & Ramadan** (14 videos - 4.5%)
 Recordings from Taraweeh prayers and special Ramadan performances.
 - Examples:
   - "Qari Fatih Seferagic - ELM Taraweeh 2016"
   - "Islam Sobhi LIVE Ramadan Tarawi"
   - "صلاة التراويح القارئ ابوبكر الشاطري"
-
-### 5. **Quranic Stories** (9 videos)
-Recitations focusing on specific stories from the Quran (Prophets, historical events).
-- Examples:
-  - "Story of Prophet Hud in Quran by reciter Raad Muhammad Alkurdi"
-  - "Prophet Ya'qub loses his second son | Story of Prophet Yusuf"
-  - "Best Quran recitation to Noah's Story"
-
-### 6. **Compilations & Best Of** (8 videos)
-Collections and compilations of multiple recitations or "best of" selections.
-- Examples:
-  - "5 Hours of Salman Al-Utaybi"
-  - "TOP 5 QARIS IN THE WORLD - QURAN"
-  - "Compilation of Best Recitation Syaikh Mishari Alafasy"
-
-### 7. **Historical & Rare** (4 videos)
-Old, vintage, or rare recordings from famous reciters.
-- Examples:
-  - "*RARE* LIVE VIDEO RECITATION :: Sheikh Muhammad Siddiq Al - Minshawi"
-  - "RARE!! - MAHIR AL-MUAIQLY - AL-BAQARAH (v. 40-61)"
-  - "Rare and beautiful Quran recitation by Shaikh Minshawi"
-
-### 8. **Maqam Styles** (3 videos)
-Recitations in specific melodic modes (Maqam Nahawand, Ajam, Jiharkah, etc.).
-- Examples:
-  - "Maqam Jiharkah / Ajam 43 - Surah Yusuf"
-  - "Beautiful Minshawi Nahawand - surat ar-R'ad"
-  - "Sheikh Husary - Maqam Nahawand - sura Ahzab"
-
-### 9. **Live Performances** (2 videos)
-Live recitations from mosques and special events.
-- Examples:
-  - "Sheikh Maahir in South Africa: Isha Prayers led by Sheikh Maher Al Muayqali"
-  - "Imaam Yaasir al-Dosary || Masjid Tawheed || May 2010"
-
-### 10. **Thematic Recitations** (2 videos)
-Videos with specific themes or messages.
-- Examples:
-  - "Allah wants to forgive you - Sheikh Mansour Al Salimi"
-  - "Conversation Between Jesus And Allah | Surah Al-Ma'idah"
+  - "Taraweeh 2013 Recitation | Sheikh Yasser Dossary"
 
 ## Categorization Logic
 
 The categorization was done using SQL pattern matching on video titles:
 
-1. **Specific Surah Recitations**: Titles containing "Surah", "Surat", "Sourate", or "سورة"
-2. **Emotional & Heart-Touching**: Titles with "emotional", "heart", "touching", "beautiful", "amazing", "cry", "tears", "خاشع", "مبك", "باك"
-3. **Taraweeh & Ramadan**: Titles with "taraweeh", "ramadan", "التراويح", "رمضان", "tahajjud", "qiyam"
-4. **Maqam Styles**: Titles with "maqam", "nahawand", "ajam", "jiharkah", "bayati", "hijaz", "rast", "مقام", "نهاوند"
-5. **Quranic Stories**: Titles with "story", "yusuf", "musa", "ibrahim", "noah", "prophet", "pharaoh", "قصة"
-6. **Historical & Rare**: Titles with "rare", "old", "vintage", "classic", year references (1411, 1420, etc.), "نادر", "قديم"
-7. **Live Performances**: Titles with "live", "makkah", "madinah", "masjid", "mosque", "مكة", "المدينة", "الحرم", "مسجد"
-8. **Compilations & Best Of**: Titles with "compilation", "best", "top", "hours", "collection"
-9. **Thematic Recitations**: Titles with "forgive", "mercy", "patience", "guidance", "conversation", "jesus", "believing man"
-10. **General Recitations**: All remaining videos that don't fit into specific categories
+1. **Long Surahs**: Titles containing "Baqarah", "Imran", "Nisa", "Maidah", "An'am", "A'raf", "Anfal", "Tawbah" and their Arabic equivalents
+2. **Medium Surahs**: Titles containing "Yunus", "Hud", "Ibrahim", "Hijr", "Nahl", "Isra", "Naml", "Ankabut", "Furqan", "Hajj", "Anbiya", "Muminun" and their Arabic equivalents
+3. **Shorter Surahs**: Titles containing "Luqman", "Sajdah", "Ahzab", "Saba", "Fatir", "Saad", "Zumar", "Ghafir", "Fussilat", "Shura", "Zukhruf", "Dukhan", "Jathiyah", "Ahqaf", "Muhammad", "Fath", "Hujurat", "Qaf", "Dhariyat", "Tur", "Najm", "Qamar", "Hadid" and their Arabic equivalents
+4. **Story Surahs**: Titles containing "Yusuf", "Maryam", "Taha", "Qasas", "Kahf", "story", "prophet" and their Arabic equivalents
+5. **Popular Surahs**: Titles containing "Yasin", "Mulk", "Rahman", "Waqiah" and their Arabic equivalents
+6. **Juz Amma Surahs**: Titles containing names of Surahs from Mujadilah (58) onwards, including "Nuh", "Insan", "Naziat", "Abasa", "Qiyama", "Rum", "Fatiha" and their Arabic equivalents
+7. **Emotional & Heart-Touching**: Titles with "emotional", "heart", "touching", "beautiful", "amazing", "cry", "tears", "خاشع", "مبك", "باك"
+8. **Taraweeh & Ramadan**: Titles with "taraweeh", "ramadan", "التراويح", "رمضان", "tahajjud", "qiyam"
+9. **Compilations & Special Styles**: Titles with "compilation", "best", "top", "hours", "collection", "rare", "old", "vintage", "maqam", "nahawand", "ajam", "jiharkah"
+10. **General Recitations**: All remaining videos that don't fit into specific categories, including live performances and thematic recitations
+
+## Distribution Summary
+
+The new categorization provides a much more balanced distribution:
+
+- **Emotional & Heart-Touching** (17.2%): Recitations emphasizing spiritual impact
+- **General Recitations** (15.2%): Quality recitations without specific categorization
+- **Story Surahs** (12.9%): Narrative-focused Surahs and story recitations
+- **Shorter Surahs** (12.0%): Medium-short Surahs (Luqman to Hadid)
+- **Medium Surahs** (11.7%): Medium-length Surahs (Yunus to Ankabut)
+- **Long Surahs** (11.0%): The longest Surahs (Baqarah to Tawbah)
+- **Popular Surahs** (5.8%): Most commonly recited Surahs
+- **Compilations & Special Styles** (4.9%): Collections, historical recordings, and Maqam styles
+- **Juz Amma Surahs** (4.9%): Short Surahs from the last Juz
+- **Taraweeh & Ramadan** (4.5%): Special prayer recordings
+
+This distribution ensures users can easily find recitations based on their preferences, whether they're looking for specific Surahs, emotional experiences, or special occasions. The categories are now much more balanced, with no single category dominating the collection.
 
 ## Database Changes
 
 - Added a `category` column to the `quran_recitations` table
 - Updated all 309 videos with appropriate categories
 - Categories are now stored directly in the table for easy filtering and display
+- Merged smaller categories to ensure all categories have a substantial number of videos
 
 ## App Integration
 
@@ -103,18 +137,10 @@ The app has been updated to:
 - Track recitation views properly
 - Integrate with the Iman Tracker for ʿIlm (Knowledge) goals
 
-## Distribution Summary
+## Benefits of New Categorization
 
-The categorization provides a balanced distribution:
-- **Specific Surah Recitations** (58.6%): The largest category, as expected for Quran recitations
-- **Emotional & Heart-Touching** (17.2%): A significant portion emphasizing spiritual impact
-- **General Recitations** (10.7%): Quality recitations without specific categorization
-- **Taraweeh & Ramadan** (4.5%): Special prayer recordings
-- **Quranic Stories** (2.9%): Narrative-focused recitations
-- **Compilations & Best Of** (2.6%): Collections and highlights
-- **Historical & Rare** (1.3%): Precious historical recordings
-- **Maqam Styles** (1.0%): Technical melodic styles
-- **Live Performances** (0.6%): Live event recordings
-- **Thematic Recitations** (0.6%): Message-focused recitations
-
-This distribution ensures users can easily find recitations based on their preferences, whether they're looking for specific Surahs, emotional experiences, or historical recordings.
+1. **Better Balance**: No category has an overwhelming number of videos
+2. **Easier Navigation**: Users can find specific types of recitations more easily
+3. **Logical Grouping**: Surahs are grouped by length and theme
+4. **Comprehensive Coverage**: All recitations are properly categorized
+5. **User-Friendly**: Categories are intuitive and easy to understand
