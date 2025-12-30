@@ -619,6 +619,78 @@ export default function AdminPanelScreen() {
                   </View>
                 </LinearGradient>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.optionCard}
+                onPress={async () => {
+                  Alert.alert(
+                    'Recategorize Recitations',
+                    'This will reorganize all Quran recitations into better categories. This may take a few moments. Continue?',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Continue',
+                        onPress: async () => {
+                          setLoading(true);
+                          try {
+                            const { data, error } = await supabase.functions.invoke('recategorize-recitations');
+                            
+                            if (error) {
+                              throw error;
+                            }
+
+                            if (data && data.success) {
+                              Alert.alert(
+                                'Success!',
+                                `Recategorization completed!\n\nTotal videos: ${data.totalVideos}\nRecategorized: ${data.recategorized}\n\nCategory distribution:\n${Object.entries(data.categoryStats || {})
+                                  .sort((a: any, b: any) => b[1] - a[1])
+                                  .map(([name, count]) => `• ${name}: ${count}`)
+                                  .join('\n')}`
+                              );
+                            } else {
+                              throw new Error(data?.error || 'Failed to recategorize');
+                            }
+                          } catch (error: any) {
+                            console.error('Error recategorizing:', error);
+                            Alert.alert('Error', error.message || 'Failed to recategorize recitations');
+                          } finally {
+                            setLoading(false);
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={['#06B6D4', '#0891B2']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.optionGradient}
+                >
+                  <View style={styles.optionIconContainer}>
+                    <IconSymbol
+                      ios_icon_name="folder.badge.gearshape"
+                      android_material_icon_name="category"
+                      size={48}
+                      color={colors.card}
+                    />
+                  </View>
+                  <Text style={styles.optionTitle}>Recategorize Recitations</Text>
+                  <Text style={styles.optionDescription}>
+                    Reorganize recitations into better categories with more balanced distribution
+                  </Text>
+                  <View style={styles.optionArrow}>
+                    <IconSymbol
+                      ios_icon_name="arrow.right.circle.fill"
+                      android_material_icon_name="arrow-circle-right"
+                      size={32}
+                      color={colors.card}
+                    />
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
           </React.Fragment>
         ) : activeTab === 'playlist' ? (
