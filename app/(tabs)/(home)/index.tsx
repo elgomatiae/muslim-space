@@ -15,7 +15,14 @@ import {
   getTimeUntilPrayer, 
   PrayerTime,
   savePrayerCompletionStatus,
+  getCachedPrayerTimesData,
 } from "@/utils/prayerTimeService";
+import { 
+  getLocationStatus, 
+  formatLocation,
+  getLocationName,
+  UserLocation,
+} from "@/utils/locationService";
 
 interface DailyVerse {
   id: string;
@@ -50,6 +57,15 @@ export default function HomeScreen() {
   const [dailyHadith, setDailyHadith] = useState<DailyHadith | null>(null);
   const [loading, setLoading] = useState(true);
   const [prayerTimesLoading, setPrayerTimesLoading] = useState(true);
+  const [locationInfo, setLocationInfo] = useState<{
+    location: UserLocation | null;
+    locationName: string | null;
+    accuracy: number | null;
+  }>({
+    location: null,
+    locationName: null,
+    accuracy: null,
+  });
 
   // Load prayer times
   const loadPrayerTimes = async () => {
@@ -59,6 +75,17 @@ export default function HomeScreen() {
       
       const prayerTimes = await getPrayerTimes();
       console.log('HomeScreen: Prayer times loaded:', prayerTimes);
+      
+      // Load location info
+      const cachedData = await getCachedPrayerTimesData();
+      if (cachedData?.location) {
+        const locationName = await getLocationName(cachedData.location);
+        setLocationInfo({
+          location: cachedData.location,
+          locationName,
+          accuracy: cachedData.location.accuracy || null,
+        });
+      }
       
       // Sync with prayer goals from context
       if (prayerGoals) {
@@ -85,7 +112,7 @@ export default function HomeScreen() {
       console.error('HomeScreen: Error loading prayer times:', error);
       Alert.alert(
         'Error Loading Prayer Times',
-        'Unable to load prayer times. Please check your permissions in settings.',
+        'Unable to load prayer times. Please check your location permissions in settings.',
         [{ text: 'OK' }]
       );
     } finally {
@@ -472,6 +499,27 @@ export default function HomeScreen() {
                 )}
               </View>
             </View>
+            
+            {/* Location Info */}
+            {locationInfo.location && (
+              <View style={styles.locationInfo}>
+                <IconSymbol
+                  ios_icon_name="location.fill"
+                  android_material_icon_name="location-on"
+                  size={12}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.locationText}>
+                  {locationInfo.locationName || formatLocation(locationInfo.location)}
+                </Text>
+                {locationInfo.accuracy && locationInfo.accuracy < 100 && (
+                  <View style={styles.accuracyBadge}>
+                    <Text style={styles.accuracyText}>±{Math.round(locationInfo.accuracy)}m</Text>
+                  </View>
+                )}
+              </View>
+            )}
+            
             {!settings.locationPermissionGranted && (
               <View style={styles.locationWarning}>
                 <IconSymbol
@@ -481,7 +529,7 @@ export default function HomeScreen() {
                   color={colors.warning}
                 />
                 <Text style={styles.locationWarningText}>
-                  Enable location for accurate times
+                  Enable location for accurate prayer times
                 </Text>
               </View>
             )}
@@ -1078,6 +1126,31 @@ const styles = StyleSheet.create({
   nextPrayerCountdown: {
     ...typography.small,
     color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  locationInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    gap: spacing.xs,
+  },
+  locationText: {
+    ...typography.small,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  accuracyBadge: {
+    backgroundColor: colors.success + '20',
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  accuracyText: {
+    fontSize: 10,
+    color: colors.success,
     fontWeight: '600',
   },
   locationWarning: {

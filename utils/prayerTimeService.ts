@@ -1,10 +1,17 @@
 
 import { Coordinates, CalculationMethod, PrayerTimes } from 'adhan';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getUserLocation, getLocationWithFallback, UserLocation } from './locationService';
+import { 
+  getUserLocation, 
+  getLocationWithFallback, 
+  UserLocation,
+  hasLocationChangedSignificantly,
+  getLastKnownLocation,
+} from './locationService';
 
 const PRAYER_TIMES_CACHE_KEY = '@prayer_times_cache';
 const PRAYER_COMPLETION_KEY = '@prayer_completion';
+const CALCULATION_METHOD_KEY = '@calculation_method';
 
 export interface PrayerTime {
   name: string;
@@ -18,6 +25,7 @@ export interface PrayerTimesData {
   prayers: PrayerTime[];
   date: string;
   location: UserLocation;
+  calculationMethod: string;
 }
 
 const PRAYER_NAMES = {
@@ -28,9 +36,77 @@ const PRAYER_NAMES = {
   isha: { english: 'Isha', arabic: 'العشاء' },
 };
 
+// Available calculation methods
+export const CALCULATION_METHODS = {
+  MuslimWorldLeague: 'Muslim World League',
+  Egyptian: 'Egyptian General Authority',
+  Karachi: 'University of Islamic Sciences, Karachi',
+  UmmAlQura: 'Umm al-Qura University, Makkah',
+  Dubai: 'Dubai',
+  Qatar: 'Qatar',
+  Kuwait: 'Kuwait',
+  MoonsightingCommittee: 'Moonsighting Committee',
+  Singapore: 'Singapore',
+  NorthAmerica: 'Islamic Society of North America',
+  Tehran: 'Institute of Geophysics, University of Tehran',
+  Turkey: 'Turkey',
+};
+
 /**
- * Simple prayer time service - calculates and manages prayer times
+ * Enhanced prayer time service - calculates and manages prayer times with improved accuracy
  */
+
+// Get saved calculation method
+export async function getCalculationMethod(): Promise<string> {
+  try {
+    const method = await AsyncStorage.getItem(CALCULATION_METHOD_KEY);
+    return method || 'MuslimWorldLeague';
+  } catch (error) {
+    console.log('Error getting calculation method:', error);
+    return 'MuslimWorldLeague';
+  }
+}
+
+// Save calculation method
+export async function saveCalculationMethod(method: string): Promise<void> {
+  try {
+    await AsyncStorage.setItem(CALCULATION_METHOD_KEY, method);
+    console.log('Calculation method saved:', method);
+  } catch (error) {
+    console.log('Error saving calculation method:', error);
+  }
+}
+
+// Get calculation method parameters
+function getCalculationParams(methodName: string): any {
+  switch (methodName) {
+    case 'Egyptian':
+      return CalculationMethod.Egyptian();
+    case 'Karachi':
+      return CalculationMethod.Karachi();
+    case 'UmmAlQura':
+      return CalculationMethod.UmmAlQura();
+    case 'Dubai':
+      return CalculationMethod.Dubai();
+    case 'Qatar':
+      return CalculationMethod.Qatar();
+    case 'Kuwait':
+      return CalculationMethod.Kuwait();
+    case 'MoonsightingCommittee':
+      return CalculationMethod.MoonsightingCommittee();
+    case 'Singapore':
+      return CalculationMethod.Singapore();
+    case 'NorthAmerica':
+      return CalculationMethod.NorthAmerica();
+    case 'Tehran':
+      return CalculationMethod.Tehran();
+    case 'Turkey':
+      return CalculationMethod.Turkey();
+    case 'MuslimWorldLeague':
+    default:
+      return CalculationMethod.MuslimWorldLeague();
+  }
+}
 
 // Format time to readable string
 function formatTime(date: Date): string {
@@ -48,12 +124,20 @@ function getTodayString(): string {
 }
 
 // Calculate prayer times for a location
-export async function calculatePrayerTimes(location: UserLocation): Promise<PrayerTime[]> {
+export async function calculatePrayerTimes(
+  location: UserLocation,
+  methodName?: string
+): Promise<PrayerTime[]> {
   try {
-    console.log('Calculating prayer times for location:', location);
+    console.log('Calculating prayer times for location:', {
+      lat: location.latitude.toFixed(4),
+      lng: location.longitude.toFixed(4),
+      accuracy: location.accuracy ? `${Math.round(location.accuracy)}m` : 'unknown'
+    });
 
     const coordinates = new Coordinates(location.latitude, location.longitude);
-    const params = CalculationMethod.MuslimWorldLeague();
+    const method = methodName || await getCalculationMethod();
+    const params = getCalculationParams(method);
     const date = new Date();
     
     const prayerTimes = new PrayerTimes(coordinates, date, params);
@@ -96,7 +180,7 @@ export async function calculatePrayerTimes(location: UserLocation): Promise<Pray
       },
     ];
 
-    console.log('Prayer times calculated successfully');
+    console.log('Prayer times calculated successfully using', method);
     return prayers;
   } catch (error) {
     console.error('Error calculating prayer times:', error);
@@ -119,7 +203,7 @@ async function getCachedPrayerTimes(): Promise<PrayerTimesData | null> {
         ...p,
         date: new Date(p.date),
       }));
-      console.log('Using cached prayer times');
+      console.log('Using cached prayer times from', data.calculationMethod);
       return data;
     }
 
@@ -165,25 +249,39 @@ export async function savePrayerCompletionStatus(completionStatus: Record<string
   }
 }
 
-// Get prayer times (with caching)
-export async function getPrayerTimes(): Promise<PrayerTime[]> {
+// Get prayer times (with caching and location awareness)
+export async function getPrayerTimes(forceRefresh: boolean = false): Promise<PrayerTime[]> {
   try {
-    // Try to get cached prayer times first
-    const cached = await getCachedPrayerTimes();
-    if (cached) {
-      // Apply completion status
-      const completionStatus = await getPrayerCompletionStatus();
-      cached.prayers = cached.prayers.map(p => ({
-        ...p,
-        completed: completionStatus[p.name.toLowerCase()] || false,
-      }));
-      return cached.prayers;
+    // Try to get cached prayer times first (if not forcing refresh)
+    if (!forceRefresh) {
+      const cached = await getCachedPrayerTimes();
+      if (cached) {
+        // Check if location has changed significantly
+        const currentLocation = await getLastKnownLocation();
+        if (currentLocation) {
+          const locationChanged = await hasLocationChangedSignificantly(currentLocation);
+          if (locationChanged) {
+            console.log('Location changed significantly, recalculating prayer times...');
+            // Location changed, recalculate
+            return await getPrayerTimes(true);
+          }
+        }
+
+        // Apply completion status
+        const completionStatus = await getPrayerCompletionStatus();
+        cached.prayers = cached.prayers.map(p => ({
+          ...p,
+          completed: completionStatus[p.name.toLowerCase()] || false,
+        }));
+        return cached.prayers;
+      }
     }
 
     // Calculate new prayer times
     console.log('Calculating fresh prayer times...');
     const location = await getLocationWithFallback();
-    const prayers = await calculatePrayerTimes(location);
+    const method = await getCalculationMethod();
+    const prayers = await calculatePrayerTimes(location, method);
 
     // Apply completion status
     const completionStatus = await getPrayerCompletionStatus();
@@ -197,6 +295,7 @@ export async function getPrayerTimes(): Promise<PrayerTime[]> {
       prayers: prayersWithStatus,
       date: getTodayString(),
       location,
+      calculationMethod: method,
     });
 
     return prayersWithStatus;
@@ -207,17 +306,20 @@ export async function getPrayerTimes(): Promise<PrayerTime[]> {
   }
 }
 
-// Refresh prayer times (force recalculation)
+// Refresh prayer times (force recalculation with fresh location)
 export async function refreshPrayerTimes(): Promise<PrayerTime[]> {
   try {
-    console.log('Refreshing prayer times...');
+    console.log('Refreshing prayer times with fresh location...');
     
     // Clear cache
     await AsyncStorage.removeItem(PRAYER_TIMES_CACHE_KEY);
     
-    // Get fresh location and calculate
-    const location = await getLocationWithFallback();
-    const prayers = await calculatePrayerTimes(location);
+    // Get fresh location with high accuracy
+    const location = await getUserLocation(true);
+    const finalLocation = location || await getLocationWithFallback();
+    
+    const method = await getCalculationMethod();
+    const prayers = await calculatePrayerTimes(finalLocation, method);
 
     // Apply completion status
     const completionStatus = await getPrayerCompletionStatus();
@@ -230,7 +332,8 @@ export async function refreshPrayerTimes(): Promise<PrayerTime[]> {
     await cachePrayerTimes({
       prayers: prayersWithStatus,
       date: getTodayString(),
-      location,
+      location: finalLocation,
+      calculationMethod: method,
     });
 
     return prayersWithStatus;
@@ -254,6 +357,22 @@ export function getNextPrayer(prayers: PrayerTime[]): PrayerTime | null {
   return prayers[0] || null;
 }
 
+// Get current prayer (the one that just passed or is happening now)
+export function getCurrentPrayer(prayers: PrayerTime[]): PrayerTime | null {
+  const now = new Date();
+  let currentPrayer: PrayerTime | null = null;
+  
+  for (const prayer of prayers) {
+    if (prayer.date <= now) {
+      currentPrayer = prayer;
+    } else {
+      break;
+    }
+  }
+
+  return currentPrayer;
+}
+
 // Get time until prayer
 export function getTimeUntilPrayer(prayer: PrayerTime): string {
   const now = new Date();
@@ -270,6 +389,39 @@ export function getTimeUntilPrayer(prayer: PrayerTime): string {
     return `${hours}h ${minutes}m`;
   }
   return `${minutes}m`;
+}
+
+// Get time since prayer
+export function getTimeSincePrayer(prayer: PrayerTime): string {
+  const now = new Date();
+  const diff = now.getTime() - prayer.date.getTime();
+
+  if (diff < 0) {
+    return 'Not yet';
+  }
+
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ago`;
+  }
+  return `${minutes}m ago`;
+}
+
+// Get cached prayer times data (including location info)
+export async function getCachedPrayerTimesData(): Promise<PrayerTimesData | null> {
+  return await getCachedPrayerTimes();
+}
+
+// Clear prayer times cache
+export async function clearPrayerTimesCache(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(PRAYER_TIMES_CACHE_KEY);
+    console.log('Prayer times cache cleared');
+  } catch (error) {
+    console.log('Error clearing prayer times cache:', error);
+  }
 }
 
 // Default prayer times (fallback)
