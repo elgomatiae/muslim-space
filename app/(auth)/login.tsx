@@ -45,7 +45,16 @@ export default function LoginScreen() {
 
       if (error) {
         console.log('Login error:', error);
-        Alert.alert('Login Failed', error.message || 'Invalid email or password');
+        
+        // Show user-friendly error messages
+        let errorMessage = error.message;
+        if (error.message.includes('Email not confirmed')) {
+          errorMessage = 'Please verify your email address before logging in. Check your inbox for the verification link.';
+        } else if (error.message.includes('Invalid login credentials')) {
+          errorMessage = 'Invalid email or password. Please try again.';
+        }
+        
+        Alert.alert('Login Failed', errorMessage);
         setLoading(false);
         return;
       }
@@ -55,8 +64,7 @@ export default function LoginScreen() {
         if (Platform.OS !== 'web') {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
-        // Navigate specifically to the home page
-        router.replace('/(tabs)/(home)/');
+        // Navigation will be handled automatically by AuthContext
       }
     } catch (error: any) {
       console.error('Login error:', error);

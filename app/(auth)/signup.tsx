@@ -76,16 +76,32 @@ export default function SignupScreen() {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
 
-        Alert.alert(
-          'Verify Your Email',
-          'We have sent you a verification email. Please check your inbox and verify your email address before logging in.',
-          [
-            {
-              text: 'OK',
-              onPress: () => router.replace('/(auth)/login'),
-            },
-          ]
-        );
+        // Check if email confirmation is required
+        if (data.user.identities && data.user.identities.length === 0) {
+          // User already exists
+          Alert.alert(
+            'Account Exists',
+            'An account with this email already exists. Please sign in instead.',
+            [
+              {
+                text: 'OK',
+                onPress: () => router.replace('/(auth)/login'),
+              },
+            ]
+          );
+        } else {
+          // New user created - show email verification message
+          Alert.alert(
+            'Verify Your Email',
+            'We have sent you a verification email. Please check your inbox and verify your email address before logging in.',
+            [
+              {
+                text: 'OK',
+                onPress: () => router.replace('/(auth)/login'),
+              },
+            ]
+          );
+        }
       }
     } catch (error: any) {
       console.error('Signup error:', error);

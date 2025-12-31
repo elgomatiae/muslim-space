@@ -35,17 +35,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      console.log('Initial session:', session?.user?.id);
+      console.log('Initial session check:', session?.user?.id || 'No session');
       setSession(session);
       setUser(session?.user ?? null);
       
       // Initialize user profile if logged in
       if (session?.user) {
-        await initializeUserProfile(
-          session.user.id,
-          session.user.user_metadata?.username,
-          session.user.email
-        );
+        try {
+          await initializeUserProfile(
+            session.user.id,
+            session.user.user_metadata?.username,
+            session.user.email
+          );
+        } catch (error) {
+          console.error('Error initializing user profile:', error);
+        }
       }
       
       setLoading(false);
@@ -53,17 +57,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      console.log('Auth state changed:', _event, session?.user?.id);
+      console.log('Auth state changed:', _event, session?.user?.id || 'No session');
       setSession(session);
       setUser(session?.user ?? null);
       
       // Initialize user profile on sign in
       if (_event === 'SIGNED_IN' && session?.user) {
-        await initializeUserProfile(
-          session.user.id,
-          session.user.user_metadata?.username,
-          session.user.email
-        );
+        try {
+          await initializeUserProfile(
+            session.user.id,
+            session.user.user_metadata?.username,
+            session.user.email
+          );
+        } catch (error) {
+          console.error('Error initializing user profile:', error);
+        }
       }
       
       setLoading(false);
@@ -74,8 +82,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
+      console.log('Signing out...');
       await supabase.auth.signOut();
-      router.replace('/(auth)/login');
+      // The router.replace will be handled by the useEffect in _layout.tsx
     } catch (error) {
       console.error('Error signing out:', error);
     }
