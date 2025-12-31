@@ -1,6 +1,6 @@
 
-import React, { useCallback, useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, ActivityIndicator } from "react-native";
+import React, { useCallback, useState, useEffect, useRef } from "react";
+import { View, Text, StyleSheet, RefreshControl, TouchableOpacity, ActivityIndicator, Animated, Dimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
@@ -9,12 +9,25 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useImanTracker } from '@/contexts/ImanTrackerContext';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import * as Haptics from 'expo-haptics';
 
 import ImanRingsDisplay from "@/components/iman/ImanRingsDisplay";
 import IbadahSection from "./ibadah-section";
 import IlmSection from "./ilm-section";
 import AmanahSection from "./amanah-section";
 import AchievementsBadges from "@/components/iman/AchievementsBadges";
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Header animation constants
+const HEADER_MAX_HEIGHT = 200;
+const HEADER_MIN_HEIGHT = 80;
+const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
+
+// Tab animation constants
+const TAB_MAX_HEIGHT = 60;
+const TAB_MIN_HEIGHT = 0;
+const TAB_SCROLL_DISTANCE = 80;
 
 type TabType = 'tracker' | 'achievements' | 'communities';
 
@@ -33,10 +46,48 @@ export default function ImanTrackerScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('tracker');
   const [refreshing, setRefreshing] = React.useState(false);
 
+  // Animation values
+  const scrollY = useRef(new Animated.Value(0)).current;
+
   // Communities state
   const [communities, setCommunities] = useState<Community[]>([]);
   const [communitiesLoading, setCommunitiesLoading] = useState(false);
   const [pendingInvitesCount, setPendingInvitesCount] = useState(0);
+
+  // Header height animation
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
+    extrapolate: 'clamp',
+  });
+
+  // Header content opacity
+  const headerContentOpacity = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE / 2, HEADER_SCROLL_DISTANCE],
+    outputRange: [1, 0.5, 0],
+    extrapolate: 'clamp',
+  });
+
+  // Header title scale for collapsed state
+  const headerTitleScale = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [1, 0.8],
+    extrapolate: 'clamp',
+  });
+
+  // Tab switcher height animation
+  const tabHeight = scrollY.interpolate({
+    inputRange: [0, TAB_SCROLL_DISTANCE],
+    outputRange: [TAB_MAX_HEIGHT, TAB_MIN_HEIGHT],
+    extrapolate: 'clamp',
+  });
+
+  // Tab switcher opacity
+  const tabOpacity = scrollY.interpolate({
+    inputRange: [0, TAB_SCROLL_DISTANCE / 2, TAB_SCROLL_DISTANCE],
+    outputRange: [1, 0.5, 0],
+    extrapolate: 'clamp',
+  });
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -154,6 +205,11 @@ export default function ImanTrackerScreen() {
     router.push('/(tabs)/(iman)/communities');
   };
 
+  const handleTabChange = (tab: TabType) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setActiveTab(tab);
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -166,104 +222,183 @@ export default function ImanTrackerScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* ENHANCED HEADER */}
-      <LinearGradient
-        colors={colors.gradientOcean}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.headerContainer}
+      {/* COLLAPSING HEADER */}
+      <Animated.View 
+        style={[
+          styles.headerSection,
+          { height: headerHeight }
+        ]}
       >
-        <View style={styles.headerIconContainer}>
-          <IconSymbol
-            ios_icon_name="sparkles"
-            android_material_icon_name="auto-awesome"
-            size={48}
-            color="#FFFFFF"
-          />
+        <LinearGradient
+          colors={colors.gradientOcean}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <Animated.View 
+            style={[
+              styles.headerContent,
+              { opacity: headerContentOpacity }
+            ]}
+          >
+            <Animated.View 
+              style={[
+                styles.headerTop,
+                { transform: [{ scale: headerTitleScale }] }
+              ]}
+            >
+              <View style={styles.headerIconContainer}>
+                <IconSymbol
+                  ios_icon_name="sparkles"
+                  android_material_icon_name="auto-awesome"
+                  size={48}
+                  color="#FFFFFF"
+                />
+              </View>
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.header}>Iman Tracker</Text>
+                <Text style={styles.subtitle}>Track your spiritual journey daily</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.activityButton}
+                onPress={() => router.push('/(tabs)/(iman)/activity')}
+                activeOpacity={0.7}
+              >
+                <IconSymbol
+                  ios_icon_name="list.bullet.clipboard.fill"
+                  android_material_icon_name="assignment"
+                  size={24}
+                  color="#FFFFFF"
+                />
+              </TouchableOpacity>
+            </Animated.View>
+          </Animated.View>
+        </LinearGradient>
+      </Animated.View>
+
+      {/* COLLAPSING TABS */}
+      <Animated.View 
+        style={[
+          styles.tabsContainer,
+          { 
+            height: tabHeight,
+            opacity: tabOpacity,
+          }
+        ]}
+      >
+        <View style={styles.tabsWrapper}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'tracker' && styles.tabActive]}
+            onPress={() => handleTabChange('tracker')}
+            activeOpacity={0.7}
+          >
+            {activeTab === 'tracker' ? (
+              <LinearGradient
+                colors={colors.gradientPrimary}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.tabGradient}
+              >
+                <IconSymbol
+                  ios_icon_name="chart.pie.fill"
+                  android_material_icon_name="pie-chart"
+                  size={20}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.tabTextActive}>Tracker</Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.tabInactive}>
+                <IconSymbol
+                  ios_icon_name="chart.pie.fill"
+                  android_material_icon_name="pie-chart"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.tabText}>Tracker</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'achievements' && styles.tabActive]}
+            onPress={() => handleTabChange('achievements')}
+            activeOpacity={0.7}
+          >
+            {activeTab === 'achievements' ? (
+              <LinearGradient
+                colors={colors.gradientWarning}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.tabGradient}
+              >
+                <IconSymbol
+                  ios_icon_name="trophy.fill"
+                  android_material_icon_name="emoji-events"
+                  size={20}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.tabTextActive}>Achievements</Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.tabInactive}>
+                <IconSymbol
+                  ios_icon_name="trophy.fill"
+                  android_material_icon_name="emoji-events"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.tabText}>Achievements</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'communities' && styles.tabActive]}
+            onPress={() => handleTabChange('communities')}
+            activeOpacity={0.7}
+          >
+            {activeTab === 'communities' ? (
+              <LinearGradient
+                colors={colors.gradientTeal}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.tabGradient}
+              >
+                <IconSymbol
+                  ios_icon_name="person.3.fill"
+                  android_material_icon_name="groups"
+                  size={20}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.tabTextActive}>Communities</Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.tabInactive}>
+                <IconSymbol
+                  ios_icon_name="person.3.fill"
+                  android_material_icon_name="groups"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.tabText}>Communities</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
-        <View style={styles.headerTextContainer}>
-          <Text style={styles.header}>Iman Tracker</Text>
-          <Text style={styles.subtitle}>Track your spiritual journey daily</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.activityButton}
-          onPress={() => router.push('/(tabs)/(iman)/activity')}
-          activeOpacity={0.7}
-        >
-          <IconSymbol
-            ios_icon_name="list.bullet.clipboard.fill"
-            android_material_icon_name="assignment"
-            size={24}
-            color="#FFFFFF"
-          />
-        </TouchableOpacity>
-        <View style={styles.headerDecoration}>
-          <IconSymbol
-            ios_icon_name="moon.stars.fill"
-            android_material_icon_name="nights-stay"
-            size={36}
-            color="rgba(255, 255, 255, 0.6)"
-          />
-        </View>
-      </LinearGradient>
+      </Animated.View>
 
-      {/* TABS */}
-      <View style={styles.tabsContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'tracker' && styles.tabActive]}
-          onPress={() => setActiveTab('tracker')}
-          activeOpacity={0.7}
-        >
-          <IconSymbol
-            ios_icon_name="chart.pie.fill"
-            android_material_icon_name="pie-chart"
-            size={20}
-            color={activeTab === 'tracker' ? colors.primary : colors.textSecondary}
-          />
-          <Text style={[styles.tabText, activeTab === 'tracker' && styles.tabTextActive]}>
-            Tracker
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'achievements' && styles.tabActive]}
-          onPress={() => setActiveTab('achievements')}
-          activeOpacity={0.7}
-        >
-          <IconSymbol
-            ios_icon_name="trophy.fill"
-            android_material_icon_name="emoji-events"
-            size={20}
-            color={activeTab === 'achievements' ? colors.primary : colors.textSecondary}
-          />
-          <Text style={[styles.tabText, activeTab === 'achievements' && styles.tabTextActive]}>
-            Achievements
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'communities' && styles.tabActive]}
-          onPress={() => setActiveTab('communities')}
-          activeOpacity={0.7}
-        >
-          <IconSymbol
-            ios_icon_name="person.3.fill"
-            android_material_icon_name="groups"
-            size={20}
-            color={activeTab === 'communities' ? colors.primary : colors.textSecondary}
-          />
-          <Text style={[styles.tabText, activeTab === 'communities' && styles.tabTextActive]}>
-            Communities
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* TAB CONTENT */}
+      {/* TAB CONTENT WITH ANIMATED SCROLL */}
       {activeTab === 'tracker' && (
-        <ScrollView
+        <Animated.ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: false }
+          )}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
@@ -350,14 +485,19 @@ export default function ImanTrackerScreen() {
           </View>
 
           <View style={styles.bottomPadding} />
-        </ScrollView>
+        </Animated.ScrollView>
       )}
 
       {activeTab === 'achievements' && (
-        <ScrollView
+        <Animated.ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: false }
+          )}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
@@ -366,14 +506,19 @@ export default function ImanTrackerScreen() {
           <AchievementsBadges />
 
           <View style={styles.bottomPadding} />
-        </ScrollView>
+        </Animated.ScrollView>
       )}
 
       {activeTab === 'communities' && (
-        <ScrollView
+        <Animated.ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: false }
+          )}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
@@ -490,7 +635,7 @@ export default function ImanTrackerScreen() {
           )}
 
           <View style={styles.bottomPadding} />
-        </ScrollView>
+        </Animated.ScrollView>
       )}
     </SafeAreaView>
   );
@@ -512,16 +657,25 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
   },
-  headerContainer: {
+  headerSection: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    ...shadows.large,
+  },
+  headerGradient: {
+    flex: 1,
+    padding: spacing.xl,
+    justifyContent: 'center',
+  },
+  headerContent: {
+    gap: spacing.md,
+  },
+  headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
-    padding: spacing.xl,
-    borderRadius: borderRadius.xl,
-    ...shadows.large,
+    gap: spacing.md,
   },
   headerIconContainer: {
     width: 64,
@@ -533,10 +687,9 @@ const styles = StyleSheet.create({
   },
   headerTextContainer: {
     flex: 1,
-    marginLeft: spacing.lg,
   },
   header: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '800',
     color: '#FFFFFF',
     marginBottom: spacing.xs,
@@ -545,7 +698,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
     color: 'rgba(255, 255, 255, 0.9)',
   },
@@ -556,47 +709,63 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: spacing.sm,
-  },
-  headerDecoration: {
-    opacity: 0.8,
   },
   tabsContainer: {
-    flexDirection: 'row',
-    backgroundColor: colors.card,
-    marginHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
+    overflow: 'hidden',
+  },
+  tabsWrapper: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
     padding: spacing.xs,
     ...shadows.medium,
   },
   tab: {
     flex: 1,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+  },
+  tabActive: {
+    ...shadows.small,
+  },
+  tabGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.xs,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.xs,
-    borderRadius: borderRadius.md,
-    gap: spacing.xs,
   },
-  tabActive: {
-    backgroundColor: colors.highlight,
+  tabInactive: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    backgroundColor: 'transparent',
   },
   tabText: {
     ...typography.caption,
+    fontSize: 13,
     color: colors.textSecondary,
     fontWeight: '600',
   },
   tabTextActive: {
-    color: colors.primary,
+    ...typography.caption,
+    fontSize: 13,
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
   },
   bottomPadding: {
     height: 100,
