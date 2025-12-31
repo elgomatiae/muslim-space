@@ -318,77 +318,29 @@ export default function AmanahSection() {
               </TouchableOpacity>
             </View>
 
-            {/* Journal & Reflection Prompts */}
-            <View style={styles.reflectionSection}>
-              <Text style={styles.reflectionTitle}>✨ Reflection & Journaling</Text>
-              <Text style={styles.reflectionSubtitle}>
-                Document your spiritual journey and track your progress
-              </Text>
-              
-              <View style={styles.reflectionButtons}>
-                <TouchableOpacity
-                  style={styles.reflectionButton}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    router.push('/(tabs)/(wellness)/journal' as any);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <LinearGradient
-                    colors={['#8B5CF6', '#7C3AED']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.reflectionGradient}
-                  >
-                    <IconSymbol
-                      ios_icon_name="book.fill"
-                      android_material_icon_name="menu-book"
-                      size={24}
-                      color="#FFFFFF"
-                    />
-                    <Text style={styles.reflectionButtonText}>My Journal</Text>
-                    <Text style={styles.reflectionButtonSubtext}>Write & reflect</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.reflectionButton}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    router.push('/(tabs)/(wellness)/journal-prompts' as any);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <LinearGradient
-                    colors={['#EC4899', '#DB2777']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.reflectionGradient}
-                  >
-                    <IconSymbol
-                      ios_icon_name="lightbulb.fill"
-                      android_material_icon_name="lightbulb"
-                      size={24}
-                      color="#FFFFFF"
-                    />
-                    <Text style={styles.reflectionButtonText}>Prompts</Text>
-                    <Text style={styles.reflectionButtonSubtext}>Get inspired</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.infoBox}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(tabs)/(wellness)/journal' as any);
+              }}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={['#F59E0B', '#D97706']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.actionGradient}
+              >
                 <IconSymbol
-                  ios_icon_name="info.circle.fill"
-                  android_material_icon_name="info"
-                  size={16}
-                  color="#F59E0B"
+                  ios_icon_name="arrow.right.circle.fill"
+                  android_material_icon_name="arrow-forward"
+                  size={18}
+                  color="#FFFFFF"
                 />
-                <Text style={styles.infoText}>
-                  Journaling counts toward your meditation goals and can be tracked in the Iman Tracker
-                </Text>
-              </View>
-            </View>
+                <Text style={styles.actionText}>Go to Journal</Text>
+              </LinearGradient>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.actionButton}
@@ -681,65 +633,5 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: '#FFFFFF',
     fontWeight: '600',
-  },
-  reflectionSection: {
-    backgroundColor: colors.highlight,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginTop: spacing.sm,
-  },
-  reflectionTitle: {
-    ...typography.h4,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  reflectionSubtitle: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginBottom: spacing.lg,
-  },
-  reflectionButtons: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  reflectionButton: {
-    flex: 1,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    ...shadows.medium,
-  },
-  reflectionGradient: {
-    padding: spacing.lg,
-    alignItems: 'center',
-    minHeight: 120,
-    justifyContent: 'center',
-  },
-  reflectionButtonText: {
-    ...typography.bodyBold,
-    color: '#FFFFFF',
-    marginTop: spacing.sm,
-    fontSize: 16,
-  },
-  reflectionButtonSubtext: {
-    ...typography.small,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginTop: spacing.xs,
-  },
-  infoBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    borderLeftWidth: 3,
-    borderLeftColor: '#F59E0B',
-  },
-  infoText: {
-    ...typography.small,
-    color: colors.text,
-    flex: 1,
-    lineHeight: 18,
   },
 });
