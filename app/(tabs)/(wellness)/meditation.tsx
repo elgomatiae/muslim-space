@@ -313,26 +313,16 @@ export default function MeditationScreen() {
         return;
       }
 
-      const { data: currentGoals } = await supabase
-        .from('iman_tracker_goals')
-        .select('meditation_daily_completed, meditation_daily_goal, amanah_weekly_mental_health_completed, amanah_weekly_mental_health_goal')
-        .eq('user_id', user.id)
-        .single();
-
-      const newMeditationCompleted = (currentGoals?.meditation_daily_completed || 0) + 1;
-      const newMentalHealthCompleted = (currentGoals?.amanah_weekly_mental_health_completed || 0) + 1;
-
-      const { error: updateError } = await supabase
-        .from('iman_tracker_goals')
-        .update({
-          meditation_daily_completed: newMeditationCompleted,
-          amanah_weekly_mental_health_completed: newMentalHealthCompleted,
-          last_updated: new Date().toISOString(),
-        })
-        .eq('user_id', user.id);
-
-      if (updateError) {
-        console.error('Error updating goals:', updateError);
+      // Update Amanah goals - meditation counter
+      if (amanahGoals) {
+        const updatedGoals = {
+          ...amanahGoals,
+          weeklyMeditationCompleted: Math.min(
+            amanahGoals.weeklyMeditationCompleted + 1,
+            amanahGoals.weeklyMeditationGoal
+          ),
+        };
+        await updateAmanahGoals(updatedGoals);
       }
 
       if (selectedPractice.type === 'dhikr' && dhikrGoals) {

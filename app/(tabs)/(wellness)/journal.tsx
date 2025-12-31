@@ -171,13 +171,13 @@ export default function JournalScreen() {
         } else {
           Alert.alert('Success', 'Your journal entry has been saved');
           
-          // Update Iman Tracker - mental health activity
+          // Update Iman Tracker - journal activity
           if (amanahGoals) {
             const updatedGoals = {
               ...amanahGoals,
-              weeklyMentalHealthCompleted: Math.min(
-                amanahGoals.weeklyMentalHealthCompleted + 1,
-                amanahGoals.weeklyMentalHealthGoal
+              weeklyJournalCompleted: Math.min(
+                amanahGoals.weeklyJournalCompleted + 1,
+                amanahGoals.weeklyJournalGoal
               ),
             };
             await updateAmanahGoals(updatedGoals);

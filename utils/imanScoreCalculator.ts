@@ -94,7 +94,13 @@ export interface AmanahGoals {
   weeklyWorkoutGoal: number;
   weeklyWorkoutCompleted: number;
   
-  // Mental health - Weekly
+  // Mental health - Weekly (SEPARATED)
+  weeklyMeditationGoal: number;
+  weeklyMeditationCompleted: number;
+  weeklyJournalGoal: number;
+  weeklyJournalCompleted: number;
+  
+  // Legacy field for backward compatibility
   weeklyMentalHealthGoal: number;
   weeklyMentalHealthCompleted: number;
   weeklyStressManagementGoal: number;
@@ -423,7 +429,7 @@ export function calculateAmanahScore(goals: AmanahGoals): number {
   let totalWeightedProgress = 0;
   
   // All Amanah goals have equal weight
-  const componentWeight = 16.67; // ~100/6 components
+  const componentWeight = 14.29; // ~100/7 components (added meditation and journal separately)
   
   if (goals.dailyExerciseGoal > 0) {
     const progress = Math.min(1, goals.dailyExerciseCompleted / goals.dailyExerciseGoal);
@@ -461,13 +467,24 @@ export function calculateAmanahScore(goals: AmanahGoals): number {
     console.log(`🏋️ Workout: Disabled`);
   }
   
-  if (goals.weeklyMentalHealthGoal > 0) {
-    const progress = Math.min(1, goals.weeklyMentalHealthCompleted / goals.weeklyMentalHealthGoal);
+  // SEPARATED: Meditation Goal
+  if (goals.weeklyMeditationGoal > 0) {
+    const progress = Math.min(1, goals.weeklyMeditationCompleted / goals.weeklyMeditationGoal);
     totalWeight += componentWeight;
     totalWeightedProgress += progress * componentWeight;
-    console.log(`🧘 Mental Health: ${goals.weeklyMentalHealthCompleted}/${goals.weeklyMentalHealthGoal} sessions = ${(progress * 100).toFixed(1)}%`);
+    console.log(`🧘 Meditation: ${goals.weeklyMeditationCompleted}/${goals.weeklyMeditationGoal} sessions = ${(progress * 100).toFixed(1)}%`);
   } else {
-    console.log(`🧘 Mental Health: Disabled`);
+    console.log(`🧘 Meditation: Disabled`);
+  }
+  
+  // SEPARATED: Journal Goal
+  if (goals.weeklyJournalGoal > 0) {
+    const progress = Math.min(1, goals.weeklyJournalCompleted / goals.weeklyJournalGoal);
+    totalWeight += componentWeight;
+    totalWeightedProgress += progress * componentWeight;
+    console.log(`📔 Journal: ${goals.weeklyJournalCompleted}/${goals.weeklyJournalGoal} entries = ${(progress * 100).toFixed(1)}%`);
+  } else {
+    console.log(`📔 Journal: Disabled`);
   }
   
   if (goals.weeklyStressManagementGoal > 0) {
@@ -759,6 +776,8 @@ export async function resetWeeklyGoals(): Promise<void> {
     ilmGoals.weeklyReflectionCompleted = 0;
     
     amanahGoals.weeklyWorkoutCompleted = 0;
+    amanahGoals.weeklyMeditationCompleted = 0;
+    amanahGoals.weeklyJournalCompleted = 0;
     amanahGoals.weeklyMentalHealthCompleted = 0;
     amanahGoals.weeklyStressManagementCompleted = 0;
     
@@ -873,7 +892,23 @@ export async function loadAmanahGoals(): Promise<AmanahGoals> {
   try {
     const saved = await AsyncStorage.getItem('amanahGoals');
     if (saved) {
-      return JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      
+      // Migration: If old format, split weeklyMentalHealthGoal into meditation and journal
+      if (!Object.prototype.hasOwnProperty.call(parsed, 'weeklyMeditationGoal')) {
+        const mentalHealthGoal = parsed.weeklyMentalHealthGoal || 3;
+        const mentalHealthCompleted = parsed.weeklyMentalHealthCompleted || 0;
+        
+        // Split evenly between meditation and journal
+        parsed.weeklyMeditationGoal = Math.ceil(mentalHealthGoal / 2);
+        parsed.weeklyMeditationCompleted = Math.floor(mentalHealthCompleted / 2);
+        parsed.weeklyJournalGoal = Math.floor(mentalHealthGoal / 2);
+        parsed.weeklyJournalCompleted = Math.ceil(mentalHealthCompleted / 2);
+        
+        console.log('🔄 Migrated mental health goal to separate meditation and journal goals');
+      }
+      
+      return parsed;
     }
   } catch (error) {
     console.log('Error loading amanah goals:', error);
@@ -886,6 +921,10 @@ export async function loadAmanahGoals(): Promise<AmanahGoals> {
     dailyWaterCompleted: 0,
     weeklyWorkoutGoal: 3,
     weeklyWorkoutCompleted: 0,
+    weeklyMeditationGoal: 2,
+    weeklyMeditationCompleted: 0,
+    weeklyJournalGoal: 2,
+    weeklyJournalCompleted: 0,
     weeklyMentalHealthGoal: 3,
     weeklyMentalHealthCompleted: 0,
     dailySleepGoal: 7,

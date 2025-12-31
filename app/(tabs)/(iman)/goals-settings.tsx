@@ -94,6 +94,7 @@ export default function GoalsSettingsScreen() {
       if (data.water_goal_frequency) frequencies.water = data.water_goal_frequency;
       if (data.workout_goal_frequency) frequencies.workout = data.workout_goal_frequency;
       if (data.meditation_goal_frequency) frequencies.meditation = data.meditation_goal_frequency;
+      if (data.journal_goal_frequency) frequencies.journal = data.journal_goal_frequency;
       if (data.sleep_goal_frequency) frequencies.sleep = data.sleep_goal_frequency;
       
       setGoalFrequencies(frequencies);
@@ -413,17 +414,33 @@ export default function GoalsSettingsScreen() {
       id: 'meditation',
       label: 'Meditation Sessions',
       description: 'Meditation & mindfulness goal',
-      goalField: 'weeklyMentalHealthGoal',
-      completedField: 'weeklyMentalHealthCompleted',
+      goalField: 'weeklyMeditationGoal',
+      completedField: 'weeklyMeditationCompleted',
       frequencyField: 'meditation_goal_frequency',
       min: 0,
       max: 7,
       step: 1,
       unit: 'sessions',
-      enabled: (localAmanahGoals?.weeklyMentalHealthGoal ?? 0) > 0,
+      enabled: (localAmanahGoals?.weeklyMeditationGoal ?? 0) > 0,
       canDisable: true,
       defaultFrequency: 'weekly',
       currentFrequency: goalFrequencies.meditation || 'weekly',
+    },
+    {
+      id: 'journal',
+      label: 'Journal Entries',
+      description: 'Journaling & reflection goal',
+      goalField: 'weeklyJournalGoal',
+      completedField: 'weeklyJournalCompleted',
+      frequencyField: 'journal_goal_frequency',
+      min: 0,
+      max: 7,
+      step: 1,
+      unit: 'entries',
+      enabled: (localAmanahGoals?.weeklyJournalGoal ?? 0) > 0,
+      canDisable: true,
+      defaultFrequency: 'weekly',
+      currentFrequency: goalFrequencies.journal || 'weekly',
     },
     {
       id: 'sleep',
@@ -521,7 +538,8 @@ export default function GoalsSettingsScreen() {
       dailyExerciseGoal: 30,
       dailyWaterGoal: 8,
       weeklyWorkoutGoal: 3,
-      weeklyMentalHealthGoal: 3,
+      weeklyMeditationGoal: 2,
+      weeklyJournalGoal: 2,
       dailySleepGoal: 7,
       weeklyStressManagementGoal: 2,
     };
