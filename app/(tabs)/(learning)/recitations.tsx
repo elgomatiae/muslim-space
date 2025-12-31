@@ -25,6 +25,16 @@ import { useImanTracker } from '@/contexts/ImanTrackerContext';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 
+// Helper function to shuffle an array
+const shuffleArray = <T,>(array: T[]): T[] => {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
+
 export default function RecitationsScreen() {
   const { user } = useAuth();
   const { ilmGoals, updateIlmGoals } = useImanTracker();
@@ -70,12 +80,20 @@ export default function RecitationsScreen() {
         }
       });
       
+      // Randomize the order of videos within each category
+      Object.keys(categorized).forEach(category => {
+        categorized[category] = shuffleArray(categorized[category]);
+      });
+      
+      // Randomize uncategorized recitations as well
+      const shuffledUncategorized = shuffleArray(uncategorized);
+      
       // Get unique categories
       const uniqueCategories = Object.keys(categorized).sort();
       
       setCategories(uniqueCategories);
       setRecitationsByCategory(categorized);
-      setUncategorizedRecitations(uncategorized);
+      setUncategorizedRecitations(shuffledUncategorized);
       
       console.log(`Loaded ${allRecitations.length} recitations: ${uniqueCategories.length} categories, ${uncategorized.length} uncategorized`);
     } catch (error) {
@@ -282,10 +300,6 @@ export default function RecitationsScreen() {
     }
   };
 
-  const handleImportPlaylist = () => {
-    router.push('/(tabs)/(learning)/playlist-import?type=recitation');
-  };
-
   const handleClearSearch = () => {
     setSearchQuery('');
     setSearchResults([]);
@@ -370,28 +384,8 @@ export default function RecitationsScreen() {
             </View>
             <Text style={styles.emptyTitle}>No Recitations Yet</Text>
             <Text style={styles.emptyText}>
-              Import a YouTube playlist to get started. Tap the import button above to begin.
+              Quran recitations will appear here once they are added to your Supabase database.
             </Text>
-            <TouchableOpacity
-              style={styles.emptyButton}
-              onPress={handleImportPlaylist}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={colors.gradientPrimary}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.emptyButtonGradient}
-              >
-                <IconSymbol
-                  ios_icon_name="square.and.arrow.down.fill"
-                  android_material_icon_name="download"
-                  size={20}
-                  color={colors.card}
-                />
-                <Text style={styles.emptyButtonText}>Import Playlist</Text>
-              </LinearGradient>
-            </TouchableOpacity>
           </View>
         </ScrollView>
       </View>
@@ -409,18 +403,6 @@ export default function RecitationsScreen() {
             </Text>
           </View>
           <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={styles.importButton}
-              onPress={handleImportPlaylist}
-              activeOpacity={0.7}
-            >
-              <IconSymbol
-                ios_icon_name="square.and.arrow.down"
-                android_material_icon_name="download"
-                size={20}
-                color={colors.primary}
-              />
-            </TouchableOpacity>
             <TouchableOpacity
               style={styles.searchButton}
               onPress={handleSearchToggle}
@@ -837,15 +819,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
-  importButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...shadows.small,
-  },
   searchButton: {
     width: 44,
     height: 44,
@@ -1034,23 +1007,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: spacing.xl,
-  },
-  emptyButton: {
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-    ...shadows.medium,
-  },
-  emptyButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-  },
-  emptyButtonText: {
-    ...typography.bodyBold,
-    color: colors.card,
   },
   categorySection: {
     marginBottom: spacing.xxl,
