@@ -63,10 +63,12 @@ export default function HomeScreen() {
     location: UserLocation | null;
     locationName: string | null;
     accuracy: number | null;
+    source: 'api' | 'calculation' | 'default';
   }>({
     location: null,
     locationName: null,
     accuracy: null,
+    source: 'api',
   });
 
   // Load prayer times
@@ -86,8 +88,10 @@ export default function HomeScreen() {
           location: cachedData.location,
           locationName,
           accuracy: cachedData.location.accuracy || null,
+          source: cachedData.source || 'api',
         });
         console.log('📍 Location:', locationName || formatLocation(cachedData.location));
+        console.log('🌐 Source:', cachedData.source);
       }
       
       // Sync with prayer goals from context
@@ -524,21 +528,35 @@ export default function HomeScreen() {
               </View>
             </View>
             
-            {/* Location Info - Shows automatic calculation */}
+            {/* Location Info - Shows online API source */}
             {locationInfo.location && (
               <View style={styles.locationInfo}>
                 <IconSymbol
-                  ios_icon_name="location.fill"
-                  android_material_icon_name="location-on"
+                  ios_icon_name={locationInfo.source === 'api' ? 'globe' : 'location.fill'}
+                  android_material_icon_name={locationInfo.source === 'api' ? 'public' : 'location-on'}
                   size={12}
-                  color={colors.success}
+                  color={locationInfo.source === 'api' ? colors.primary : colors.success}
                 />
-                <Text style={styles.locationText}>
-                  Auto-calculated for {locationInfo.locationName || formatLocation(locationInfo.location)}
+                <Text style={[
+                  styles.locationText,
+                  locationInfo.source === 'api' && { color: colors.primary }
+                ]}>
+                  {locationInfo.source === 'api' 
+                    ? `Online times for ${locationInfo.locationName || formatLocation(locationInfo.location)}`
+                    : `Calculated for ${locationInfo.locationName || formatLocation(locationInfo.location)}`
+                  }
                 </Text>
                 {locationInfo.accuracy && locationInfo.accuracy < 100 && (
-                  <View style={styles.accuracyBadge}>
-                    <Text style={styles.accuracyText}>±{Math.round(locationInfo.accuracy)}m</Text>
+                  <View style={[
+                    styles.accuracyBadge,
+                    locationInfo.source === 'api' && { backgroundColor: colors.primary + '20' }
+                  ]}>
+                    <Text style={[
+                      styles.accuracyText,
+                      locationInfo.source === 'api' && { color: colors.primary }
+                    ]}>
+                      ±{Math.round(locationInfo.accuracy)}m
+                    </Text>
                   </View>
                 )}
               </View>

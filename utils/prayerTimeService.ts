@@ -12,11 +12,18 @@ import {
   requestLocationPermission,
   isLocationEnabled,
 } from './locationService';
+import {
+  fetchPrayerTimesFromApi,
+  mapCalculationMethodToApiId,
+  validatePrayerTimes,
+  ApiPrayerTimes,
+} from './prayerTimeApiService';
 
 const PRAYER_TIMES_CACHE_KEY = '@prayer_times_cache';
 const PRAYER_COMPLETION_KEY = '@prayer_completion';
 const CALCULATION_METHOD_KEY = '@calculation_method';
 const LAST_LOCATION_KEY = '@last_prayer_location';
+const USE_API_KEY = '@use_prayer_api';
 
 export interface PrayerTime {
   name: string;
@@ -32,6 +39,7 @@ export interface PrayerTimesData {
   location: UserLocation;
   calculationMethod: string;
   locationName?: string;
+  source: 'api' | 'calculation' | 'default';
 }
 
 export interface PrayerTimeAdjustments {
@@ -67,21 +75,43 @@ export const CALCULATION_METHODS = {
 };
 
 /**
- * Enhanced prayer time service - AUTOMATICALLY calculates prayer times based on GPS location
+ * Enhanced prayer time service - AUTOMATICALLY fetches city-specific prayer times from online API
  * 
  * KEY FEATURES:
- * - Automatic location-based calculation using the adhan library
- * - High-accuracy GPS positioning
- * - Automatic recalculation when location changes significantly (>5km)
+ * - Fetches prayer times from Aladhan API based on exact GPS coordinates
+ * - City-specific prayer times (not broad regional calculations)
+ * - Automatic location-based fetching
+ * - Fallback to local calculation if API is unavailable
  * - Support for 12 different Islamic calculation methods
  * - Optional manual adjustments (fine-tuning in minutes)
  * - Persistent storage in Supabase database
- * - Smart caching to reduce battery usage
+ * - Smart caching to reduce API calls and battery usage
  * 
- * IMPORTANT: Prayer times are NEVER manually calculated by users.
- * The system automatically determines times based on GPS coordinates.
- * Users can only fine-tune times with small adjustments (±minutes).
+ * IMPORTANT: Prayer times are fetched from online sources for maximum accuracy.
+ * The system uses your exact GPS coordinates to get city-specific times.
  */
+
+// Check if API should be used (default: true)
+export async function shouldUseApi(): Promise<boolean> {
+  try {
+    const useApi = await AsyncStorage.getItem(USE_API_KEY);
+    return useApi !== 'false'; // Default to true
+  } catch (error) {
+    console.log('Error checking API preference:', error);
+    return true;
+  }
+}
+
+// Set API usage preference
+export async function setUseApi(useApi: boolean): Promise<void> {
+  try {
+    await AsyncStorage.setItem(USE_API_KEY, useApi ? 'true' : 'false');
+    console.log('API usage preference saved:', useApi);
+    await clearPrayerTimesCache();
+  } catch (error) {
+    console.log('Error saving API preference:', error);
+  }
+}
 
 // Get saved calculation method
 export async function getCalculationMethod(): Promise<string> {
@@ -107,7 +137,7 @@ export async function saveCalculationMethod(method: string): Promise<void> {
   }
 }
 
-// Get calculation method parameters
+// Get calculation method parameters (for fallback calculation)
 function getCalculationParams(methodName: string): any {
   switch (methodName) {
     case 'NorthAmerica':
@@ -283,6 +313,7 @@ async function storePrayerTimes(
   prayers: PrayerTime[],
   location: UserLocation,
   calculationMethod: string,
+  source: 'api' | 'calculation' | 'default',
   isManual: boolean = false
 ): Promise<void> {
   try {
@@ -314,7 +345,7 @@ async function storePrayerTimes(
     if (error) {
       console.error('Error storing prayer times:', error);
     } else {
-      console.log('✅ Prayer times stored in database successfully');
+      console.log(`✅ Prayer times stored in database (source: ${source})`);
     }
   } catch (error) {
     console.error('Error storing prayer times:', error);
@@ -343,10 +374,107 @@ async function getLastPrayerLocation(): Promise<UserLocation | null> {
 }
 
 /**
- * AUTOMATIC PRAYER TIME CALCULATION
+ * FETCH PRAYER TIMES FROM API
  * 
- * This function automatically calculates prayer times based on the user's GPS location.
- * It uses the adhan library with the user's coordinates to determine accurate prayer times.
+ * This function fetches city-specific prayer times from the Aladhan API
+ * based on the user's exact GPS coordinates.
+ * 
+ * @param location - User's GPS coordinates (latitude, longitude)
+ * @param methodName - Calculation method (defaults to ISNA/North America)
+ * @returns Array of prayer times with names, Arabic names, and times
+ */
+export async function fetchPrayerTimesFromOnline(
+  location: UserLocation,
+  methodName?: string
+): Promise<PrayerTime[]> {
+  try {
+    console.log('🌐 FETCHING CITY-SPECIFIC PRAYER TIMES FROM ONLINE API');
+    console.log('📍 Location:', {
+      lat: location.latitude.toFixed(4),
+      lng: location.longitude.toFixed(4),
+      accuracy: location.accuracy ? `${Math.round(location.accuracy)}m` : 'unknown'
+    });
+
+    const method = methodName || await getCalculationMethod();
+    const methodId = mapCalculationMethodToApiId(method);
+    
+    console.log('📐 Using calculation method:', method, `(API ID: ${methodId})`);
+    
+    // Fetch prayer times from API
+    const apiTimes: ApiPrayerTimes = await fetchPrayerTimesFromApi(location, methodId);
+
+    // Validate the response
+    if (!validatePrayerTimes(apiTimes)) {
+      throw new Error('Invalid prayer times received from API');
+    }
+
+    // Get adjustments if any (these are just fine-tuning offsets)
+    const adjustments = await getPrayerTimeAdjustments();
+
+    let prayers: PrayerTime[] = [
+      {
+        name: PRAYER_NAMES.fajr.english,
+        arabicName: PRAYER_NAMES.fajr.arabic,
+        time: formatTime(adjustments ? applyTimeAdjustment(apiTimes.fajr, adjustments.fajr_offset) : apiTimes.fajr),
+        date: adjustments ? applyTimeAdjustment(apiTimes.fajr, adjustments.fajr_offset) : apiTimes.fajr,
+        completed: false,
+      },
+      {
+        name: PRAYER_NAMES.dhuhr.english,
+        arabicName: PRAYER_NAMES.dhuhr.arabic,
+        time: formatTime(adjustments ? applyTimeAdjustment(apiTimes.dhuhr, adjustments.dhuhr_offset) : apiTimes.dhuhr),
+        date: adjustments ? applyTimeAdjustment(apiTimes.dhuhr, adjustments.dhuhr_offset) : apiTimes.dhuhr,
+        completed: false,
+      },
+      {
+        name: PRAYER_NAMES.asr.english,
+        arabicName: PRAYER_NAMES.asr.arabic,
+        time: formatTime(adjustments ? applyTimeAdjustment(apiTimes.asr, adjustments.asr_offset) : apiTimes.asr),
+        date: adjustments ? applyTimeAdjustment(apiTimes.asr, adjustments.asr_offset) : apiTimes.asr,
+        completed: false,
+      },
+      {
+        name: PRAYER_NAMES.maghrib.english,
+        arabicName: PRAYER_NAMES.maghrib.arabic,
+        time: formatTime(adjustments ? applyTimeAdjustment(apiTimes.maghrib, adjustments.maghrib_offset) : apiTimes.maghrib),
+        date: adjustments ? applyTimeAdjustment(apiTimes.maghrib, adjustments.maghrib_offset) : apiTimes.maghrib,
+        completed: false,
+      },
+      {
+        name: PRAYER_NAMES.isha.english,
+        arabicName: PRAYER_NAMES.isha.arabic,
+        time: formatTime(adjustments ? applyTimeAdjustment(apiTimes.isha, adjustments.isha_offset) : apiTimes.isha),
+        date: adjustments ? applyTimeAdjustment(apiTimes.isha, adjustments.isha_offset) : apiTimes.isha,
+        completed: false,
+      },
+    ];
+
+    console.log('✅ Prayer times fetched successfully from online API');
+    console.log('🕌 Times:', prayers.map(p => `${p.name}: ${p.time}`).join(', '));
+    
+    if (adjustments) {
+      const hasAdjustments = Object.values(adjustments).some(v => v !== 0);
+      if (hasAdjustments) {
+        console.log('⚙️ Applied user adjustments (fine-tuning)');
+      }
+    }
+
+    // Store in database for future reference
+    await storePrayerTimes(prayers, location, method, 'api', false);
+    await saveLastPrayerLocation(location);
+
+    return prayers;
+  } catch (error) {
+    console.error('❌ Error fetching prayer times from online API:', error);
+    throw error;
+  }
+}
+
+/**
+ * CALCULATE PRAYER TIMES LOCALLY (FALLBACK)
+ * 
+ * This function calculates prayer times locally using the adhan library.
+ * It's used as a fallback when the online API is unavailable.
  * 
  * @param location - User's GPS coordinates (latitude, longitude)
  * @param methodName - Calculation method (defaults to ISNA/North America)
@@ -357,7 +485,7 @@ export async function calculatePrayerTimes(
   methodName?: string
 ): Promise<PrayerTime[]> {
   try {
-    console.log('🕌 CALCULATING PRAYER TIMES AUTOMATICALLY');
+    console.log('🕌 CALCULATING PRAYER TIMES LOCALLY (FALLBACK)');
     console.log('📍 Location:', {
       lat: location.latitude.toFixed(4),
       lng: location.longitude.toFixed(4),
@@ -415,7 +543,7 @@ export async function calculatePrayerTimes(
       },
     ];
 
-    console.log('✅ Prayer times calculated successfully');
+    console.log('✅ Prayer times calculated locally');
     console.log('🕌 Times:', prayers.map(p => `${p.name}: ${p.time}`).join(', '));
     
     if (adjustments) {
@@ -426,7 +554,7 @@ export async function calculatePrayerTimes(
     }
 
     // Store in database for future reference
-    await storePrayerTimes(prayers, location, method, false);
+    await storePrayerTimes(prayers, location, method, 'calculation', false);
     await saveLastPrayerLocation(location);
 
     return prayers;
@@ -451,7 +579,7 @@ async function getCachedPrayerTimes(): Promise<PrayerTimesData | null> {
         ...p,
         date: new Date(p.date),
       }));
-      console.log('✅ Using cached prayer times');
+      console.log(`✅ Using cached prayer times (source: ${data.source})`);
       return data;
     }
 
@@ -467,7 +595,7 @@ async function getCachedPrayerTimes(): Promise<PrayerTimesData | null> {
 async function cachePrayerTimes(data: PrayerTimesData): Promise<void> {
   try {
     await AsyncStorage.setItem(PRAYER_TIMES_CACHE_KEY, JSON.stringify(data));
-    console.log('✅ Prayer times cached successfully');
+    console.log(`✅ Prayer times cached successfully (source: ${data.source})`);
   } catch (error) {
     console.log('Error caching prayer times:', error);
   }
@@ -504,8 +632,9 @@ export async function savePrayerCompletionStatus(completionStatus: Record<string
  * 1. Checks if we have valid cached times for today
  * 2. Checks if location has changed significantly (>5km)
  * 3. Gets fresh GPS location if needed
- * 4. Calculates prayer times based on location
- * 5. Stores times in database and cache
+ * 4. Fetches prayer times from online API (city-specific)
+ * 5. Falls back to local calculation if API is unavailable
+ * 6. Stores times in database and cache
  * 
  * @param forceRefresh - Force recalculation even if cache is valid
  * @returns Array of prayer times with completion status
@@ -565,13 +694,14 @@ export async function getPrayerTimes(forceRefresh: boolean = false): Promise<Pra
         location,
         calculationMethod: method,
         locationName: locationName || undefined,
+        source: 'api', // Assume API source for stored times
       });
 
       return prayersWithStatus;
     }
 
-    // Calculate new prayer times based on GPS location
-    console.log('🔄 Calculating fresh prayer times based on GPS location...');
+    // Fetch new prayer times based on GPS location
+    console.log('🔄 Fetching fresh prayer times based on GPS location...');
     
     // Ensure we have location permissions
     const hasPermission = await requestLocationPermission();
@@ -581,7 +711,28 @@ export async function getPrayerTimes(forceRefresh: boolean = false): Promise<Pra
     
     const location = await getLocationWithFallback();
     const method = await getCalculationMethod();
-    const prayers = await calculatePrayerTimes(location, method);
+    
+    let prayers: PrayerTime[];
+    let source: 'api' | 'calculation' | 'default';
+
+    // Check if we should use API
+    const useApi = await shouldUseApi();
+
+    if (useApi) {
+      try {
+        // Try to fetch from online API first
+        prayers = await fetchPrayerTimesFromOnline(location, method);
+        source = 'api';
+      } catch (apiError) {
+        console.log('⚠️ API unavailable, falling back to local calculation');
+        prayers = await calculatePrayerTimes(location, method);
+        source = 'calculation';
+      }
+    } else {
+      // Use local calculation
+      prayers = await calculatePrayerTimes(location, method);
+      source = 'calculation';
+    }
 
     // Apply completion status
     const completionStatus = await getPrayerCompletionStatus();
@@ -600,6 +751,7 @@ export async function getPrayerTimes(forceRefresh: boolean = false): Promise<Pra
       location,
       calculationMethod: method,
       locationName: locationName || undefined,
+      source,
     });
 
     return prayersWithStatus;
@@ -616,8 +768,9 @@ export async function getPrayerTimes(forceRefresh: boolean = false): Promise<Pra
  * This function:
  * 1. Clears all caches
  * 2. Gets fresh high-accuracy GPS location
- * 3. Recalculates prayer times
- * 4. Updates database and cache
+ * 3. Fetches prayer times from online API
+ * 4. Falls back to local calculation if API is unavailable
+ * 5. Updates database and cache
  */
 export async function refreshPrayerTimes(): Promise<PrayerTime[]> {
   try {
@@ -638,7 +791,28 @@ export async function refreshPrayerTimes(): Promise<PrayerTime[]> {
     const finalLocation = location || await getLocationWithFallback();
     
     const method = await getCalculationMethod();
-    const prayers = await calculatePrayerTimes(finalLocation, method);
+    
+    let prayers: PrayerTime[];
+    let source: 'api' | 'calculation' | 'default';
+
+    // Check if we should use API
+    const useApi = await shouldUseApi();
+
+    if (useApi) {
+      try {
+        // Try to fetch from online API first
+        prayers = await fetchPrayerTimesFromOnline(finalLocation, method);
+        source = 'api';
+      } catch (apiError) {
+        console.log('⚠️ API unavailable, falling back to local calculation');
+        prayers = await calculatePrayerTimes(finalLocation, method);
+        source = 'calculation';
+      }
+    } else {
+      // Use local calculation
+      prayers = await calculatePrayerTimes(finalLocation, method);
+      source = 'calculation';
+    }
 
     // Apply completion status
     const completionStatus = await getPrayerCompletionStatus();
@@ -657,6 +831,7 @@ export async function refreshPrayerTimes(): Promise<PrayerTime[]> {
       location: finalLocation,
       calculationMethod: method,
       locationName: locationName || undefined,
+      source,
     });
 
     console.log('✅ Prayer times refreshed successfully');
