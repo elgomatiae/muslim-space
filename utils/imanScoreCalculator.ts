@@ -19,7 +19,8 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getPrayerTimes, PrayerTime } from './prayerTimeService';
+import { getTodayPrayerTimes, PrayerTime } from '@/services/PrayerTimeService';
+import { getCurrentLocation } from '@/services/LocationService';
 
 // ============================================================================
 // INTERFACES
