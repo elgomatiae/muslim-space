@@ -16,7 +16,9 @@ import {
 } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
+import { ImanTrackerProvider } from "@/contexts/ImanTrackerContext";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -79,49 +81,51 @@ export default function RootLayout() {
     },
   };
   return (
-    <>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar style="auto" animated />
-        <ThemeProvider
-          value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
-        >
+      <ThemeProvider
+        value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
+      >
+        <AuthProvider>
           <NotificationProvider>
-            <WidgetProvider>
-              <GestureHandlerRootView>
-              <Stack>
-                {/* Main app with tabs */}
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <ImanTrackerProvider>
+              <WidgetProvider>
+                <Stack>
+                  {/* Main app with tabs */}
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
-                {/* Modal Demo Screens */}
-                <Stack.Screen
-                  name="modal"
-                  options={{
-                    presentation: "modal",
-                    title: "Standard Modal",
-                  }}
-                />
-                <Stack.Screen
-                  name="formsheet"
-                  options={{
-                    presentation: "formSheet",
-                    title: "Form Sheet Modal",
-                    sheetGrabberVisible: true,
-                    sheetAllowedDetents: [0.5, 0.8, 1.0],
-                    sheetCornerRadius: 20,
-                  }}
-                />
-                <Stack.Screen
-                  name="transparent-modal"
-                  options={{
-                    presentation: "transparentModal",
-                    headerShown: false,
-                  }}
-                />
-              </Stack>
-              <SystemBars style={"auto"} />
-              </GestureHandlerRootView>
-            </WidgetProvider>
+                  {/* Modal Demo Screens */}
+                  <Stack.Screen
+                    name="modal"
+                    options={{
+                      presentation: "modal",
+                      title: "Standard Modal",
+                    }}
+                  />
+                  <Stack.Screen
+                    name="formsheet"
+                    options={{
+                      presentation: "formSheet",
+                      title: "Form Sheet Modal",
+                      sheetGrabberVisible: true,
+                      sheetAllowedDetents: [0.5, 0.8, 1.0],
+                      sheetCornerRadius: 20,
+                    }}
+                  />
+                  <Stack.Screen
+                    name="transparent-modal"
+                    options={{
+                      presentation: "transparentModal",
+                      headerShown: false,
+                    }}
+                  />
+                </Stack>
+                <SystemBars style={"auto"} />
+              </WidgetProvider>
+            </ImanTrackerProvider>
           </NotificationProvider>
-        </ThemeProvider>
-    </>
+        </AuthProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

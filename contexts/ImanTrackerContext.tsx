@@ -1,21 +1,20 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useAuth } from './AuthContext';
-import {
-  calculateAllSectionScores,
+import { 
+  calculateAllSectionScores, 
   getOverallImanScore,
   updateSectionScores,
-  loadIbadahGoals,
-  loadIlmGoals,
-  loadAmanahGoals,
+  SectionScores,
   IbadahGoals,
   IlmGoals,
   AmanahGoals,
-  SectionScores,
+  loadIbadahGoals,
+  loadIlmGoals,
+  loadAmanahGoals
 } from '@/utils/imanScoreCalculator';
 
 interface ImanTrackerContextType {
-  imanScore: number;
+  overallScore: number;
   sectionScores: SectionScores;
   ibadahGoals: IbadahGoals;
   ilmGoals: IlmGoals;
@@ -27,12 +26,11 @@ interface ImanTrackerContextType {
 const ImanTrackerContext = createContext<ImanTrackerContextType | undefined>(undefined);
 
 export function ImanTrackerProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
-  const [imanScore, setImanScore] = useState(0);
+  const [overallScore, setOverallScore] = useState(0);
   const [sectionScores, setSectionScores] = useState<SectionScores>({
     ibadah: 0,
     ilm: 0,
-    amanah: 0,
+    amanah: 0
   });
   const [ibadahGoals, setIbadahGoals] = useState<IbadahGoals>({} as IbadahGoals);
   const [ilmGoals, setIlmGoals] = useState<IlmGoals>({} as IlmGoals);
@@ -41,45 +39,50 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
 
   const refreshImanScore = async () => {
     try {
-      setLoading(true);
       const [ibadah, ilm, amanah] = await Promise.all([
         loadIbadahGoals(),
         loadIlmGoals(),
-        loadAmanahGoals(),
+        loadAmanahGoals()
       ]);
-
+      
       setIbadahGoals(ibadah);
       setIlmGoals(ilm);
       setAmanahGoals(amanah);
 
+      await updateSectionScores();
       const scores = await calculateAllSectionScores(ibadah, ilm, amanah);
-      setSectionScores(scores);
-
       const overall = await getOverallImanScore();
-      setImanScore(overall);
+      
+      setSectionScores(scores);
+      setOverallScore(overall);
     } catch (error) {
       console.error('Failed to refresh Iman score:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (user) {
-      refreshImanScore();
-    }
-  }, [user]);
+    const initialize = async () => {
+      setLoading(true);
+      await refreshImanScore();
+      setLoading(false);
+    };
+    initialize();
+
+    // Auto-refresh every 5 minutes
+    const interval = setInterval(refreshImanScore, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <ImanTrackerContext.Provider
       value={{
-        imanScore,
+        overallScore,
         sectionScores,
         ibadahGoals,
         ilmGoals,
         amanahGoals,
         refreshImanScore,
-        loading,
+        loading
       }}
     >
       {children}
