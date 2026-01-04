@@ -1,87 +1,85 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useAuth } from './AuthContext';
 import {
+  calculateAllSectionScores,
   getOverallImanScore,
-  getCurrentSectionScores,
   updateSectionScores,
-  checkAndHandleResets,
+  loadIbadahGoals,
+  loadIlmGoals,
+  loadAmanahGoals,
+  IbadahGoals,
+  IlmGoals,
+  AmanahGoals,
   SectionScores,
 } from '@/utils/imanScoreCalculator';
 
 interface ImanTrackerContextType {
   imanScore: number;
   sectionScores: SectionScores;
-  updateImanScore: (score: number) => void;
-  refreshScore: () => Promise<void>;
-  isLoading: boolean;
+  ibadahGoals: IbadahGoals;
+  ilmGoals: IlmGoals;
+  amanahGoals: AmanahGoals;
+  refreshImanScore: () => Promise<void>;
+  loading: boolean;
 }
 
 const ImanTrackerContext = createContext<ImanTrackerContextType | undefined>(undefined);
 
 export function ImanTrackerProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [imanScore, setImanScore] = useState(0);
   const [sectionScores, setSectionScores] = useState<SectionScores>({
     ibadah: 0,
     ilm: 0,
     amanah: 0,
   });
-  const [isLoading, setIsLoading] = useState(true);
+  const [ibadahGoals, setIbadahGoals] = useState<IbadahGoals>({} as IbadahGoals);
+  const [ilmGoals, setIlmGoals] = useState<IlmGoals>({} as IlmGoals);
+  const [amanahGoals, setAmanahGoals] = useState<AmanahGoals>({} as AmanahGoals);
+  const [loading, setLoading] = useState(true);
 
-  const updateImanScore = (score: number) => {
-    setImanScore(score);
-  };
-
-  const refreshScore = async () => {
+  const refreshImanScore = async () => {
     try {
-      console.log('🔄 Refreshing Iman scores...');
-      
-      // Check for daily/weekly resets
-      await checkAndHandleResets();
-      
-      // Get section scores
-      const scores = await getCurrentSectionScores();
+      setLoading(true);
+      const [ibadah, ilm, amanah] = await Promise.all([
+        loadIbadahGoals(),
+        loadIlmGoals(),
+        loadAmanahGoals(),
+      ]);
+
+      setIbadahGoals(ibadah);
+      setIlmGoals(ilm);
+      setAmanahGoals(amanah);
+
+      const scores = await calculateAllSectionScores(ibadah, ilm, amanah);
       setSectionScores(scores);
-      
-      // Get overall score
+
       const overall = await getOverallImanScore();
       setImanScore(overall);
-      
-      console.log('✅ Iman scores refreshed:', {
-        overall,
-        ibadah: scores.ibadah,
-        ilm: scores.ilm,
-        amanah: scores.amanah,
-      });
     } catch (error) {
-      console.error('❌ Error refreshing Iman score:', error);
-      // Set default values on error
-      setImanScore(0);
-      setSectionScores({ ibadah: 0, ilm: 0, amanah: 0 });
+      console.error('Failed to refresh Iman score:', error);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    // Initial load
-    refreshScore();
-    
-    // Refresh every 5 minutes to keep scores up to date
-    const interval = setInterval(() => {
-      refreshScore();
-    }, 5 * 60 * 1000);
-    
-    return () => clearInterval(interval);
-  }, []);
+    if (user) {
+      refreshImanScore();
+    }
+  }, [user]);
 
   return (
     <ImanTrackerContext.Provider
       value={{
         imanScore,
         sectionScores,
-        updateImanScore,
-        refreshScore,
-        isLoading,
+        ibadahGoals,
+        ilmGoals,
+        amanahGoals,
+        refreshImanScore,
+        loading,
       }}
     >
       {children}
