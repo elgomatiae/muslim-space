@@ -1,5 +1,6 @@
-const tintColorLight = "#0a7ea4";
-const tintColorDark = "#fff";
+
+const tintColorLight = "#8B5CF6";  // Purple accent
+const tintColorDark = "#A78BFA";   // Lighter purple for dark mode
 
 export const zincColors = {
   50: "#fafafa",
@@ -17,6 +18,8 @@ export const zincColors = {
 
 export const appleBlue = "#007AFF";
 export const appleRed = "#FF3B30";
+export const purpleAccent = "#8B5CF6"; // Main purple accent color
+export const purpleLight = "#A78BFA"; // Light purple for dark mode
 
 export const borderColor = "#A1A1AA80";
 export const appleGreen = "#34C759";

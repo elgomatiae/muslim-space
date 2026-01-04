@@ -1,30 +1,59 @@
 
 import React from 'react';
-import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
+import { Stack } from 'expo-router';
+import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 
 export default function TabLayout() {
+  // iOS also uses the custom floating tab bar for consistency
+  const tabs: TabBarItem[] = [
+    {
+      name: '(home)',
+      route: '/(tabs)/(home)/',
+      icon: 'home',
+      label: 'Home',
+    },
+    {
+      name: '(learning)',
+      route: '/(tabs)/(learning)/',
+      icon: 'school',
+      label: 'Learning',
+    },
+    {
+      name: '(iman)',
+      route: '/(tabs)/(iman)/',
+      icon: 'favorite',
+      label: 'Iman',
+      isCenter: true,
+    },
+    {
+      name: '(wellness)',
+      route: '/(tabs)/(wellness)/',
+      icon: 'spa',
+      label: 'Wellness',
+    },
+    {
+      name: 'profile',
+      route: '/(tabs)/profile',
+      icon: 'person',
+      label: 'Profile',
+    },
+  ];
+
   return (
-    <NativeTabs>
-      <NativeTabs.Trigger key="home" name="(home)">
-        <Icon sf="house.fill" />
-        <Label>Home</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger key="iman" name="(iman)">
-        <Icon sf="heart.fill" />
-        <Label>Iman</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger key="learning" name="(learning)">
-        <Icon sf="book.fill" />
-        <Label>Learn</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger key="wellness" name="(wellness)">
-        <Icon sf="leaf.fill" />
-        <Label>Wellness</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger key="profile" name="profile">
-        <Icon sf="person.fill" />
-        <Label>Profile</Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
+    <>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: 'none',
+        }}
+      >
+        <Stack.Screen key="home" name="(home)" />
+        <Stack.Screen key="iman" name="(iman)" />
+        <Stack.Screen key="learning" name="(learning)" />
+        <Stack.Screen key="wellness" name="(wellness)" />
+        <Stack.Screen key="profile" name="profile" />
+      </Stack>
+      <FloatingTabBar tabs={tabs} />
+    </>
   );
 }

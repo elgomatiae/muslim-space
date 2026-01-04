@@ -8,7 +8,7 @@ import {
   Platform,
   Dimensions,
 } from 'react-native';
-import { useRouter, usePathname, useSegments } from 'expo-router';
+import { useRouter, usePathname } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
 import { BlurView } from 'expo-blur';
@@ -17,180 +17,161 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
-  interpolate,
 } from 'react-native-reanimated';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Href } from 'expo-router';
 
 const { width: screenWidth } = Dimensions.get('window');
 
+// Purple accent color for selected tabs
+const PURPLE_ACCENT = '#8B5CF6';
+const PURPLE_GLOW = 'rgba(139, 92, 246, 0.4)';
+
 export interface TabBarItem {
   name: string;
   route: Href;
   icon: keyof typeof MaterialIcons.glyphMap;
   label: string;
+  isCenter?: boolean; // Flag for center elevated tab
 }
 
 interface FloatingTabBarProps {
   tabs: TabBarItem[];
-  containerWidth?: number;
-  borderRadius?: number;
-  bottomMargin?: number;
 }
 
-export default function FloatingTabBar({
-  tabs,
-  containerWidth = screenWidth / 2.5,
-  borderRadius = 35,
-  bottomMargin
-}: FloatingTabBarProps) {
+export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const segments = useSegments();
   const theme = useTheme();
-  const animatedValue = useSharedValue(0);
+  const scaleAnim = useSharedValue(1);
 
-  // Enhanced active tab detection with improved segment-based matching
+  // Improved active tab detection with better logging
   const activeTabIndex = React.useMemo(() => {
-    console.log('FloatingTabBar - Current pathname:', pathname);
-    console.log('FloatingTabBar - Current segments:', segments);
-    
-    // Get the first segment after (tabs) - this is the main tab identifier
-    // segments will be like: ['(tabs)', '(home)'] or ['(tabs)', '(iman)', 'achievements']
-    const tabSegment = segments.length > 1 ? segments[1] : null;
-    
-    console.log('FloatingTabBar - Tab segment:', tabSegment);
-    
-    // Find matching tab by checking the segment
-    const matchedIndex = tabs.findIndex(tab => {
-      const tabName = tab.name;
-      
-      // Direct segment match (most reliable)
-      if (tabSegment === tabName) {
-        console.log(`FloatingTabBar - Direct match found: ${tabName} at index ${tabs.indexOf(tab)}`);
-        return true;
+    let bestMatch = -1;
+    let bestMatchScore = 0;
+
+    console.log('🔍 FloatingTabBar - Current pathname:', pathname);
+
+    tabs.forEach((tab, index) => {
+      let score = 0;
+
+      // Exact match
+      if (pathname === tab.route) {
+        score = 100;
+      } 
+      // Starts with route (for nested routes)
+      else if (pathname.startsWith(tab.route as string)) {
+        score = 80;
+      } 
+      // Contains tab name
+      else if (pathname.includes(tab.name)) {
+        score = 60;
       }
-      
-      // Fallback: Check if pathname contains the tab name
-      // This handles cases where segments might not be parsed correctly
-      if (pathname.includes(`/${tabName}/`)) {
-        console.log(`FloatingTabBar - Pathname match found: ${tabName} at index ${tabs.indexOf(tab)}`);
-        return true;
+
+      console.log(`  Tab ${index} (${tab.name}): score=${score}, route=${tab.route}`);
+
+      if (score > bestMatchScore) {
+        bestMatchScore = score;
+        bestMatch = index;
       }
-      
-      return false;
     });
 
-    const finalIndex = matchedIndex >= 0 ? matchedIndex : 0;
-    console.log('FloatingTabBar - Active tab index:', finalIndex, '(', tabs[finalIndex]?.label, ')');
+    console.log(`✅ Active tab index: ${bestMatch} (${bestMatch >= 0 ? tabs[bestMatch].name : 'none'})`);
+    return bestMatch >= 0 ? bestMatch : 0;
+  }, [pathname, tabs]);
+
+  const handleTabPress = (route: Href, index: number) => {
+    console.log(`🔘 Tab pressed: ${tabs[index].name} -> ${route}`);
     
-    return finalIndex;
-  }, [pathname, segments, tabs]);
-
-  React.useEffect(() => {
-    animatedValue.value = withSpring(activeTabIndex, {
-      damping: 20,
-      stiffness: 120,
-      mass: 1,
-    });
-  }, [activeTabIndex, animatedValue]);
-
-  const handleTabPress = (route: Href) => {
-    console.log('FloatingTabBar - Tab pressed, navigating to:', route);
+    // Animate center tab press
+    if (tabs[index].isCenter) {
+      scaleAnim.value = withSpring(0.9, {}, () => {
+        scaleAnim.value = withSpring(1);
+      });
+    }
     router.push(route);
   };
 
-  const tabWidthPercent = ((100 / tabs.length) - 0.5).toFixed(2);
-
-  const indicatorStyle = useAnimatedStyle(() => {
-    const tabWidth = (containerWidth - 8) / tabs.length;
-    return {
-      transform: [
-        {
-          translateX: interpolate(
-            animatedValue.value,
-            [0, tabs.length - 1],
-            [0, tabWidth * (tabs.length - 1)]
-          ),
-        },
-      ],
-    };
-  });
-
-  const dynamicStyles = {
-    blurContainer: {
-      ...styles.blurContainer,
-      borderWidth: 1.2,
-      borderColor: 'rgba(255, 255, 255, 1)',
-      ...Platform.select({
-        ios: {
-          backgroundColor: theme.dark
-            ? 'rgba(28, 28, 30, 0.8)'
-            : 'rgba(255, 255, 255, 0.6)',
-        },
-        android: {
-          backgroundColor: theme.dark
-            ? 'rgba(28, 28, 30, 0.95)'
-            : 'rgba(255, 255, 255, 0.6)',
-        },
-        web: {
-          backgroundColor: theme.dark
-            ? 'rgba(28, 28, 30, 0.95)'
-            : 'rgba(255, 255, 255, 0.6)',
-          backdropFilter: 'blur(10px)',
-        },
-      }),
-    },
-    background: {
-      ...styles.background,
-    },
-    indicator: {
-      ...styles.indicator,
-      backgroundColor: theme.dark
-        ? 'rgba(255, 255, 255, 0.08)'
-        : 'rgba(0, 0, 0, 0.04)',
-      width: `${tabWidthPercent}%` as `${number}%`,
-    },
-  };
+  const centerTabAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scaleAnim.value }],
+  }));
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-      <View style={[
-        styles.container,
-        {
-          width: containerWidth,
-          marginBottom: bottomMargin ?? 20
-        }
-      ]}>
+      <View style={styles.container}>
         <BlurView
-          intensity={80}
-          style={[dynamicStyles.blurContainer, { borderRadius }]}
+          intensity={Platform.OS === 'ios' ? 80 : 95}
+          style={styles.blurContainer}
+          tint={theme.dark ? 'dark' : 'light'}
         >
-          <View style={dynamicStyles.background} />
-          <Animated.View style={[dynamicStyles.indicator, indicatorStyle]} />
+          <View style={[
+            styles.background,
+            { backgroundColor: theme.dark ? 'rgba(28, 28, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)' }
+          ]} />
+          
           <View style={styles.tabsContainer}>
             {tabs.map((tab, index) => {
               const isActive = activeTabIndex === index;
+              const isCenter = tab.isCenter;
 
+              // Render center tab differently
+              if (isCenter) {
+                return (
+                  <View key={index} style={styles.centerTabWrapper}>
+                    <Animated.View style={[styles.centerTabContainer, centerTabAnimStyle]}>
+                      <TouchableOpacity
+                        style={[
+                          styles.centerTab,
+                          { backgroundColor: theme.dark ? '#1F1F1F' : '#FFFFFF' },
+                          isActive && styles.centerTabActive,
+                        ]}
+                        onPress={() => handleTabPress(tab.route, index)}
+                        activeOpacity={0.8}
+                      >
+                        <IconSymbol
+                          android_material_icon_name={tab.icon}
+                          ios_icon_name={tab.icon}
+                          size={32}
+                          color={isActive ? PURPLE_ACCENT : (theme.dark ? '#FFFFFF' : '#000000')}
+                        />
+                      </TouchableOpacity>
+                    </Animated.View>
+                    <Text
+                      style={[
+                        styles.centerTabLabel,
+                        { color: theme.dark ? '#98989D' : '#8E8E93' },
+                        isActive && { color: PURPLE_ACCENT, fontWeight: '700' },
+                      ]}
+                    >
+                      {tab.label}
+                    </Text>
+                  </View>
+                );
+              }
+
+              // Regular tabs
               return (
                 <TouchableOpacity
-                  key={`tab-${index}-${tab.name}`}
+                  key={index}
                   style={styles.tab}
-                  onPress={() => handleTabPress(tab.route)}
+                  onPress={() => handleTabPress(tab.route, index)}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.tabContent}>
+                  <View style={[
+                    styles.tabContent,
+                    isActive && styles.tabContentActive,
+                  ]}>
                     <IconSymbol
                       android_material_icon_name={tab.icon}
                       ios_icon_name={tab.icon}
-                      size={22}
-                      color={isActive ? theme.colors.primary : (theme.dark ? '#98989D' : '#8E8E93')}
+                      size={24}
+                      color={isActive ? PURPLE_ACCENT : (theme.dark ? '#98989D' : '#8E8E93')}
                     />
                     <Text
                       style={[
                         styles.tabLabel,
                         { color: theme.dark ? '#98989D' : '#8E8E93' },
-                        isActive && { color: theme.colors.primary, fontWeight: '600' },
+                        isActive && { color: PURPLE_ACCENT, fontWeight: '700' },
                       ]}
                     >
                       {tab.label}
@@ -213,30 +194,35 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 1000,
-    alignItems: 'center',
+    pointerEvents: 'box-none',
   },
   container: {
-    marginHorizontal: 20,
-    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    pointerEvents: 'box-none',
   },
   blurContainer: {
-    overflow: 'hidden',
+    borderRadius: 30,
+    overflow: 'visible', // Changed from 'hidden' to allow center tab to overflow
+    borderWidth: 2,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+    // Enhanced shadow for better visibility
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 12,
   },
   background: {
     ...StyleSheet.absoluteFillObject,
-  },
-  indicator: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    bottom: 4,
-    borderRadius: 27,
+    borderRadius: 28,
   },
   tabsContainer: {
     flexDirection: 'row',
-    height: 60,
+    height: 70,
     alignItems: 'center',
-    paddingHorizontal: 4,
+    justifyContent: 'space-around',
+    paddingHorizontal: 8,
   },
   tab: {
     flex: 1,
@@ -247,11 +233,56 @@ const styles = StyleSheet.create({
   tabContent: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    minWidth: 60,
+  },
+  tabContentActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
   },
   tabLabel: {
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: '500',
     marginTop: 2,
+  },
+  centerTabWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -40, // Elevate above the tab bar
+    zIndex: 100,
+    flex: 1,
+  },
+  centerTabContainer: {
+    marginBottom: 6,
+  },
+  centerTab: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 4,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+    // Enhanced shadow for elevation
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 16,
+  },
+  centerTabActive: {
+    borderColor: PURPLE_ACCENT,
+    borderWidth: 4,
+    shadowColor: PURPLE_ACCENT,
+    shadowOpacity: 0.8,
+    shadowRadius: 16,
+    elevation: 20,
+  },
+  centerTabLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 6,
   },
 });

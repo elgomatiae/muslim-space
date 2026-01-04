@@ -4,7 +4,7 @@ import { Stack } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 
 export default function TabLayout() {
-  // Define all 5 tabs configuration (removed non-existent prayer tab)
+  // Define 5 tabs with Iman Tracker in the middle (no separate prayer tab - prayers are on home)
   const tabs: TabBarItem[] = [
     {
       name: '(home)',
@@ -13,16 +13,17 @@ export default function TabLayout() {
       label: 'Home',
     },
     {
+      name: '(learning)',
+      route: '/(tabs)/(learning)/',
+      icon: 'school',
+      label: 'Learning',
+    },
+    {
       name: '(iman)',
       route: '/(tabs)/(iman)/',
       icon: 'favorite',
       label: 'Iman',
-    },
-    {
-      name: '(learning)',
-      route: '/(tabs)/(learning)/',
-      icon: 'school',
-      label: 'Learn',
+      isCenter: true, // Special flag for center elevated tab
     },
     {
       name: '(wellness)',
@@ -32,7 +33,7 @@ export default function TabLayout() {
     },
     {
       name: 'profile',
-      route: '/(tabs)/profile/',
+      route: '/(tabs)/profile',
       icon: 'person',
       label: 'Profile',
     },
@@ -52,7 +53,7 @@ export default function TabLayout() {
         <Stack.Screen key="wellness" name="(wellness)" />
         <Stack.Screen key="profile" name="profile" />
       </Stack>
-      <FloatingTabBar tabs={tabs} containerWidth={360} />
+      <FloatingTabBar tabs={tabs} />
     </>
   );
 }
