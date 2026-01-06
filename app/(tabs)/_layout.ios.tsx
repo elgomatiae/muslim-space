@@ -14,9 +14,13 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          height: 60,
-          paddingBottom: 8,
+          height: 88,
+          paddingBottom: 20,
           paddingTop: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
         },
       }}
     >
@@ -24,23 +28,11 @@ export default function TabLayout() {
         name="(home)"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => (
+          tabBarIcon: ({ color, focused }) => (
             <IconSymbol 
-              ios_icon_name="house.fill" 
+              ios_icon_name={focused ? 'house.fill' : 'house'}
               android_material_icon_name="home"
-              color={color} 
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="(prayer)"
-        options={{
-          title: 'Prayer',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol 
-              ios_icon_name="moon.stars.fill" 
-              android_material_icon_name="nightlight"
+              size={28}
               color={color} 
             />
           ),
@@ -50,10 +42,11 @@ export default function TabLayout() {
         name="(iman)"
         options={{
           title: 'Iman',
-          tabBarIcon: ({ color }) => (
+          tabBarIcon: ({ color, focused }) => (
             <IconSymbol 
-              ios_icon_name="chart.line.uptrend.xyaxis" 
-              android_material_icon_name="trending-up"
+              ios_icon_name={focused ? 'chart.pie.fill' : 'chart.pie'}
+              android_material_icon_name="pie-chart"
+              size={28}
               color={color} 
             />
           ),
@@ -63,10 +56,11 @@ export default function TabLayout() {
         name="(learning)"
         options={{
           title: 'Learning',
-          tabBarIcon: ({ color }) => (
+          tabBarIcon: ({ color, focused }) => (
             <IconSymbol 
-              ios_icon_name="book.fill" 
+              ios_icon_name={focused ? 'book.fill' : 'book'}
               android_material_icon_name="menu-book"
+              size={28}
               color={color} 
             />
           ),
@@ -76,10 +70,11 @@ export default function TabLayout() {
         name="(wellness)"
         options={{
           title: 'Wellness',
-          tabBarIcon: ({ color }) => (
+          tabBarIcon: ({ color, focused }) => (
             <IconSymbol 
-              ios_icon_name="heart.fill" 
+              ios_icon_name={focused ? 'heart.fill' : 'heart'}
               android_material_icon_name="favorite"
+              size={28}
               color={color} 
             />
           ),
@@ -89,10 +84,11 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => (
+          tabBarIcon: ({ color, focused }) => (
             <IconSymbol 
-              ios_icon_name="person.fill" 
+              ios_icon_name={focused ? 'person.fill' : 'person'}
               android_material_icon_name="person"
+              size={28}
               color={color} 
             />
           ),

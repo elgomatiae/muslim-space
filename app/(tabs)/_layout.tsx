@@ -41,20 +41,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="(learning)"
-        options={{
-          title: 'Learning',
-          tabBarIcon: ({ color, focused }) => (
-            <IconSymbol
-              ios_icon_name={focused ? 'book.fill' : 'book'}
-              android_material_icon_name="menu-book"
-              size={28}
-              color={color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="(iman)"
         options={{
           title: 'Iman',
@@ -62,6 +48,20 @@ export default function TabLayout() {
             <IconSymbol
               ios_icon_name={focused ? 'chart.pie.fill' : 'chart.pie'}
               android_material_icon_name="pie-chart"
+              size={28}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="(learning)"
+        options={{
+          title: 'Learning',
+          tabBarIcon: ({ color, focused }) => (
+            <IconSymbol
+              ios_icon_name={focused ? 'book.fill' : 'book'}
+              android_material_icon_name="menu-book"
               size={28}
               color={color}
             />
