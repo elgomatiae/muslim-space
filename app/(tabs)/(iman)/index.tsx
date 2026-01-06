@@ -42,9 +42,10 @@ interface Community {
 
 export default function ImanTrackerScreen() {
   const { user } = useAuth();
-  const { refreshData, loading } = useImanTracker();
+  const { refreshScores } = useImanTracker();
   const [activeTab, setActiveTab] = useState<TabType>('tracker');
   const [refreshing, setRefreshing] = React.useState(false);
+  const [loading, setLoading] = useState(false);
 
   // Animation values
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -91,12 +92,12 @@ export default function ImanTrackerScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refreshData();
+    await refreshScores();
     if (activeTab === 'communities') {
       await loadCommunities();
     }
     setRefreshing(false);
-  }, [refreshData, activeTab]);
+  }, [refreshScores, activeTab]);
 
   // Load communities when tab is selected
   useEffect(() => {

@@ -18,7 +18,7 @@ export default function ImanRingsDisplay({ onRefresh }: ImanRingsDisplayProps) {
   const glowAnim = useMemo(() => new Animated.Value(0), []);
   const rotateAnim = useMemo(() => new Animated.Value(0), []);
   
-  const { sectionScores, overallScore } = useImanTracker();
+  const { sectionScores, imanScore } = useImanTracker();
   const [showBreakdown, setShowBreakdown] = useState(false);
 
   useEffect(() => {
@@ -82,16 +82,16 @@ export default function ImanRingsDisplay({ onRefresh }: ImanRingsDisplayProps) {
   };
 
   const getDecayWarning = () => {
-    if (overallScore < 30) {
+    if (imanScore < 30) {
       return { text: "⚠️ Low Iman score! Complete goals to increase.", color: colors.error };
     }
-    if (overallScore < 50) {
+    if (imanScore < 50) {
       return { text: "⏰ Score decaying. Stay active!", color: colors.warning };
     }
     return null;
   };
 
-  const badge = getAchievementBadge(overallScore);
+  const badge = getAchievementBadge(imanScore);
   const decayWarning = getDecayWarning();
 
   // Ring configuration - LARGER SIZES
@@ -253,7 +253,9 @@ export default function ImanRingsDisplay({ onRefresh }: ImanRingsDisplayProps) {
             ]}
           >
             <Text style={styles.centerTitle}>Iman Score</Text>
-            <Text style={[styles.centerPercentage, { color: badge.color }]}>{overallScore}%</Text>
+            <Text style={[styles.centerPercentage, { color: badge.color }]}>
+              {Math.round(imanScore)}%
+            </Text>
             <Text style={styles.centerHint}>Tap for details</Text>
           </Animated.View>
         </TouchableOpacity>
@@ -280,7 +282,7 @@ export default function ImanRingsDisplay({ onRefresh }: ImanRingsDisplayProps) {
       
       <View style={styles.motivationalContainer}>
         <Text style={styles.motivationalText}>
-          {getMotivationalMessage(overallScore)}
+          {getMotivationalMessage(imanScore)}
         </Text>
       </View>
       
@@ -331,7 +333,7 @@ export default function ImanRingsDisplay({ onRefresh }: ImanRingsDisplayProps) {
           <View style={styles.breakdownRow}>
             <Text style={styles.breakdownTotalLabel}>Overall Score</Text>
             <Text style={[styles.breakdownTotalValue, { color: badge.color }]}>
-              {overallScore}%
+              {Math.round(imanScore)}%
             </Text>
           </View>
           
