@@ -1,7 +1,8 @@
+
 {
   "expo": {
-    "name": "Muslim Life Hub",
-    "slug": "Muslim Life Hub",
+    "name": "Natively",
+    "slug": "Natively",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/natively-dark.png",
@@ -15,8 +16,12 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.Natively",
+      "buildNumber": "1",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "We need your location to calculate accurate prayer times.",
+        "NSCameraUsageDescription": "Allow access to camera for profile pictures.",
+        "NSPhotoLibraryUsageDescription": "Allow access to photos for profile pictures."
       }
     },
     "android": {
@@ -25,7 +30,12 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.Natively"
+      "package": "com.anonymous.Natively",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",
@@ -36,18 +46,9 @@
       "expo-router",
       "expo-web-browser",
       [
-        "expo-notifications",
-        {
-          "icon": "./assets/images/natively-dark.png",
-          "color": "#4CAF50",
-          "defaultChannel": "default",
-          "sounds": []
-        }
-      ],
-      [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow Muslim Life Hub to use your location for accurate prayer times."
+          "locationAlwaysAndWhenInUsePermission": "Allow Natively to use your location for accurate prayer times."
         }
       ]
     ],
@@ -58,6 +59,5 @@
     "extra": {
       "router": {}
     }
-  },
-  "scheme": "Muslim Life Hub"
+  }
 }
