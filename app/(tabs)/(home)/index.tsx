@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { router } from "expo-router";
+import * as Haptics from 'expo-haptics';
 import { 
   getTodayPrayerTimes,
   getNextPrayer, 
@@ -50,11 +51,11 @@ const PRAYER_CACHE_KEY = '@prayer_times_cache';
 export default function HomeScreen() {
   const { user } = useAuth();
   const { 
-    prayerGoals, 
+    ibadahGoals,
     sectionScores, 
-    overallScore,
-    refreshData,
-    updatePrayerGoals,
+    imanScore,
+    refreshScores,
+    updateIbadahGoals,
   } = useImanTracker();
   const { settings, refreshPrayerTimesAndNotifications, requestPermissions, scheduledCount } = useNotifications();
 
@@ -110,12 +111,12 @@ export default function HomeScreen() {
       });
       
       // Sync with prayer goals from context
-      if (prayerGoals) {
+      if (ibadahGoals && ibadahGoals.fardPrayers) {
         const updatedPrayers = prayerTimesData.prayers.map((prayer) => {
-          const prayerKey = prayer.name.toLowerCase() as keyof typeof prayerGoals.fardPrayers;
+          const prayerKey = prayer.name.toLowerCase() as keyof typeof ibadahGoals.fardPrayers;
           return {
             ...prayer,
-            completed: prayerGoals.fardPrayers[prayerKey] || false,
+            completed: ibadahGoals.fardPrayers[prayerKey] || false,
           };
         });
         setPrayers(updatedPrayers);
@@ -162,19 +163,19 @@ export default function HomeScreen() {
     loadPrayerTimes();
   }, []);
 
-  // Sync prayers with prayerGoals from context
+  // Sync prayers with ibadahGoals from context
   useEffect(() => {
-    if (prayerGoals && prayers.length > 0) {
+    if (ibadahGoals && ibadahGoals.fardPrayers && prayers.length > 0) {
       const updatedPrayers = prayers.map((prayer) => {
-        const prayerKey = prayer.name.toLowerCase() as keyof typeof prayerGoals.fardPrayers;
+        const prayerKey = prayer.name.toLowerCase() as keyof typeof ibadahGoals.fardPrayers;
         return {
           ...prayer,
-          completed: prayerGoals.fardPrayers[prayerKey] || false,
+          completed: ibadahGoals.fardPrayers[prayerKey] || false,
         };
       });
       setPrayers(updatedPrayers);
     }
-  }, [prayerGoals]);
+  }, [ibadahGoals]);
 
   // Update time until next prayer every minute
   useEffect(() => {
@@ -254,7 +255,7 @@ export default function HomeScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     await Promise.all([
-      refreshData(), 
+      refreshScores(), 
       loadDailyContent(), 
       loadPrayerTimes(),
       refreshPrayerTimesAndNotifications()
@@ -263,20 +264,37 @@ export default function HomeScreen() {
   };
 
   const togglePrayer = async (index: number) => {
-    if (!prayerGoals) return;
+    if (!ibadahGoals) {
+      console.log('⚠️ Ibadah goals not loaded yet');
+      return;
+    }
 
-    const prayerKeys: (keyof typeof prayerGoals.fardPrayers)[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+    const prayerKeys: (keyof typeof ibadahGoals.fardPrayers)[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
     const prayerKey = prayerKeys[index];
 
+    console.log(`🕌 Toggling prayer: ${prayerKey}`);
+
+    // Update local state immediately for responsive UI
+    const updatedPrayers = [...prayers];
+    updatedPrayers[index].completed = !updatedPrayers[index].completed;
+    setPrayers(updatedPrayers);
+
+    // Update Iman Tracker context
     const updatedGoals = {
-      ...prayerGoals,
+      ...ibadahGoals,
       fardPrayers: {
-        ...prayerGoals.fardPrayers,
-        [prayerKey]: !prayerGoals.fardPrayers[prayerKey],
+        ...ibadahGoals.fardPrayers,
+        [prayerKey]: !ibadahGoals.fardPrayers[prayerKey],
       },
     };
 
-    await updatePrayerGoals(updatedGoals);
+    // Haptic feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Save to context (this will trigger score recalculation)
+    await updateIbadahGoals(updatedGoals);
+
+    console.log(`✅ Prayer ${prayerKey} toggled successfully`);
   };
 
   const completedCount = prayers.filter(p => p.completed).length;
@@ -441,7 +459,7 @@ export default function HomeScreen() {
           {/* Center Content */}
           <View style={styles.ringsCenterContent}>
             <Text style={styles.ringsCenterTitle}>Iman</Text>
-            <Text style={styles.ringsCenterPercentage}>{overallScore}%</Text>
+            <Text style={styles.ringsCenterPercentage}>{imanScore}%</Text>
           </View>
         </View>
         
