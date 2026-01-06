@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from "react";
-import { View, Text, StyleSheet, Animated, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, Animated, TouchableOpacity, ActivityIndicator } from "react-native";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
@@ -18,7 +18,7 @@ export default function ImanRingsDisplay({ onRefresh }: ImanRingsDisplayProps) {
   const glowAnim = useMemo(() => new Animated.Value(0), []);
   const rotateAnim = useMemo(() => new Animated.Value(0), []);
   
-  const { sectionScores, imanScore } = useImanTracker();
+  const { sectionScores, imanScore, isLoading, error } = useImanTracker();
   const [showBreakdown, setShowBreakdown] = useState(false);
 
   useEffect(() => {
@@ -138,6 +138,52 @@ export default function ImanRingsDisplay({ onRefresh }: ImanRingsDisplayProps) {
   const ibadahColor = '#10B981'; // Green
   const ilmColor = '#3B82F6'; // Blue
   const amanahColor = '#F59E0B'; // Amber/Gold
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <LinearGradient
+        colors={['#FFFFFF', '#F5F7FA', '#FFFFFF']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.container}
+      >
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading Iman Tracker...</Text>
+        </View>
+      </LinearGradient>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <LinearGradient
+        colors={['#FFFFFF', '#F5F7FA', '#FFFFFF']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.container}
+      >
+        <View style={styles.errorContainer}>
+          <IconSymbol
+            ios_icon_name="exclamationmark.triangle.fill"
+            android_material_icon_name="warning"
+            size={48}
+            color={colors.error}
+          />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={onRefresh}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+    );
+  }
 
   return (
     <LinearGradient
@@ -397,6 +443,39 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     padding: spacing.xl,
     ...shadows.large,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xxxl * 2,
+    gap: spacing.md,
+  },
+  loadingText: {
+    ...typography.body,
+    color: colors.textSecondary,
+  },
+  errorContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xxxl * 2,
+    gap: spacing.md,
+  },
+  errorText: {
+    ...typography.body,
+    color: colors.error,
+    textAlign: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  retryButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    marginTop: spacing.md,
+  },
+  retryButtonText: {
+    ...typography.bodyBold,
+    color: colors.card,
   },
   ringsWrapper: {
     position: 'relative',
