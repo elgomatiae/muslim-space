@@ -10,10 +10,6 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   signOut: () => Promise<void>;
-  signInWithEmail: (email: string, password: string) => Promise<void>;
-  signUpWithEmail: (email: string, password: string, name?: string) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
-  signInWithApple: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -21,10 +17,6 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   signOut: async () => {},
-  signInWithEmail: async () => {},
-  signUpWithEmail: async () => {},
-  signInWithGoogle: async () => {},
-  signInWithApple: async () => {},
 });
 
 export const useAuth = () => {
@@ -92,101 +84,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('Signing out...');
       await supabase.auth.signOut();
-      router.replace('/auth');
+      // The router.replace will be handled by the useEffect in _layout.tsx
     } catch (error) {
       console.error('Error signing out:', error);
-      throw error;
-    }
-  };
-
-  const signInWithEmail = async (email: string, password: string) => {
-    try {
-      console.log('Signing in with email...');
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password: password,
-      });
-
-      if (error) {
-        console.error('Sign in error:', error);
-        throw new Error(error.message);
-      }
-
-      if (data.user) {
-        console.log('Sign in successful:', data.user.id);
-      }
-    } catch (error) {
-      console.error('Sign in error:', error);
-      throw error;
-    }
-  };
-
-  const signUpWithEmail = async (email: string, password: string, name?: string) => {
-    try {
-      console.log('Signing up with email...');
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password: password,
-        options: {
-          data: {
-            username: name?.trim() || email.split('@')[0],
-          },
-        },
-      });
-
-      if (error) {
-        console.error('Sign up error:', error);
-        throw new Error(error.message);
-      }
-
-      if (data.user) {
-        console.log('Sign up successful:', data.user.id);
-        // Check if email confirmation is required
-        if (data.user.identities && data.user.identities.length === 0) {
-          throw new Error('An account with this email already exists. Please sign in instead.');
-        }
-      }
-    } catch (error) {
-      console.error('Sign up error:', error);
-      throw error;
-    }
-  };
-
-  const signInWithGoogle = async () => {
-    try {
-      console.log('Signing in with Google...');
-      // TODO: Backend Integration - Implement Google OAuth sign-in
-      // This requires setting up OAuth providers in Supabase dashboard
-      throw new Error('Google sign-in not yet configured. Please use email/password.');
-    } catch (error) {
-      console.error('Google sign in error:', error);
-      throw error;
-    }
-  };
-
-  const signInWithApple = async () => {
-    try {
-      console.log('Signing in with Apple...');
-      // TODO: Backend Integration - Implement Apple OAuth sign-in
-      // This requires setting up OAuth providers in Supabase dashboard
-      throw new Error('Apple sign-in not yet configured. Please use email/password.');
-    } catch (error) {
-      console.error('Apple sign in error:', error);
-      throw error;
     }
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      session, 
-      user, 
-      loading, 
-      signOut,
-      signInWithEmail,
-      signUpWithEmail,
-      signInWithGoogle,
-      signInWithApple,
-    }}>
+    <AuthContext.Provider value={{ session, user, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,34 +1,10 @@
 
-import React, { useEffect } from 'react';
-import { Stack, router } from 'expo-router';
-import { useAuth } from '@/contexts/AuthContext';
-import { ActivityIndicator, View } from 'react-native';
+import React from 'react';
+import { Stack } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 
 export default function TabLayout() {
-  const { user, loading } = useAuth();
-
-  // Redirect to auth if not authenticated
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace('/auth');
-    }
-  }, [user, loading]);
-
-  // Show loading while checking auth
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1a1a2e' }}>
-        <ActivityIndicator size="large" color="#4A90E2" />
-      </View>
-    );
-  }
-
-  // Don't render tabs if not authenticated
-  if (!user) {
-    return null;
-  }
-
+  // Define the tabs configuration with Iman Tracker in the middle
   const tabs: TabBarItem[] = [
     {
       name: '(home)',
@@ -39,7 +15,7 @@ export default function TabLayout() {
     {
       name: '(learning)',
       route: '/(tabs)/(learning)/',
-      icon: 'menu-book',
+      icon: 'school',
       label: 'Learning',
     },
     {
@@ -47,6 +23,7 @@ export default function TabLayout() {
       route: '/(tabs)/(iman)/',
       icon: 'favorite',
       label: 'Iman',
+      isMainFeature: true, // Flag to make this icon larger
     },
     {
       name: '(wellness)',
@@ -68,6 +45,7 @@ export default function TabLayout() {
         screenOptions={{
           headerShown: false,
           animation: 'none',
+          contentStyle: { backgroundColor: '#FFFFFF' }, // White background
         }}
       >
         <Stack.Screen key="home" name="(home)" />

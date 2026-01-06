@@ -1,35 +1,10 @@
 
-import React, { useEffect } from 'react';
-import { Tabs, router } from 'expo-router';
+import React from 'react';
+import { Tabs } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
-import { useAuth } from '@/contexts/AuthContext';
-import { ActivityIndicator, View } from 'react-native';
 
 export default function TabLayout() {
-  const { user, loading } = useAuth();
-
-  // Redirect to auth if not authenticated
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace('/auth');
-    }
-  }, [user, loading]);
-
-  // Show loading while checking auth
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1a1a2e' }}>
-        <ActivityIndicator size="large" color="#4A90E2" />
-      </View>
-    );
-  }
-
-  // Don't render tabs if not authenticated
-  if (!user) {
-    return null;
-  }
-
   return (
     <Tabs
       screenOptions={{
