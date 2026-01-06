@@ -42,7 +42,7 @@ interface WorkoutDurations {
 
 export default function PhysicalHealthScreen() {
   const { user } = useAuth();
-  const { amanahGoals, updateAmanahGoals, refreshData } = useImanTracker();
+  const { amanahGoals, updateAmanahGoals, refreshScores } = useImanTracker();
   const [goals, setGoals] = useState<PhysicalWellnessGoals | null>(null);
   const [waterIntakeToday, setWaterIntakeToday] = useState(0);
   const [todayExerciseMinutes, setTodayExerciseMinutes] = useState(0);
@@ -194,7 +194,7 @@ export default function PhysicalHealthScreen() {
     if (!error) {
       await loadTodayStats();
       await updateGoalsProgress();
-      await refreshData();
+      await refreshScores();
     }
   };
 
@@ -249,7 +249,7 @@ export default function PhysicalHealthScreen() {
     if (!error) {
       await loadTodayStats();
       await updateGoalsProgress();
-      await refreshData();
+      await refreshScores();
     }
   };
 
@@ -284,7 +284,7 @@ export default function PhysicalHealthScreen() {
       setShowWorkoutModal(false);
       await loadTodayStats();
       await updateGoalsProgress();
-      await refreshData();
+      await refreshScores();
       Alert.alert('Success', `Logged ${totalDuration} minutes of exercise!`);
     } else {
       Alert.alert('Error', 'Failed to log workout. Please try again.');
@@ -309,7 +309,7 @@ export default function PhysicalHealthScreen() {
     if (!error) {
       await loadTodayStats();
       await updateGoalsProgress();
-      await refreshData();
+      await refreshScores();
     }
   };
 
@@ -401,7 +401,7 @@ export default function PhysicalHealthScreen() {
     if (!error) {
       setEditingGoals(false);
       await loadGoals();
-      await refreshData();
+      await refreshScores();
       Alert.alert('Success', 'Your physical wellness goals have been updated!');
     } else {
       Alert.alert('Error', 'Failed to save goals. Please try again.');
