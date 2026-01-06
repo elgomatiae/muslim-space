@@ -760,8 +760,8 @@ export default function HomeScreen() {
           ) : (
             <View style={styles.prayerList}>
               {prayers.map((prayer, index) => (
-              <React.Fragment key={index}>
                 <TouchableOpacity
+                  key={`prayer-${prayer.name}-${index}`}
                   style={[
                     styles.prayerCard,
                     prayer.completed && styles.prayerCardCompleted
@@ -816,7 +816,6 @@ export default function HomeScreen() {
                     )}
                   </View>
                 </TouchableOpacity>
-              </React.Fragment>
               ))}
             </View>
           )}
