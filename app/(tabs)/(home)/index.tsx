@@ -23,6 +23,7 @@ import {
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity, RefreshControl, Alert } from "react-native";
 import { schedulePrayerNotifications } from "@/services/PrayerNotificationService";
+import { formatPrayerTime } from "@/utils/prayerTimeHelpers";
 
 interface DailyVerse {
   id: string;
@@ -51,7 +52,7 @@ export default function HomeScreen() {
   const { imanScore, sectionScores, refreshImanScore } = useImanTracker();
   
   const [prayerTimes, setPrayerTimes] = useState<DailyPrayerTimes | null>(null);
-  const [nextPrayer, setNextPrayer] = useState<{ name: string; time: Date } | null>(null);
+  const [nextPrayer, setNextPrayer] = useState<PrayerTime | null>(null);
   const [timeUntilNext, setTimeUntilNext] = useState<string>('');
   const [dailyVerse, setDailyVerse] = useState<DailyVerse | null>(null);
   const [dailyHadith, setDailyHadith] = useState<DailyHadith | null>(null);
@@ -98,7 +99,7 @@ export default function HomeScreen() {
     if (!nextPrayer) return;
 
     const interval = setInterval(() => {
-      const timeString = getTimeUntilNextPrayer(nextPrayer.time);
+      const timeString = getTimeUntilNextPrayer(nextPrayer);
       setTimeUntilNext(timeString);
     }, 1000);
 
@@ -145,7 +146,7 @@ export default function HomeScreen() {
       setNextPrayer(next);
 
       // Schedule notifications
-      await schedulePrayerNotifications(times, location);
+      await schedulePrayerNotifications(times);
       console.log('Scheduled prayer notifications');
 
     } catch (error) {
@@ -386,7 +387,7 @@ export default function HomeScreen() {
               <Text style={styles.nextPrayerLabel}>Next Prayer</Text>
               <Text style={styles.nextPrayerName}>{nextPrayer.name}</Text>
               <Text style={styles.nextPrayerTime}>
-                {nextPrayer.time.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                {formatPrayerTime(nextPrayer.date)}
               </Text>
               <Text style={styles.timeUntilNext}>{timeUntilNext}</Text>
             </View>
@@ -394,29 +395,25 @@ export default function HomeScreen() {
 
           {prayerTimes && (
             <View style={styles.prayerList}>
-              {['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].map((prayer, index) => {
-                const prayerKey = prayer.toLowerCase() as keyof DailyPrayerTimes;
-                const time = prayerTimes[prayerKey];
-                return (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.prayerItem}
-                    onPress={() => togglePrayer(index)}
-                  >
-                    <View style={styles.prayerInfo}>
-                      <Text style={styles.prayerName}>{prayer}</Text>
-                      <Text style={styles.prayerTime}>
-                        {time.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                      </Text>
-                    </View>
-                    <View style={[styles.checkbox, prayerGoals[index] && styles.checkboxChecked]}>
-                      {prayerGoals[index] && (
-                        <IconSymbol ios_icon_name="checkmark" android_material_icon_name="check" size={16} color="#fff" />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+              {prayerTimes.prayers.map((prayer, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.prayerItem}
+                  onPress={() => togglePrayer(index)}
+                >
+                  <View style={styles.prayerInfo}>
+                    <Text style={styles.prayerName}>{prayer.name}</Text>
+                    <Text style={styles.prayerTime}>
+                      {formatPrayerTime(prayer.date)}
+                    </Text>
+                  </View>
+                  <View style={[styles.checkbox, prayerGoals[index] && styles.checkboxChecked]}>
+                    {prayerGoals[index] && (
+                      <IconSymbol ios_icon_name="checkmark" android_material_icon_name="check" size={16} color="#fff" />
+                    )}
+                  </View>
+                </TouchableOpacity>
+              ))}
             </View>
           )}
 
