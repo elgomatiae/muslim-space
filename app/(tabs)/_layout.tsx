@@ -1,101 +1,60 @@
 
-import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform } from 'react-native';
-import { IconSymbol } from '@/components/IconSymbol';
-import { colors } from '@/styles/commonStyles';
+import { Stack } from 'expo-router';
+import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 
 export default function TabLayout() {
+  // Define the tabs configuration with Iman Tracker in the middle
+  const tabs: TabBarItem[] = [
+    {
+      name: '(home)',
+      route: '/(tabs)/(home)/',
+      icon: 'home',
+      label: 'Home',
+    },
+    {
+      name: '(learning)',
+      route: '/(tabs)/(learning)/',
+      icon: 'school',
+      label: 'Learning',
+    },
+    {
+      name: '(iman)',
+      route: '/(tabs)/(iman)/',
+      icon: 'favorite',
+      label: 'Iman',
+      isMainFeature: true, // Flag to make this icon larger
+    },
+    {
+      name: '(wellness)',
+      route: '/(tabs)/(wellness)/',
+      icon: 'spa',
+      label: 'Wellness',
+    },
+    {
+      name: 'profile',
+      route: '/(tabs)/profile',
+      icon: 'person',
+      label: 'Profile',
+    },
+  ];
+
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary || '#9333EA',
-        tabBarInactiveTintColor: colors.text,
-        tabBarStyle: {
-          backgroundColor: colors.background,
-          borderTopColor: colors.border || '#E5E7EB',
-          borderTopWidth: 1,
-          paddingBottom: Platform.OS === 'ios' ? 20 : 10,
-          paddingTop: 10,
-          height: Platform.OS === 'ios' ? 88 : 68,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
-        },
-      }}
-    >
-      <Tabs.Screen
-        name="(home)"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color, focused }) => (
-            <IconSymbol
-              ios_icon_name={focused ? 'house.fill' : 'house'}
-              android_material_icon_name="home"
-              size={28}
-              color={color}
-            />
-          ),
+    <>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: 'none',
+          contentStyle: { backgroundColor: '#FFFFFF' }, // White background
         }}
-      />
-      <Tabs.Screen
-        name="(iman)"
-        options={{
-          title: 'Iman',
-          tabBarIcon: ({ color, focused }) => (
-            <IconSymbol
-              ios_icon_name={focused ? 'chart.pie.fill' : 'chart.pie'}
-              android_material_icon_name="pie-chart"
-              size={28}
-              color={color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="(learning)"
-        options={{
-          title: 'Learning',
-          tabBarIcon: ({ color, focused }) => (
-            <IconSymbol
-              ios_icon_name={focused ? 'book.fill' : 'book'}
-              android_material_icon_name="menu-book"
-              size={28}
-              color={color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="(wellness)"
-        options={{
-          title: 'Wellness',
-          tabBarIcon: ({ color, focused }) => (
-            <IconSymbol
-              ios_icon_name={focused ? 'heart.fill' : 'heart'}
-              android_material_icon_name="favorite"
-              size={28}
-              color={color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, focused }) => (
-            <IconSymbol
-              ios_icon_name={focused ? 'person.fill' : 'person'}
-              android_material_icon_name="person"
-              size={28}
-              color={color}
-            />
-          ),
-        }}
-      />
-    </Tabs>
+      >
+        <Stack.Screen key="home" name="(home)" />
+        <Stack.Screen key="learning" name="(learning)" />
+        <Stack.Screen key="iman" name="(iman)" />
+        <Stack.Screen key="wellness" name="(wellness)" />
+        <Stack.Screen key="profile" name="profile" />
+      </Stack>
+      <FloatingTabBar tabs={tabs} />
+    </>
   );
 }

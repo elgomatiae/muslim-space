@@ -12,7 +12,7 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarStyle: {
-          backgroundColor: colors.surface,
+          backgroundColor: '#FFFFFF', // White background
           borderTopColor: colors.border,
           height: 88,
           paddingBottom: 20,
@@ -39,20 +39,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="(iman)"
-        options={{
-          title: 'Iman',
-          tabBarIcon: ({ color, focused }) => (
-            <IconSymbol 
-              ios_icon_name={focused ? 'chart.pie.fill' : 'chart.pie'}
-              android_material_icon_name="pie-chart"
-              size={28}
-              color={color} 
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="(learning)"
         options={{
           title: 'Learning',
@@ -67,13 +53,27 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="(iman)"
+        options={{
+          title: 'Iman',
+          tabBarIcon: ({ color, focused }) => (
+            <IconSymbol 
+              ios_icon_name={focused ? 'heart.fill' : 'heart'}
+              android_material_icon_name="favorite"
+              size={36}
+              color={color} 
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="(wellness)"
         options={{
           title: 'Wellness',
           tabBarIcon: ({ color, focused }) => (
             <IconSymbol 
-              ios_icon_name={focused ? 'heart.fill' : 'heart'}
-              android_material_icon_name="favorite"
+              ios_icon_name={focused ? 'heart.circle.fill' : 'heart.circle'}
+              android_material_icon_name="spa"
               size={28}
               color={color} 
             />
