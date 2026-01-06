@@ -18,7 +18,8 @@
       "bundleIdentifier": "com.anonymous.Natively",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
@@ -35,7 +36,21 @@
     "plugins": [
       "expo-font",
       "expo-router",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Natively to use your location to calculate accurate prayer times."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/natively-dark.png",
+          "color": "#000000",
+          "sounds": []
+        }
+      ]
     ],
     "scheme": "natively",
     "experiments": {
