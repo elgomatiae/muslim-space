@@ -9,13 +9,16 @@ import {
   saveAmanahGoals,
   getOverallImanScore,
   updateSectionScores,
+  getCurrentSectionScores,
   IbadahGoals,
   IlmGoals,
-  AmanahGoals
+  AmanahGoals,
+  SectionScores
 } from '@/utils/imanScoreCalculator';
 
 interface ImanTrackerContextType {
   imanScore: number;
+  sectionScores: SectionScores;
   ibadahGoals: IbadahGoals;
   ilmGoals: IlmGoals;
   amanahGoals: AmanahGoals;
@@ -24,16 +27,19 @@ interface ImanTrackerContextType {
   updateIlmGoals: (newGoals: Partial<IlmGoals>) => Promise<void>;
   updateAmanahGoals: (newGoals: Partial<AmanahGoals>) => Promise<void>;
   isLoading: boolean;
+  error: string | null;
 }
 
 const ImanTrackerContext = createContext<ImanTrackerContextType | undefined>(undefined);
 
 export function ImanTrackerProvider({ children }: { children: ReactNode }) {
   const [imanScore, setImanScore] = useState(0);
+  const [sectionScores, setSectionScores] = useState<SectionScores>({ ibadah: 0, ilm: 0, amanah: 0 });
   const [ibadahGoals, setIbadahGoals] = useState<IbadahGoals>({} as IbadahGoals);
   const [ilmGoals, setIlmGoals] = useState<IlmGoals>({} as IlmGoals);
   const [amanahGoals, setAmanahGoals] = useState<AmanahGoals>({} as AmanahGoals);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadAllGoals();
@@ -42,6 +48,7 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
   const loadAllGoals = async () => {
     try {
       setIsLoading(true);
+      setError(null);
       console.log('ImanTrackerContext: Loading all goals...');
       
       const [ibadah, ilm, amanah] = await Promise.all([
@@ -57,8 +64,9 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
       setAmanahGoals(amanah);
       
       await refreshScores();
-    } catch (error) {
-      console.error('ImanTrackerContext: Error loading goals:', error);
+    } catch (err) {
+      console.error('ImanTrackerContext: Error loading goals:', err);
+      setError('Failed to load goals. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -68,11 +76,18 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     try {
       console.log('ImanTrackerContext: Refreshing scores...');
       await updateSectionScores();
-      const score = await getOverallImanScore();
-      console.log('ImanTrackerContext: Score updated:', score);
+      
+      const [score, sections] = await Promise.all([
+        getOverallImanScore(),
+        getCurrentSectionScores()
+      ]);
+      
+      console.log('ImanTrackerContext: Scores updated:', { score, sections });
       setImanScore(score);
-    } catch (error) {
-      console.error('ImanTrackerContext: Error refreshing scores:', error);
+      setSectionScores(sections || { ibadah: 0, ilm: 0, amanah: 0 });
+    } catch (err) {
+      console.error('ImanTrackerContext: Error refreshing scores:', err);
+      setError('Failed to refresh scores. Please try again.');
     }
   };
 
@@ -83,9 +98,9 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
       await saveIbadahGoals(updated);
       setIbadahGoals(updated);
       await refreshScores();
-    } catch (error) {
-      console.error('ImanTrackerContext: Error updating Ibadah goals:', error);
-      throw error;
+    } catch (err) {
+      console.error('ImanTrackerContext: Error updating Ibadah goals:', err);
+      throw err;
     }
   };
 
@@ -96,9 +111,9 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
       await saveIlmGoals(updated);
       setIlmGoals(updated);
       await refreshScores();
-    } catch (error) {
-      console.error('ImanTrackerContext: Error updating Ilm goals:', error);
-      throw error;
+    } catch (err) {
+      console.error('ImanTrackerContext: Error updating Ilm goals:', err);
+      throw err;
     }
   };
 
@@ -109,9 +124,9 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
       await saveAmanahGoals(updated);
       setAmanahGoals(updated);
       await refreshScores();
-    } catch (error) {
-      console.error('ImanTrackerContext: Error updating Amanah goals:', error);
-      throw error;
+    } catch (err) {
+      console.error('ImanTrackerContext: Error updating Amanah goals:', err);
+      throw err;
     }
   };
 
@@ -119,6 +134,7 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
     <ImanTrackerContext.Provider
       value={{
         imanScore,
+        sectionScores,
         ibadahGoals,
         ilmGoals,
         amanahGoals,
@@ -127,6 +143,7 @@ export function ImanTrackerProvider({ children }: { children: ReactNode }) {
         updateIlmGoals,
         updateAmanahGoals,
         isLoading,
+        error,
       }}
     >
       {children}
