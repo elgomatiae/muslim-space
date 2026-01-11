@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, ActivityIndicator, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,14 +10,11 @@ import { supabase } from '@/lib/supabase';
 
 interface QuizQuestion {
   id: string;
-  question_text: string;
-  option_a: string;
-  option_b: string;
-  option_c: string;
-  option_d: string;
-  correct_answer: string;
+  question: string;
+  options: string[]; // JSON array of 4 options
+  correct_answer: number; // 0-3 index
   explanation: string;
-  difficulty: string;
+  order_index?: number;
 }
 
 interface UserAnswer {
@@ -28,7 +26,7 @@ interface UserAnswer {
 export default function QuizTakeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const categoryId = params.categoryId as string;
+  const quizId = params.quizId as string;
   const categoryName = params.categoryName as string;
 
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
@@ -45,12 +43,13 @@ export default function QuizTakeScreen() {
 
   const loadQuestions = async () => {
     try {
-      // Fetch all questions for this category
+      // Fetch all questions for this quiz
       const { data, error } = await supabase
         .from('quiz_questions')
-        .select('*')
-        .eq('category_id', categoryId)
-        .eq('is_active', true);
+        .select('id, question, options, correct_answer, explanation, order_index')
+        .eq('quiz_id', quizId)
+        .order('order_index', { ascending: true })
+        .limit(200); // Fetch more questions for better randomization
 
       if (error) {
         console.error('Error loading quiz questions:', error);
@@ -60,13 +59,25 @@ export default function QuizTakeScreen() {
       }
 
       if (!data || data.length < 10) {
-        Alert.alert('Not Enough Questions', 'This category needs more questions to start a quiz.');
+        Alert.alert('Not Enough Questions', 'This quiz needs at least 10 questions to start.');
         router.back();
         return;
       }
 
-      // Randomly select 10 questions
-      const shuffled = [...data].sort(() => Math.random() - 0.5);
+      // Parse options from JSON strings if needed
+      const parsedData = data.map(q => ({
+        ...q,
+        options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options,
+      }));
+
+      // Improved random selection: Fisher-Yates shuffle for better distribution
+      const shuffled = [...parsedData];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      
+      // Select 10 random questions
       const selected = shuffled.slice(0, 10);
       
       setQuestions(selected);
@@ -91,7 +102,9 @@ export default function QuizTakeScreen() {
     }
 
     const currentQuestion = questions[currentQuestionIndex];
-    const isCorrect = selectedAnswer === currentQuestion.correct_answer;
+    // Convert selected answer (A/B/C/D) to index (0/1/2/3)
+    const selectedIndex = selectedAnswer.charCodeAt(0) - 65; // 'A'=0, 'B'=1, etc.
+    const isCorrect = selectedIndex === currentQuestion.correct_answer;
 
     setUserAnswers([
       ...userAnswers,
@@ -141,7 +154,7 @@ export default function QuizTakeScreen() {
         .from('user_quiz_attempts')
         .insert({
           user_id: user.id,
-          category_id: categoryId,
+          quiz_id: quizId,
           score,
           total_questions: questions.length,
           percentage,
@@ -152,6 +165,10 @@ export default function QuizTakeScreen() {
 
       if (attemptError) {
         console.error('Error saving quiz attempt:', attemptError);
+        // If table doesn't exist, continue without saving (quiz still works)
+        if (attemptError.code === 'PGRST205' || attemptError.message?.includes('Could not find the table')) {
+          console.log('⚠️ Quiz attempts table not found, continuing without saving to database');
+        }
       }
 
       // Save individual answers
@@ -191,17 +208,21 @@ export default function QuizTakeScreen() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (questions.length === 0) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>No questions available</Text>
-      </View>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.errorText}>No questions available</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -209,7 +230,7 @@ export default function QuizTakeScreen() {
   const progress = ((currentQuestionIndex + 1) / questions.length) * 100;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
@@ -230,18 +251,17 @@ export default function QuizTakeScreen() {
 
         {/* Question Card */}
         <View style={styles.questionCard}>
-          <View style={styles.difficultyBadge}>
-            <Text style={styles.difficultyText}>{currentQuestion.difficulty}</Text>
-          </View>
-          <Text style={styles.questionText}>{currentQuestion.question_text}</Text>
+          <Text style={styles.questionText}>{currentQuestion.question}</Text>
         </View>
 
         {/* Answer Options */}
         <View style={styles.optionsContainer}>
-          {['A', 'B', 'C', 'D'].map((option) => {
-            const optionText = currentQuestion[`option_${option.toLowerCase()}` as keyof QuizQuestion] as string;
+          {['A', 'B', 'C', 'D'].map((option, index) => {
+            const optionText = currentQuestion.options && currentQuestion.options[index] ? currentQuestion.options[index] : '';
             const isSelected = selectedAnswer === option;
-            const isCorrect = option === currentQuestion.correct_answer;
+            const correctOptionIndex = currentQuestion.correct_answer; // 0-3
+            const correctOptionLetter = String.fromCharCode(65 + correctOptionIndex); // Convert 0-3 to 'A'-'D'
+            const isCorrect = option === correctOptionLetter;
             const showCorrect = showExplanation && isCorrect;
             const showIncorrect = showExplanation && isSelected && !isCorrect;
 
@@ -348,7 +368,7 @@ export default function QuizTakeScreen() {
 
         <View style={styles.bottomPadding} />
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -361,7 +381,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingTop: Platform.OS === 'android' ? 56 : 20,
+    paddingTop: spacing.lg,
     paddingHorizontal: spacing.xl,
   },
   header: {
@@ -390,25 +410,12 @@ const styles = StyleSheet.create({
   },
   questionCard: {
     backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xxxl,
     marginBottom: spacing.xxl,
-    ...shadows.medium,
+    ...shadows.card,
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  difficultyBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.highlight,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.md,
-  },
-  difficultyText: {
-    ...typography.smallBold,
-    color: colors.primary,
-    textTransform: 'capitalize',
   },
   questionText: {
     ...typography.h4,
@@ -421,11 +428,11 @@ const styles = StyleSheet.create({
   optionButton: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+    padding: spacing.xl,
     marginBottom: spacing.md,
     borderWidth: 2,
     borderColor: colors.border,
-    ...shadows.small,
+    ...shadows.card,
   },
   optionButtonSelected: {
     borderColor: colors.primary,
@@ -525,6 +532,12 @@ const styles = StyleSheet.create({
   actionButtonText: {
     ...typography.h4,
     color: colors.card,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
   },
   errorText: {
     ...typography.body,

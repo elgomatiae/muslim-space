@@ -53,13 +53,14 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Log error to console
-    console.error("Error caught by boundary:", error, errorInfo);
+    // Sanitize error before logging
+    const { logError } = require('@/utils/logger');
+    logError(error, 'ErrorBoundary');
 
-    // Update state with error info
+    // Update state with error info (sanitized)
     this.setState({
       error,
-      errorInfo,
+      errorInfo: __DEV__ ? errorInfo : null, // Only include stack in dev
     });
 
     // Call custom error handler if provided

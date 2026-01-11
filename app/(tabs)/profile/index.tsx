@@ -224,13 +224,13 @@ export default function ProfileScreen() {
       setPinInput('');
       
       setTimeout(() => {
-        console.log('Navigating to admin panel at /admin');
+        console.log('Navigating to health check screen');
         try {
-          router.push('/admin');
-          console.log('Navigation to /admin executed successfully');
+          router.push('/(tabs)/profile/health-check');
+          console.log('Navigation to health check executed successfully');
         } catch (error) {
           console.error('Navigation error:', error);
-          Alert.alert('Error', 'Failed to open admin panel. Please try again.');
+          Alert.alert('Error', 'Failed to open health check. Please try again.');
         }
       }, 300);
     } else {

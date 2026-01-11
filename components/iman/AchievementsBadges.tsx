@@ -9,10 +9,11 @@ import { useImanTracker } from '@/contexts/ImanTrackerContext';
 import { useAchievementCelebration } from '@/contexts/AchievementCelebrationContext';
 import { supabase } from '@/lib/supabase';
 import * as Haptics from 'expo-haptics';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LOCAL_ACHIEVEMENTS } from '@/data/localAchievements';
 import { sendAchievementUnlocked } from '@/utils/notificationService';
+import { checkAndUnlockAchievements } from '@/utils/achievementService';
 
 interface Achievement {
   id: string;
@@ -41,6 +42,8 @@ export default function AchievementsBadges() {
   const [loading, setLoading] = useState(true);
   const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'unlocked' | 'locked'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'ibadah' | 'ilm' | 'amanah' | 'general'>('all');
   const cacheRef = useRef<{ data: Achievement[]; timestamp: number } | null>(null);
   const previousUnlockedIdsRef = useRef<Set<string>>(new Set());
   const CACHE_DURATION = 30000; // 30 seconds cache
@@ -49,8 +52,12 @@ export default function AchievementsBadges() {
   useFocusEffect(
     React.useCallback(() => {
       if (user) {
-        loadAchievements();
-        checkForNewUnlocks();
+        // First check and unlock any achievements that reached 100% (for Supabase)
+        checkAndUnlockAchievements(user.id).then(() => {
+          // Then load achievements to show updated progress
+          loadAchievements();
+          checkForNewUnlocks();
+        });
       }
     }, [user])
   );
@@ -65,12 +72,28 @@ export default function AchievementsBadges() {
       
       if (queueData) {
         const queue = JSON.parse(queueData);
+        const achievementsToCelebrate: any[] = [];
         
-        // Process each achievement in the queue
+        // Check each achievement in the queue to see if it's already been celebrated
         for (const item of queue) {
-          if (item.achievement && !previousUnlockedIdsRef.current.has(item.achievement.id)) {
-            console.log('🎉 Found uncelebrated achievement in queue:', item.achievement.title);
+          if (item.achievement) {
+            // Check if this achievement has already been celebrated
+            const celebratedKey = `achievement_celebrated_${user.id}_${item.achievement.id}`;
+            const celebratedData = await AsyncStorage.getItem(celebratedKey);
             
+            if (!celebratedData) {
+              // Not yet celebrated, add to list
+              achievementsToCelebrate.push(item);
+              console.log('🎉 Found uncelebrated achievement in queue:', item.achievement.title);
+            } else {
+              console.log('✅ Achievement already celebrated:', item.achievement.title);
+            }
+          }
+        }
+
+        // Only celebrate achievements that haven't been celebrated yet
+        for (const item of achievementsToCelebrate) {
+          if (item.achievement) {
             // Trigger celebration
             celebrateAchievement({
               id: item.achievement.id,
@@ -82,12 +105,12 @@ export default function AchievementsBadges() {
               points: item.achievement.points,
             });
 
-            // Mark as processed
+            // Mark as processed in memory (for this session)
             previousUnlockedIdsRef.current.add(item.achievement.id);
           }
         }
 
-        // Clear the queue after processing
+        // Clear the queue after processing (even if all were already celebrated)
         await AsyncStorage.removeItem(celebrationQueueKey);
       }
     } catch (error) {
@@ -121,7 +144,7 @@ export default function AchievementsBadges() {
         const [achievementsResult, userAchievementsResult, progressResult] = await Promise.all([
           supabase
             .from('achievements')
-            .select('*')
+            .select('id, title, description, icon_name, requirement_type, requirement_value, points, tier, category, order_index, is_active, unlock_message, next_steps')
             .eq('is_active', true)
             .order('order_index', { ascending: true }),
           supabase
@@ -183,22 +206,90 @@ export default function AchievementsBadges() {
         progressData.map((p: any) => [p.achievement_id || p.id, p.current_value || p.current])
       );
 
-      // Merge data
+      // Merge data and check for auto-unlock
+      const newlyUnlockedAchievements: any[] = [];
       const mergedAchievements = allAchievements.map((achievement) => {
         const achievementId = achievement.id;
         const unlockedAt = unlockedMap.get(achievementId);
-        const unlocked = !!unlockedAt;
+        let unlocked = !!unlockedAt;
         const currentValue = progressMap.get(achievementId) || 0;
         const progress = unlocked ? 100 : Math.min(100, (currentValue / achievement.requirement_value) * 100);
+
+        // Auto-unlock if progress reaches 100% and not already unlocked
+        // (Celebration check will happen later after async operations)
+        if (!unlocked && progress >= 100 && currentValue >= achievement.requirement_value) {
+          console.log(`🎉 AUTO-UNLOCKING: ${achievement.title} (${currentValue}/${achievement.requirement_value})`);
+          unlocked = true;
+          const unlockTimestamp = new Date().toISOString();
+          
+          // Add to newly unlocked list for saving
+          newlyUnlockedAchievements.push({
+            achievement_id: achievementId,
+            id: achievementId,
+            unlocked_at: unlockTimestamp,
+          });
+        }
 
         return {
           ...achievement,
           unlocked,
-          unlocked_at: unlockedAt,
+          unlocked_at: unlocked || newlyUnlockedAchievements.find(nu => nu.achievement_id === achievementId)?.unlocked_at || unlockedAt,
           progress,
           current_value: currentValue,
         };
       });
+
+      // Check and celebrate newly auto-unlocked achievements (async check)
+      for (const newUnlock of newlyUnlockedAchievements) {
+        const achievement = mergedAchievements.find(a => a.id === newUnlock.achievement_id);
+        if (achievement) {
+          // Check if this achievement has already been celebrated
+          const celebratedKey = `achievement_celebrated_${user.id}_${newUnlock.achievement_id}`;
+          const celebratedData = await AsyncStorage.getItem(celebratedKey);
+          
+          if (!celebratedData) {
+            // Trigger celebration (this will mark it as celebrated)
+            celebrateAchievement({
+              id: achievement.id,
+              title: achievement.title,
+              description: achievement.description,
+              icon_name: achievement.icon_name,
+              tier: achievement.tier,
+              unlock_message: achievement.unlock_message,
+              points: achievement.points,
+            });
+
+            // Send notification
+            sendAchievementUnlocked(
+              achievement.title,
+              achievement.unlock_message || achievement.description
+            ).catch(err => console.log('Error sending notification:', err));
+          } else {
+            console.log(`✅ Achievement already celebrated: ${achievement.title}`);
+          }
+        }
+      }
+
+      // Save newly unlocked achievements to AsyncStorage (for local fallback)
+      if (useLocalFallback && newlyUnlockedAchievements.length > 0) {
+        try {
+          const existingUnlocked = await AsyncStorage.getItem(`user_achievements_${user.id}`);
+          const unlockedList = existingUnlocked ? JSON.parse(existingUnlocked) : [];
+          
+          // Add new unlocks (avoid duplicates)
+          const existingIds = new Set(unlockedList.map((u: any) => u.achievement_id || u.id));
+          newlyUnlockedAchievements.forEach(newUnlock => {
+            if (!existingIds.has(newUnlock.achievement_id || newUnlock.id)) {
+              unlockedList.push(newUnlock);
+            }
+          });
+
+          await AsyncStorage.setItem(`user_achievements_${user.id}`, JSON.stringify(unlockedList));
+          console.log(`✅ Saved ${newlyUnlockedAchievements.length} newly unlocked achievements to local storage`);
+        } catch (error) {
+          console.log('Error saving newly unlocked achievements:', error);
+        }
+      }
 
       console.log('✅ Merged achievements:', mergedAchievements.length);
       const unlockedCount = mergedAchievements.filter(a => a.unlocked).length;
@@ -209,15 +300,24 @@ export default function AchievementsBadges() {
         mergedAchievements.filter(a => a.unlocked).map(a => a.id)
       );
       
-      // Find newly unlocked achievements
-      const newlyUnlocked = mergedAchievements.filter(
-        a => a.unlocked && !previousUnlockedIdsRef.current.has(a.id)
-      );
+      // Find newly unlocked achievements (not in previous session AND not already celebrated)
+      const newlyUnlocked: Achievement[] = [];
+      for (const achievement of mergedAchievements) {
+        if (achievement.unlocked && !previousUnlockedIdsRef.current.has(achievement.id)) {
+          // Check if already celebrated in AsyncStorage
+          const celebratedKey = `achievement_celebrated_${user.id}_${achievement.id}`;
+          const celebratedData = await AsyncStorage.getItem(celebratedKey);
+          
+          if (!celebratedData) {
+            newlyUnlocked.push(achievement);
+          }
+        }
+      }
 
       // Update previous unlocked set
       previousUnlockedIdsRef.current = currentUnlockedIds;
 
-      // Trigger celebrations for newly unlocked achievements
+      // Trigger celebrations for newly unlocked achievements (that haven't been celebrated)
       for (const achievement of newlyUnlocked) {
         console.log('🎉 NEW ACHIEVEMENT UNLOCKED:', achievement.title);
         
@@ -227,7 +327,7 @@ export default function AchievementsBadges() {
           achievement.unlock_message || achievement.description
         );
 
-        // Trigger celebration
+        // Trigger celebration (this will mark it as celebrated)
         celebrateAchievement({
           id: achievement.id,
           title: achievement.title,
@@ -366,6 +466,84 @@ export default function AchievementsBadges() {
   };
 
   const unlockedCount = achievements.filter(a => a.unlocked).length;
+  const totalPoints = achievements
+    .filter(a => a.unlocked)
+    .reduce((sum, a) => sum + a.points, 0);
+
+  // Earned achievements (unlocked)
+  const earnedAchievements = achievements
+    .filter(a => a.unlocked)
+    .sort((a, b) => {
+      const dateA = a.unlocked_at ? new Date(a.unlocked_at).getTime() : 0;
+      const dateB = b.unlocked_at ? new Date(b.unlocked_at).getTime() : 0;
+      return dateB - dateA; // Most recent first
+    })
+    .slice(0, 6); // Show top 6
+
+  // Close to accomplishing (high progress but not unlocked)
+  const closeAchievements = achievements
+    .filter(a => !a.unlocked && a.progress > 0)
+    .sort((a, b) => b.progress - a.progress)
+    .slice(0, 6); // Show top 6
+
+  // Category-based achievements
+  const categoryAchievements = {
+    ibadah: achievements.filter(a => a.category === 'ibadah'),
+    ilm: achievements.filter(a => a.category === 'ilm'),
+    amanah: achievements.filter(a => a.category === 'amanah'),
+    general: achievements.filter(a => a.category === 'general'),
+  };
+
+  // Filter achievements based on current filters
+  const filteredAchievements = achievements.filter(achievement => {
+    if (filter === 'unlocked' && !achievement.unlocked) return false;
+    if (filter === 'locked' && achievement.unlocked) return false;
+    if (categoryFilter !== 'all' && achievement.category !== categoryFilter) return false;
+    return true;
+  });
+
+  // Navigate to relevant action based on achievement requirement type
+  const navigateToAction = (requirementType: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    switch (requirementType) {
+      case 'total_prayers':
+        router.push('/(tabs)/(iman)' as any);
+        break;
+      case 'total_dhikr':
+        router.push('/(tabs)/(iman)/dhikr-window' as any);
+        break;
+      case 'total_quran_pages':
+        router.push('/(tabs)/(iman)' as any);
+        break;
+      case 'lectures_watched':
+        router.push('/(tabs)/(ilm)' as any);
+        break;
+      case 'quizzes_completed':
+        router.push('/(tabs)/(ilm)' as any);
+        break;
+      case 'workouts_completed':
+        router.push('/(tabs)/(wellness)/physical-health' as any);
+        break;
+      case 'meditation_sessions':
+        router.push('/(tabs)/(wellness)/mental-health' as any);
+        break;
+      case 'streak':
+      case 'days_active':
+        router.push('/(tabs)/(iman)' as any);
+        break;
+      default:
+        router.push('/(tabs)/(iman)' as any);
+    }
+  };
+
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'ibadah': return { ios: 'hands.sparkles.fill', android: 'self-improvement' };
+      case 'ilm': return { ios: 'book.fill', android: 'menu-book' };
+      case 'amanah': return { ios: 'heart.fill', android: 'favorite' };
+      default: return { ios: 'star.fill', android: 'star' };
+    }
+  };
 
   const openAchievementDetails = (achievement: Achievement) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -545,33 +723,396 @@ export default function AchievementsBadges() {
         </View>
       </View>
 
-      {/* Recent Achievements Section */}
-      {recentAchievements.length > 0 && (
-        <View style={styles.recentSection}>
-          <View style={styles.recentHeader}>
+      {/* Overview Stats Grid */}
+      <View style={styles.statsGrid}>
+        <TouchableOpacity
+          style={styles.statCard}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setFilter('unlocked');
+            setCategoryFilter('all');
+          }}
+          activeOpacity={0.7}
+        >
+          <LinearGradient
+            colors={[colors.success + '20', colors.success + '10']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.statCardGradient}
+          >
             <IconSymbol
-              ios_icon_name="sparkles"
-              android_material_icon_name="auto-awesome"
-              size={18}
+              ios_icon_name="trophy.fill"
+              android_material_icon_name="emoji-events"
+              size={28}
+              color={colors.success}
+            />
+            <Text style={styles.statCardValue}>{unlockedCount}</Text>
+            <Text style={styles.statCardLabel}>Unlocked</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.statCard}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setFilter('locked');
+            setCategoryFilter('all');
+          }}
+          activeOpacity={0.7}
+        >
+          <LinearGradient
+            colors={[colors.warning + '20', colors.warning + '10']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.statCardGradient}
+          >
+            <IconSymbol
+              ios_icon_name="target"
+              android_material_icon_name="flag"
+              size={28}
               color={colors.warning}
             />
-            <Text style={styles.recentTitle}>Recently Unlocked</Text>
-          </View>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false} 
-            style={styles.achievementsScroll}
-            contentContainerStyle={styles.achievementsScrollContent}
+            <Text style={styles.statCardValue}>{closeAchievements.length}</Text>
+            <Text style={styles.statCardLabel}>In Progress</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.statCard}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setFilter('all');
+            setCategoryFilter('all');
+          }}
+          activeOpacity={0.7}
+        >
+          <LinearGradient
+            colors={[colors.primary + '20', colors.primary + '10']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.statCardGradient}
           >
-            {recentAchievements.map((achievement, index) => renderAchievementCard(achievement, index))}
-          </ScrollView>
+            <IconSymbol
+              ios_icon_name="star.fill"
+              android_material_icon_name="star"
+              size={28}
+              color={colors.primary}
+            />
+            <Text style={styles.statCardValue}>{totalPoints}</Text>
+            <Text style={styles.statCardLabel}>Total Points</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+
+      {/* Featured Sections */}
+      <View style={styles.featuredSection}>
+        {/* Earned Achievements */}
+        <View style={styles.featuredCard}>
+          <View style={styles.featuredHeader}>
+            <View style={styles.featuredHeaderLeft}>
+              <View style={[styles.featuredIconContainer, { backgroundColor: colors.success + '20' }]}>
+                <IconSymbol
+                  ios_icon_name="trophy.fill"
+                  android_material_icon_name="emoji-events"
+                  size={20}
+                  color={colors.success}
+                />
+              </View>
+              <View>
+                <Text style={styles.featuredTitle}>Earned</Text>
+                <Text style={styles.featuredSubtitle}>{earnedAchievements.length} achievements</Text>
+              </View>
+            </View>
+            {earnedAchievements.length > 0 && (
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setFilter('unlocked');
+                  setCategoryFilter('all');
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.featuredViewAll}>View All →</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {earnedAchievements.length > 0 ? (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.featuredScroll}
+              contentContainerStyle={styles.featuredScrollContent}
+            >
+              {earnedAchievements.map((achievement, index) => (
+                <TouchableOpacity
+                  key={achievement.id || index}
+                  style={styles.featuredItem}
+                  onPress={() => openAchievementDetails(achievement)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.featuredItemIcon, { backgroundColor: getTierColor(achievement.tier) }]}>
+                    <IconSymbol
+                      ios_icon_name={achievement.icon_name || 'star.fill'}
+                      android_material_icon_name="star"
+                      size={24}
+                      color={colors.card}
+                    />
+                  </View>
+                  <Text style={styles.featuredItemTitle} numberOfLines={1}>
+                    {achievement.title}
+                  </Text>
+                  <View style={styles.featuredItemBadge}>
+                    <Text style={styles.featuredItemBadgeText}>{achievement.tier}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={styles.featuredEmpty}>
+              <Text style={styles.featuredEmptyText}>Complete activities to unlock achievements</Text>
+            </View>
+          )}
         </View>
-      )}
+
+        {/* In Progress Achievements */}
+        <View style={styles.featuredCard}>
+          <View style={styles.featuredHeader}>
+            <View style={styles.featuredHeaderLeft}>
+              <View style={[styles.featuredIconContainer, { backgroundColor: colors.warning + '20' }]}>
+                <IconSymbol
+                  ios_icon_name="target"
+                  android_material_icon_name="flag"
+                  size={20}
+                  color={colors.warning}
+                />
+              </View>
+              <View>
+                <Text style={styles.featuredTitle}>In Progress</Text>
+                <Text style={styles.featuredSubtitle}>{closeAchievements.length} achievements</Text>
+              </View>
+            </View>
+            {closeAchievements.length > 0 && (
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setFilter('locked');
+                  setCategoryFilter('all');
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.featuredViewAll}>View All →</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {closeAchievements.length > 0 ? (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.featuredScroll}
+              contentContainerStyle={styles.featuredScrollContent}
+            >
+              {closeAchievements.map((achievement, index) => (
+                <TouchableOpacity
+                  key={achievement.id || index}
+                  style={styles.featuredItem}
+                  onPress={() => openAchievementDetails(achievement)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.featuredItemIcon, { backgroundColor: getTierColor(achievement.tier) + '60' }]}>
+                    <IconSymbol
+                      ios_icon_name="lock.fill"
+                      android_material_icon_name="lock"
+                      size={24}
+                      color={colors.card}
+                    />
+                  </View>
+                  <Text style={styles.featuredItemTitle} numberOfLines={1}>
+                    {achievement.title}
+                  </Text>
+                  <View style={styles.progressBarContainer}>
+                    <View style={styles.progressBarBackground}>
+                      <View 
+                        style={[
+                          styles.progressBarFill, 
+                          { 
+                            width: `${achievement.progress}%`,
+                            backgroundColor: getTierColor(achievement.tier)
+                          }
+                        ]} 
+                      />
+                    </View>
+                  </View>
+                  <Text style={styles.featuredItemProgress}>{Math.round(achievement.progress)}%</Text>
+                  <TouchableOpacity
+                    style={styles.featuredActionButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      navigateToAction(achievement.requirement_type);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.featuredActionButtonText}>Action</Text>
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={styles.featuredEmpty}>
+              <Text style={styles.featuredEmptyText}>Start activities to see progress</Text>
+            </View>
+          )}
+        </View>
+      </View>
+
+      {/* Category Quick Access */}
+      <View style={styles.categorySection}>
+        <Text style={styles.sectionTitle}>Browse by Category</Text>
+        <View style={styles.categoryGrid}>
+          <TouchableOpacity
+            style={[styles.categoryCard, categoryFilter === 'ibadah' && styles.categoryCardActive]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setCategoryFilter('ibadah');
+              setFilter('all');
+            }}
+            activeOpacity={0.7}
+          >
+            <LinearGradient
+              colors={categoryFilter === 'ibadah' 
+                ? [getCategoryColor('ibadah'), getCategoryColor('ibadah') + 'DD']
+                : [getCategoryColor('ibadah') + '20', getCategoryColor('ibadah') + '10']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.categoryCardGradient}
+            >
+              <View style={[styles.categoryCardIcon, { backgroundColor: categoryFilter === 'ibadah' ? colors.card + '30' : getCategoryColor('ibadah') + '30' }]}>
+                <IconSymbol
+                  ios_icon_name={getCategoryIcon('ibadah').ios}
+                  android_material_icon_name={getCategoryIcon('ibadah').android}
+                  size={28}
+                  color={categoryFilter === 'ibadah' ? colors.card : getCategoryColor('ibadah')}
+                />
+              </View>
+              <Text style={[styles.categoryCardTitle, categoryFilter === 'ibadah' && styles.categoryCardTitleActive]}>
+                ʿIbādah
+              </Text>
+              <Text style={[styles.categoryCardCount, categoryFilter === 'ibadah' && styles.categoryCardCountActive]}>
+                {categoryAchievements.ibadah.filter(a => a.unlocked).length}/{categoryAchievements.ibadah.length}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.categoryCard, categoryFilter === 'ilm' && styles.categoryCardActive]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setCategoryFilter('ilm');
+              setFilter('all');
+            }}
+            activeOpacity={0.7}
+          >
+            <LinearGradient
+              colors={categoryFilter === 'ilm' 
+                ? [getCategoryColor('ilm'), getCategoryColor('ilm') + 'DD']
+                : [getCategoryColor('ilm') + '20', getCategoryColor('ilm') + '10']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.categoryCardGradient}
+            >
+              <View style={[styles.categoryCardIcon, { backgroundColor: categoryFilter === 'ilm' ? colors.card + '30' : getCategoryColor('ilm') + '30' }]}>
+                <IconSymbol
+                  ios_icon_name={getCategoryIcon('ilm').ios}
+                  android_material_icon_name={getCategoryIcon('ilm').android}
+                  size={28}
+                  color={categoryFilter === 'ilm' ? colors.card : getCategoryColor('ilm')}
+                />
+              </View>
+              <Text style={[styles.categoryCardTitle, categoryFilter === 'ilm' && styles.categoryCardTitleActive]}>
+                ʿIlm
+              </Text>
+              <Text style={[styles.categoryCardCount, categoryFilter === 'ilm' && styles.categoryCardCountActive]}>
+                {categoryAchievements.ilm.filter(a => a.unlocked).length}/{categoryAchievements.ilm.length}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.categoryCard, categoryFilter === 'amanah' && styles.categoryCardActive]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setCategoryFilter('amanah');
+              setFilter('all');
+            }}
+            activeOpacity={0.7}
+          >
+            <LinearGradient
+              colors={categoryFilter === 'amanah' 
+                ? [getCategoryColor('amanah'), getCategoryColor('amanah') + 'DD']
+                : [getCategoryColor('amanah') + '20', getCategoryColor('amanah') + '10']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.categoryCardGradient}
+            >
+              <View style={[styles.categoryCardIcon, { backgroundColor: categoryFilter === 'amanah' ? colors.card + '30' : getCategoryColor('amanah') + '30' }]}>
+                <IconSymbol
+                  ios_icon_name={getCategoryIcon('amanah').ios}
+                  android_material_icon_name={getCategoryIcon('amanah').android}
+                  size={28}
+                  color={categoryFilter === 'amanah' ? colors.card : getCategoryColor('amanah')}
+                />
+              </View>
+              <Text style={[styles.categoryCardTitle, categoryFilter === 'amanah' && styles.categoryCardTitleActive]}>
+                Amanah
+              </Text>
+              <Text style={[styles.categoryCardCount, categoryFilter === 'amanah' && styles.categoryCardCountActive]}>
+                {categoryAchievements.amanah.filter(a => a.unlocked).length}/{categoryAchievements.amanah.length}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.categoryCard, categoryFilter === 'general' && styles.categoryCardActive]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setCategoryFilter('general');
+              setFilter('all');
+            }}
+            activeOpacity={0.7}
+          >
+            <LinearGradient
+              colors={categoryFilter === 'general' 
+                ? [getCategoryColor('general'), getCategoryColor('general') + 'DD']
+                : [getCategoryColor('general') + '20', getCategoryColor('general') + '10']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.categoryCardGradient}
+            >
+              <View style={[styles.categoryCardIcon, { backgroundColor: categoryFilter === 'general' ? colors.card + '30' : getCategoryColor('general') + '30' }]}>
+                <IconSymbol
+                  ios_icon_name={getCategoryIcon('general').ios}
+                  android_material_icon_name={getCategoryIcon('general').android}
+                  size={28}
+                  color={categoryFilter === 'general' ? colors.card : getCategoryColor('general')}
+                />
+              </View>
+              <Text style={[styles.categoryCardTitle, categoryFilter === 'general' && styles.categoryCardTitleActive]}>
+                General
+              </Text>
+              <Text style={[styles.categoryCardCount, categoryFilter === 'general' && styles.categoryCardCountActive]}>
+                {categoryAchievements.general.filter(a => a.unlocked).length}/{categoryAchievements.general.length}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </View>
 
       {/* All Achievements Section */}
       <View style={styles.allAchievementsSection}>
         <View style={styles.allAchievementsHeader}>
           <Text style={styles.allAchievementsTitle}>All Achievements</Text>
+          <Text style={styles.allAchievementsSubtitle}>
+            {filteredAchievements.length} shown
+          </Text>
         </View>
         <ScrollView 
           horizontal 
@@ -579,7 +1120,7 @@ export default function AchievementsBadges() {
           style={styles.achievementsScroll}
           contentContainerStyle={styles.achievementsScrollContent}
         >
-          {achievements.map((achievement, index) => renderAchievementCard(achievement, index))}
+          {filteredAchievements.map((achievement, index) => renderAchievementCard(achievement, index))}
         </ScrollView>
       </View>
 
@@ -766,6 +1307,33 @@ export default function AchievementsBadges() {
                             </Text>
                           </View>
                         )}
+
+                        {/* Action Button */}
+                        <TouchableOpacity
+                          style={[styles.modalActionButton, { backgroundColor: getTierColor(selectedAchievement.tier) }]}
+                          onPress={() => {
+                            closeAchievementDetails();
+                            navigateToAction(selectedAchievement.requirement_type);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <IconSymbol
+                            ios_icon_name="arrow.right.circle.fill"
+                            android_material_icon_name="arrow-forward"
+                            size={20}
+                            color={colors.card}
+                          />
+                          <Text style={styles.modalActionButtonText}>
+                            {selectedAchievement.requirement_type === 'total_prayers' ? 'Go to Prayers' :
+                             selectedAchievement.requirement_type === 'total_dhikr' ? 'Go to Dhikr' :
+                             selectedAchievement.requirement_type === 'total_quran_pages' ? 'Go to Quran' :
+                             selectedAchievement.requirement_type === 'lectures_watched' ? 'Go to Lectures' :
+                             selectedAchievement.requirement_type === 'quizzes_completed' ? 'Go to Quizzes' :
+                             selectedAchievement.requirement_type === 'workouts_completed' ? 'Go to Workouts' :
+                             selectedAchievement.requirement_type === 'meditation_sessions' ? 'Go to Meditation' :
+                             'Take Action'}
+                          </Text>
+                        </TouchableOpacity>
 
                         {selectedAchievement.next_steps && (
                           <View style={styles.modalTipCard}>
@@ -1163,5 +1731,236 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text,
     lineHeight: 18,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.xl,
+    marginTop: spacing.md,
+  },
+  statCard: {
+    flex: 1,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    ...shadows.medium,
+  },
+  statCardGradient: {
+    padding: spacing.md,
+    alignItems: 'center',
+    minHeight: 100,
+    justifyContent: 'center',
+  },
+  statCardValue: {
+    ...typography.h2,
+    color: colors.text,
+    fontWeight: '800',
+    marginTop: spacing.xs,
+  },
+  statCardLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    fontWeight: '600',
+  },
+  featuredSection: {
+    marginBottom: spacing.xl,
+    gap: spacing.md,
+  },
+  featuredCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.small,
+  },
+  featuredHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  featuredHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  featuredIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featuredTitle: {
+    ...typography.bodyBold,
+    color: colors.text,
+    fontWeight: '700',
+  },
+  featuredSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  featuredViewAll: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  featuredScroll: {
+    marginHorizontal: -spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  featuredScrollContent: {
+    gap: spacing.sm,
+  },
+  featuredItem: {
+    width: 120,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  featuredItemIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  featuredItemTitle: {
+    ...typography.caption,
+    color: colors.text,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+    fontSize: 11,
+  },
+  featuredItemBadge: {
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.border,
+  },
+  featuredItemBadgeText: {
+    ...typography.small,
+    color: colors.text,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    fontSize: 9,
+  },
+  featuredItemProgress: {
+    ...typography.small,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    fontSize: 10,
+  },
+  featuredActionButton: {
+    marginTop: spacing.xs,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.primary + '20',
+  },
+  featuredActionButtonText: {
+    ...typography.small,
+    color: colors.primary,
+    fontWeight: '600',
+    fontSize: 10,
+  },
+  featuredEmpty: {
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  featuredEmptyText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  categorySection: {
+    marginBottom: spacing.xl,
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  categoryCard: {
+    width: '47%',
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    ...shadows.small,
+  },
+  categoryCardActive: {
+    ...shadows.medium,
+  },
+  categoryCardGradient: {
+    padding: spacing.md,
+    alignItems: 'center',
+    minHeight: 120,
+    justifyContent: 'center',
+  },
+  categoryCardIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  categoryCardTitle: {
+    ...typography.bodyBold,
+    color: colors.text,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
+  },
+  categoryCardTitleActive: {
+    color: colors.card,
+  },
+  categoryCardCount: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  categoryCardCountActive: {
+    color: colors.card + 'DD',
+  },
+  progressBarContainer: {
+    width: '100%',
+    marginBottom: spacing.xs,
+  },
+  progressBarBackground: {
+    height: 4,
+    backgroundColor: colors.border,
+    borderRadius: borderRadius.sm,
+    overflow: 'hidden',
+    marginBottom: spacing.xs,
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: borderRadius.sm,
+  },
+  allAchievementsSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
+  modalActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    marginTop: spacing.md,
+    ...shadows.medium,
+  },
+  modalActionButtonText: {
+    ...typography.bodyBold,
+    color: colors.card,
+    fontSize: 16,
   },
 });

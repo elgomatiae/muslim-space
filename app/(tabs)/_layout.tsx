@@ -22,9 +22,10 @@ export default function TabLayout() {
     {
       name: '(iman)',
       route: '/(tabs)/(iman)/',
-      icon: 'favorite',
+      icon: 'target',
+      iosIcon: 'target',
       label: 'Iman',
-      isMainFeature: true, // Flag to make this icon larger
+      isMainFeature: true,
     },
     {
       name: '(wellness)',

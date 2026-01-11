@@ -29,6 +29,8 @@ export interface TabBarItem {
   route: Href;
   icon: keyof typeof MaterialIcons.glyphMap;
   label: string;
+  isMainFeature?: boolean;
+  iosIcon?: string;
 }
 
 interface FloatingTabBarProps {
@@ -171,26 +173,34 @@ export default function FloatingTabBar({
           <View style={styles.tabsContainer}>
             {tabs.map((tab, index) => {
               const isActive = activeTabIndex === index;
+              const isMainFeature = tab.isMainFeature || false;
+              const iconSize = isMainFeature ? 36 : 24;
+              const labelSize = isMainFeature ? 12 : 9;
+              const tabPadding = isMainFeature ? 14 : 8;
 
               return (
                 <TouchableOpacity
                   key={`tab-${tab.name}-${index}`}
-                  style={styles.tab}
+                  style={[styles.tab, isMainFeature && styles.mainFeatureTab]}
                   onPress={() => handleTabPress(tab.route)}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.tabContent}>
+                  <View style={[styles.tabContent, { paddingVertical: tabPadding }]}>
                     <IconSymbol
                       android_material_icon_name={tab.icon}
-                      ios_icon_name={tab.icon}
-                      size={24}
+                      ios_icon_name={tab.iosIcon || tab.icon}
+                      size={iconSize}
                       color={isActive ? theme.colors.primary : (theme.dark ? '#98989D' : '#000000')}
                     />
                     <Text
                       style={[
                         styles.tabLabel,
-                        { color: theme.dark ? '#98989D' : '#8E8E93' },
-                        isActive && { color: theme.colors.primary, fontWeight: '600' },
+                        { 
+                          fontSize: labelSize,
+                          color: theme.dark ? '#98989D' : '#8E8E93',
+                          fontWeight: isMainFeature ? '800' : '500',
+                        },
+                        isActive && { color: theme.colors.primary, fontWeight: isMainFeature ? '900' : '600' },
                       ]}
                     >
                       {tab.label}
@@ -244,6 +254,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 8,
+  },
+  mainFeatureTab: {
+    flex: 1.5,
   },
   tabContent: {
     alignItems: 'center',

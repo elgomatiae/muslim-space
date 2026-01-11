@@ -10,14 +10,14 @@ import { useLocalSearchParams } from "expo-router";
 
 interface MentalHealthDua {
   id: string;
-  title: string;
+  title?: string;
   arabic_text: string;
   transliteration: string;
   translation: string;
-  context: string;
+  context?: string;
   emotion_category: string;
-  source: string;
-  benefits: string[];
+  source?: string;
+  benefits?: string[];
 }
 
 const EMOTION_CATEGORIES = [
@@ -70,17 +70,31 @@ export default function MentalDuasScreen() {
     try {
       const { data, error } = await supabase
         .from('mental_health_duas')
-        .select('*')
+        .select('id, title, arabic_text, transliteration, translation, context, emotion_category, source, benefits, order_index')
         .eq('is_active', true)
-        .order('order_index', { ascending: true });
+        .order('order_index', { ascending: true })
+        .limit(100); // Limit to prevent large payloads
 
       if (error) {
-        console.error('Error loading duas:', error);
+        // If table doesn't exist, continue with empty array (graceful degradation)
+        if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+          console.log('ℹ️ mental_health_duas table not found - run migration to enable duas feature');
+          setDuas([]);
+        } else {
+          console.error('Error loading duas:', error);
+          setDuas([]);
+        }
       } else {
         setDuas(data || []);
       }
-    } catch (error) {
-      console.error('Error loading duas:', error);
+    } catch (error: any) {
+      // Continue with empty array if table doesn't exist
+      if (error?.code === 'PGRST205' || error?.message?.includes('Could not find the table')) {
+        console.log('ℹ️ mental_health_duas table not found - run migration to enable duas feature');
+      } else {
+        console.error('Error loading duas:', error);
+      }
+      setDuas([]);
     } finally {
       setLoading(false);
     }
@@ -174,7 +188,7 @@ export default function MentalDuasScreen() {
                       />
                     </View>
                     <View style={styles.duaHeaderText}>
-                      <Text style={styles.duaTitle}>{dua.title}</Text>
+                      <Text style={styles.duaTitle}>{dua.title || 'Dua'}</Text>
                       <Text style={styles.duaCategory}>{dua.emotion_category.toUpperCase()}</Text>
                     </View>
                   </View>
@@ -228,7 +242,7 @@ export default function MentalDuasScreen() {
                   end={{ x: 1, y: 1 }}
                   style={styles.duaDetailHeader}
                 >
-                  <Text style={styles.duaDetailTitle}>{selectedDua.title}</Text>
+                  <Text style={styles.duaDetailTitle}>{selectedDua.title || 'Dua'}</Text>
                   <Text style={styles.duaDetailCategory}>
                     {selectedDua.emotion_category.toUpperCase()}
                   </Text>
@@ -240,10 +254,12 @@ export default function MentalDuasScreen() {
                     <Text style={styles.arabicText}>{selectedDua.arabic_text}</Text>
                   </View>
 
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Transliteration</Text>
-                    <Text style={styles.transliterationText}>{selectedDua.transliteration}</Text>
-                  </View>
+                  {selectedDua.transliteration && (
+                    <View style={styles.section}>
+                      <Text style={styles.sectionTitle}>Transliteration</Text>
+                      <Text style={styles.transliterationText}>{selectedDua.transliteration}</Text>
+                    </View>
+                  )}
 
                   <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Translation</Text>

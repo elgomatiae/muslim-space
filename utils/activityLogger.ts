@@ -1,4 +1,9 @@
 
+/**
+ * Activity Logger - Log and retrieve user activity from Supabase
+ * This service handles activity tracking for the Iman Tracker
+ */
+
 import { supabase } from '@/lib/supabase';
 
 export type ActivityType =

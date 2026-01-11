@@ -120,13 +120,36 @@ export default function MentalHealthHubScreen() {
   };
 
   const loadDuas = async () => {
-    const { data } = await supabase
-      .from('mental_health_duas')
-      .select('id, title, arabic_text, translation, emotion_category')
-      .eq('is_active', true)
-      .order('order_index', { ascending: true })
-      .limit(4);
-    if (data) setDuas(data);
+    try {
+      const { data, error } = await supabase
+        .from('mental_health_duas')
+        .select('id, title, arabic_text, translation, emotion_category')
+        .eq('is_active', true)
+        .order('order_index', { ascending: true })
+        .limit(4);
+      
+      if (error) {
+        // If table doesn't exist, continue with empty array (graceful degradation)
+        if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+          // Silently handle missing table - no need to log as error
+          setDuas([]);
+        } else {
+          console.error('Error loading duas:', error);
+          setDuas([]);
+        }
+      } else if (data) {
+        setDuas(data);
+      }
+    } catch (error: any) {
+      // Continue with empty array if table doesn't exist
+      if (error?.code === 'PGRST205' || error?.message?.includes('Could not find the table')) {
+        // Silently handle missing table
+        setDuas([]);
+      } else {
+        console.error('Error loading duas:', error);
+        setDuas([]);
+      }
+    }
   };
 
   const loadPrompts = async () => {

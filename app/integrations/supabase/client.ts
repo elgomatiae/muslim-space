@@ -3,29 +3,48 @@ import type { Database } from './types';
 import { createClient } from '@supabase/supabase-js'
 
 // Use environment variables with EXPO_PUBLIC_ prefix for Expo/React Native
-// Fallback to hardcoded values if env vars are not set (for development)
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || "https://teemloiwfnwrogwnoxsa.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlZW1sb2l3Zm53cm9nd25veHNhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0NTYzODMsImV4cCI6MjA4MDAzMjM4M30.CXCl1-nnRT0GB6Qg89daWxT8kWxx91gEDaUWk9jX4CQ";
+// SECURITY: Never hardcode keys in production - always use environment variables
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const SUPABASE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-// Debug: Log Supabase configuration (remove in production)
+// Validate configuration - fail fast if missing
+if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+  const errorMsg = `Missing Supabase configuration. 
+
+Please create a .env file in your project root with:
+EXPO_PUBLIC_SUPABASE_URL=your-project-url
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+
+Quick setup:
+1. Copy .env.example to .env
+2. Get your credentials from: https://supabase.com/dashboard → Settings → API
+3. Restart your dev server
+
+See docs/ENV_SETUP_QUICK.md for detailed instructions.`;
+  
+  if (__DEV__) {
+    console.error('❌', errorMsg);
+    console.error('');
+    console.error('📝 To fix this:');
+    console.error('   1. Create .env file in project root');
+    console.error('   2. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY');
+    console.error('   3. Restart dev server (npm start)');
+    console.error('');
+  }
+  throw new Error(errorMsg);
+}
+
+// Security check: Ensure we're using anon key, not service_role
+if (SUPABASE_PUBLISHABLE_KEY.includes('service_role')) {
+  throw new Error('SECURITY ERROR: Service role key detected. Never use service_role key in client code. Use anon key only.');
+}
+
+// Debug: Log configuration status (sanitized - no actual keys)
 if (__DEV__) {
   console.log('🔧 Supabase Configuration:');
   console.log('  URL:', SUPABASE_URL ? '✅ Set' : '❌ Missing');
-  console.log('  Key:', SUPABASE_PUBLISHABLE_KEY ? '✅ Set' : '❌ Missing');
+  console.log('  Key:', SUPABASE_PUBLISHABLE_KEY ? `✅ Set (${SUPABASE_PUBLISHABLE_KEY.substring(0, 20)}...)` : '❌ Missing');
   console.log('  Using env vars:', !!process.env.EXPO_PUBLIC_SUPABASE_URL);
-  
-  // Warn if using fallback values
-  if (!process.env.EXPO_PUBLIC_SUPABASE_URL) {
-    console.warn('⚠️ Using hardcoded Supabase URL - set EXPO_PUBLIC_SUPABASE_URL in .env for production');
-  }
-  if (!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) {
-    console.warn('⚠️ Using hardcoded Supabase key - set EXPO_PUBLIC_SUPABASE_ANON_KEY in .env for production');
-  }
-}
-
-// Validate configuration
-if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  throw new Error('Missing Supabase configuration. Please set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in your .env file');
 }
 
 // Import the supabase client like this:

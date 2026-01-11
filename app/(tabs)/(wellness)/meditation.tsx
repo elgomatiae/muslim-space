@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface MeditationPractice {
   title: string;
@@ -91,14 +92,30 @@ export default function MeditationScreen() {
 
     try {
       const today = new Date().toISOString().split('T')[0];
-      const { data: sessionsData } = await supabase
+      // SECURITY: Always scope by user_id
+      const { data: sessionsData, error: sessionsError } = await supabase
         .from('meditation_sessions')
-        .select('*')
+        .select('id, practice_type, duration_minutes, notes, date, created_at')
         .eq('user_id', user.id)
         .eq('date', today)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50); // Limit daily sessions
 
-      if (sessionsData) {
+      if (sessionsError && (sessionsError.code === 'PGRST205' || sessionsError.message?.includes('Could not find the table'))) {
+        // Fallback to local storage
+        try {
+          const localKey = `meditation_sessions_${user.id}`;
+          const localData = await AsyncStorage.getItem(localKey);
+          if (localData) {
+            const allSessions = JSON.parse(localData);
+            const todaySessions = allSessions.filter((s: any) => s.date === today);
+            setSessions(todaySessions);
+            setTodayCount(todaySessions.length);
+          }
+        } catch (error) {
+          console.error('Error loading local sessions:', error);
+        }
+      } else if (sessionsData) {
         setSessions(sessionsData);
         setTodayCount(sessionsData.length);
       }
@@ -305,12 +322,35 @@ export default function MeditationScreen() {
           practice_type: selectedPractice.type,
           duration_minutes: selectedPractice.duration,
           notes: sessionNotes,
+          date: new Date().toISOString().split('T')[0],
         });
 
       if (sessionError) {
         console.error('Error saving session:', sessionError);
-        Alert.alert('Error', 'Failed to save meditation session');
-        return;
+        // If table doesn't exist, save locally as fallback
+        if (sessionError.code === 'PGRST205' || sessionError.message?.includes('Could not find the table')) {
+          try {
+            const localKey = `meditation_sessions_${user.id}`;
+            const existing = await AsyncStorage.getItem(localKey);
+            const sessions = existing ? JSON.parse(existing) : [];
+            sessions.push({
+              id: Date.now().toString(),
+              user_id: user.id,
+              practice_type: selectedPractice.type,
+              duration_minutes: selectedPractice.duration,
+              notes: sessionNotes,
+              date: new Date().toISOString().split('T')[0],
+              created_at: new Date().toISOString(),
+            });
+            await AsyncStorage.setItem(localKey, JSON.stringify(sessions));
+            console.log('✅ Saved meditation session locally (table not found)');
+          } catch (localError) {
+            console.error('Error saving locally:', localError);
+          }
+        } else {
+          Alert.alert('Error', 'Failed to save meditation session');
+          return;
+        }
       }
 
       // Update Amanah goals - meditation counter

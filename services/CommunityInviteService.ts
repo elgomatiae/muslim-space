@@ -235,11 +235,13 @@ export async function getUserInvites(userId: string): Promise<CommunityInvite[]>
     console.log(`📥 Fetching invites for user: ${userId}`);
     
     // Query actual Supabase community_invites table
+    // SECURITY: Always scope by user_id to ensure RLS is enforced
     const { data, error } = await supabase
       .from('community_invites')
-      .select('*')
+      .select('id, community_id, community_name, invited_by_user_id, invited_by_username, invited_user_id, invited_username, status, created_at, responded_at')
       .eq('invited_user_id', userId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(50); // Pagination: limit to 50 invites
 
     if (error) {
       console.error('❌ Error fetching invites:', error);

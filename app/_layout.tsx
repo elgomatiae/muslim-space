@@ -20,6 +20,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { ImanTrackerProvider } from "@/contexts/ImanTrackerContext";
 import { AchievementCelebrationProvider } from "@/contexts/AchievementCelebrationContext";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -82,7 +83,7 @@ export default function RootLayout() {
     },
   };
   return (
-    <>
+    <ErrorBoundary>
       <StatusBar style="auto" animated />
         <ThemeProvider
           value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
@@ -103,31 +104,6 @@ export default function RootLayout() {
                     {/* Main app with tabs - protected */}
                     <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
-                    {/* Modal Demo Screens */}
-                    <Stack.Screen
-                      name="modal"
-                      options={{
-                        presentation: "modal",
-                        title: "Standard Modal",
-                      }}
-                    />
-                    <Stack.Screen
-                      name="formsheet"
-                      options={{
-                        presentation: "formSheet",
-                        title: "Form Sheet Modal",
-                        sheetGrabberVisible: true,
-                        sheetAllowedDetents: [0.5, 0.8, 1.0],
-                        sheetCornerRadius: 20,
-                      }}
-                    />
-                    <Stack.Screen
-                      name="transparent-modal"
-                      options={{
-                        presentation: "transparentModal",
-                        headerShown: false,
-                      }}
-                    />
                     </Stack>
                     <SystemBars style={"auto"} />
                     </GestureHandlerRootView>
@@ -137,6 +113,6 @@ export default function RootLayout() {
             </AchievementCelebrationProvider>
           </AuthProvider>
         </ThemeProvider>
-    </>
+    </ErrorBoundary>
   );
 }

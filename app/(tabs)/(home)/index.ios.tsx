@@ -25,20 +25,9 @@ import {
 } from "@/services/LocationService";
 import { schedulePrayerNotifications } from "@/services/PrayerNotificationService";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-interface DailyVerse {
-  id: string;
-  arabic_text: string;
-  translation: string;
-  reference: string;
-}
-
-interface DailyHadith {
-  id: string;
-  arabic_text?: string;
-  translation: string;
-  source: string;
-}
+import { getDailyVerse, getDailyHadith } from '@/services/DailyContentService';
+import DailyVerseWidget from '@/components/DailyVerseWidget';
+import DailyHadithWidget from '@/components/DailyHadithWidget';
 
 interface CachedPrayerData {
   location: UserLocation;
@@ -64,9 +53,9 @@ export default function HomeScreen() {
   const [nextPrayer, setNextPrayer] = useState<PrayerTime | null>(null);
   const [timeUntilNext, setTimeUntilNext] = useState<string>('');
   const [refreshing, setRefreshing] = useState(false);
-  const [dailyVerse, setDailyVerse] = useState<DailyVerse | null>(null);
-  const [dailyHadith, setDailyHadith] = useState<DailyHadith | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [dailyVerse, setDailyVerse] = useState<any>(null);
+  const [dailyHadith, setDailyHadith] = useState<any>(null);
+  const [contentLoading, setContentLoading] = useState(true);
   const [prayerTimesLoading, setPrayerTimesLoading] = useState(true);
   const [locationInfo, setLocationInfo] = useState<{
     location: UserLocation | null;
@@ -206,64 +195,21 @@ export default function HomeScreen() {
   // Load daily content
   useEffect(() => {
     loadDailyContent();
-  }, [user]);
+  }, []);
 
   const loadDailyContent = async () => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-
+    setContentLoading(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
-
-      // Check if user already has content for today
-      const { data: existingContent } = await supabase
-        .from('user_daily_content')
-        .select('*, daily_verses(*), daily_hadiths(*)')
-        .eq('user_id', user.id)
-        .eq('date', today)
-        .single();
-
-      if (existingContent && existingContent.daily_verses && existingContent.daily_hadiths) {
-        // User already has content for today
-        setDailyVerse(existingContent.daily_verses);
-        setDailyHadith(existingContent.daily_hadiths);
-      } else {
-        // Get random verse and hadith
-        const { data: verses } = await supabase
-          .from('daily_verses')
-          .select('*')
-          .eq('is_active', true);
-
-        const { data: hadiths } = await supabase
-          .from('daily_hadiths')
-          .select('*')
-          .eq('is_active', true);
-
-        if (verses && verses.length > 0 && hadiths && hadiths.length > 0) {
-          // Select random verse and hadith
-          const randomVerse = verses[Math.floor(Math.random() * verses.length)];
-          const randomHadith = hadiths[Math.floor(Math.random() * hadiths.length)];
-
-          setDailyVerse(randomVerse);
-          setDailyHadith(randomHadith);
-
-          // Save to user_daily_content
-          await supabase
-            .from('user_daily_content')
-            .upsert({
-              user_id: user.id,
-              date: today,
-              verse_id: randomVerse.id,
-              hadith_id: randomHadith.id,
-            });
-        }
-      }
+      const [verse, hadith] = await Promise.all([
+        getDailyVerse(),
+        getDailyHadith(),
+      ]);
+      setDailyVerse(verse);
+      setDailyHadith(hadith);
     } catch (error) {
       console.error('Error loading daily content:', error);
     } finally {
-      setLoading(false);
+      setContentLoading(false);
     }
   };
 
@@ -685,40 +631,9 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Daily Quran Verse Section */}
+        {/* Daily Quran Verse Widget */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionIconContainer}>
-              <IconSymbol
-                ios_icon_name="book.closed.fill"
-                android_material_icon_name="book"
-                size={18}
-                color={colors.primary}
-              />
-            </View>
-            <Text style={styles.sectionTitle}>Daily Verse</Text>
-          </View>
-          {loading ? (
-            <View style={styles.loadingCard}>
-              <Text style={styles.loadingText}>Loading verse...</Text>
-            </View>
-          ) : dailyVerse ? (
-            <LinearGradient
-              colors={colors.gradientPrimary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.verseCard}
-            >
-              <Text style={styles.verseArabic}>{dailyVerse.arabic_text}</Text>
-              <View style={styles.verseDivider} />
-              <Text style={styles.verseText}>{dailyVerse.translation}</Text>
-              <Text style={styles.verseReference}>{dailyVerse.reference}</Text>
-            </LinearGradient>
-          ) : (
-            <View style={styles.contentCard}>
-              <Text style={styles.contentText}>No verse available today</Text>
-            </View>
-          )}
+          <DailyVerseWidget verse={dailyVerse} loading={contentLoading} />
         </View>
 
         {/* Iman Score Rings */}
@@ -838,47 +753,9 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Daily Hadith Section */}
+        {/* Daily Hadith Widget */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionIconContainer}>
-              <IconSymbol
-                ios_icon_name="book.fill"
-                android_material_icon_name="menu-book"
-                size={18}
-                color={colors.accent}
-              />
-            </View>
-            <Text style={styles.sectionTitle}>Daily Hadith</Text>
-          </View>
-          {loading ? (
-            <View style={styles.loadingCard}>
-              <Text style={styles.loadingText}>Loading hadith...</Text>
-            </View>
-          ) : dailyHadith ? (
-            <View style={styles.contentCard}>
-              <View style={styles.quoteIconContainer}>
-                <IconSymbol
-                  ios_icon_name="quote.opening"
-                  android_material_icon_name="format-quote"
-                  size={24}
-                  color={colors.accent}
-                />
-              </View>
-              {dailyHadith.arabic_text && (
-                <Text style={styles.hadithArabic}>{dailyHadith.arabic_text}</Text>
-              )}
-              <Text style={styles.contentText}>{dailyHadith.translation}</Text>
-              <View style={styles.sourceContainer}>
-                <View style={styles.sourceDivider} />
-                <Text style={styles.contentSource}>{dailyHadith.source}</Text>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.contentCard}>
-              <Text style={styles.contentText}>No hadith available today</Text>
-            </View>
-          )}
+          <DailyHadithWidget hadith={dailyHadith} loading={contentLoading} />
         </View>
 
         <View style={styles.bottomPadding} />
@@ -897,14 +774,15 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingTop: 56,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xxl,
   },
   headerGradient: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
     marginBottom: spacing.xl,
-    ...shadows.colored,
+    ...shadows.emphasis,
+    overflow: 'hidden',
   },
   headerContent: {
     flexDirection: 'row',
@@ -912,12 +790,14 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   headerIconContainer: {
-    width: 48,
-    height: 48,
+    width: 56,
+    height: 56,
     borderRadius: borderRadius.round,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   headerTextSection: {
     flex: 1,
@@ -942,10 +822,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   sectionIconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.highlight,
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.highlightPurple,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -956,9 +836,9 @@ const styles = StyleSheet.create({
   },
   imanScoreCard: {
     backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    ...shadows.medium,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    ...shadows.card,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -1014,11 +894,12 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   summaryCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
     marginBottom: spacing.md,
     alignItems: 'center',
-    ...shadows.colored,
+    ...shadows.emphasis,
+    overflow: 'hidden',
   },
   progressCircleContainer: {
     position: 'relative',
@@ -1127,9 +1008,9 @@ const styles = StyleSheet.create({
   },
   contentCard: {
     backgroundColor: colors.card,
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
-    ...shadows.medium,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    ...shadows.card,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -1183,9 +1064,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   verseCard: {
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
-    ...shadows.colored,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    ...shadows.emphasis,
+    overflow: 'hidden',
   },
   verseArabic: {
     fontSize: 20,
@@ -1219,12 +1101,13 @@ const styles = StyleSheet.create({
   },
   nextPrayerCard: {
     backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
     marginBottom: spacing.xl,
     ...shadows.medium,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
+    overflow: 'hidden',
   },
   nextPrayerHeader: {
     flexDirection: 'row',

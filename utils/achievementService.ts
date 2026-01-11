@@ -30,18 +30,12 @@ export async function calculateUserStats(userId: string): Promise<UserStats> {
     console.log(`User ID: ${userId}`);
     
     // Execute all queries in parallel for better performance
-    const [
-      imanGoalsResult,
-      streakResult,
-      lecturesResult,
-      quizzesResult,
-      workoutsResult,
-      meditationResult
-    ] = await Promise.all([
+    const results = await Promise.allSettled([
       // Get Iman tracker goals (contains prayer, dhikr, quran data)
+      // SECURITY: Always scope by user_id
       supabase
         .from('iman_tracker_goals')
-        .select('*')
+        .select('fard_fajr, fard_dhuhr, fard_asr, fard_maghrib, fard_isha, dhikr_daily_completed, dhikr_weekly_completed, quran_daily_pages_completed')
         .eq('user_id', userId)
         .single(),
       
@@ -78,6 +72,14 @@ export async function calculateUserStats(userId: string): Promise<UserStats> {
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
     ]);
+
+    // Extract results, handling failures gracefully
+    const imanGoalsResult = results[0].status === 'fulfilled' ? results[0].value : { data: null, error: null };
+    const streakResult = results[1].status === 'fulfilled' ? results[1].value : { data: null, error: null };
+    const lecturesResult = results[2].status === 'fulfilled' ? results[2].value : { data: null, count: 0, error: null };
+    const quizzesResult = results[3].status === 'fulfilled' ? results[3].value : { data: null, count: 0, error: null };
+    const workoutsResult = results[4].status === 'fulfilled' ? results[4].value : { data: null, count: 0, error: null };
+    const meditationResult = results[5].status === 'fulfilled' ? results[5].value : { data: null, count: 0, error: null };
 
     // ===== PRAYER CALCULATION =====
     // Count total fard prayers completed (lifetime)
@@ -379,12 +381,13 @@ export async function checkAndUnlockAchievements(userId: string): Promise<string
     const [achievementsResult, userAchievementsResult] = await Promise.all([
       supabase
         .from('achievements')
-        .select('*')
-        .eq('is_active', true),
+        .select('id, title, description, icon_name, requirement_type, requirement_value, points, tier, category, order_index, is_active, unlock_message, next_steps')
+        .eq('is_active', true)
+        .order('order_index', { ascending: true }),
       supabase
         .from('user_achievements')
-        .select('achievement_id')
-        .eq('user_id', userId)
+        .select('achievement_id, unlocked_at')
+        .eq('user_id', userId) // SECURITY: Always scope by user_id
     ]);
 
     if (achievementsResult.error || !achievementsResult.data) {
@@ -545,7 +548,7 @@ export async function calculateAchievementProgress(
     // Get achievement details
     const { data: achievement } = await supabase
       .from('achievements')
-      .select('*')
+      .select('id, requirement_type, requirement_value')
       .eq('id', achievementId)
       .single();
 
@@ -644,8 +647,9 @@ export async function getAchievementSuggestions(userId: string): Promise<any[]> 
     // Get all achievements
     const { data: achievements } = await supabase
       .from('achievements')
-      .select('*')
-      .eq('is_active', true);
+      .select('id, title, description, icon_name, requirement_type, requirement_value, points, tier, category, order_index, is_active, unlock_message, next_steps')
+      .eq('is_active', true)
+      .order('order_index', { ascending: true });
 
     if (!achievements) return [];
 

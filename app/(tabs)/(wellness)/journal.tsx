@@ -1,26 +1,20 @@
-
-import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal, Dimensions, Platform } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
-import { IconSymbol } from "@/components/IconSymbol";
-import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/contexts/AuthContext";
-import { useImanTracker } from "@/contexts/ImanTrackerContext";
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
+import { IconSymbol } from '@/components/IconSymbol';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '@/contexts/AuthContext';
+import { useImanTracker } from '@/contexts/ImanTrackerContext';
+import { 
+  fetchJournalEntries, 
+  saveJournalEntry, 
+  updateJournalEntry, 
+  deleteJournalEntry,
+  searchJournalEntries,
+  type JournalEntry 
+} from '@/services/JournalService';
 import * as Haptics from 'expo-haptics';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-interface JournalEntry {
-  id: string;
-  title: string;
-  content: string;
-  tags: string[];
-  created_at: string;
-  updated_at: string;
-}
 
 const SUGGESTED_TAGS = [
   'Gratitude', 'Prayer', 'Reflection', 'Goals', 'Challenges',
@@ -28,7 +22,16 @@ const SUGGESTED_TAGS = [
   'Dua', 'Quran', 'Ramadan', 'Personal Growth', 'Struggles'
 ];
 
-type ViewMode = 'list' | 'calendar';
+const MOODS = [
+  { label: '😊 Happy', value: 'happy' },
+  { label: '😌 Peaceful', value: 'peaceful' },
+  { label: '🙏 Grateful', value: 'grateful' },
+  { label: '😔 Sad', value: 'sad' },
+  { label: '😰 Anxious', value: 'anxious' },
+  { label: '😤 Frustrated', value: 'frustrated' },
+  { label: '🤔 Reflective', value: 'reflective' },
+  { label: '💪 Motivated', value: 'motivated' },
+];
 
 export default function JournalScreen() {
   const { user } = useAuth();
@@ -37,7 +40,7 @@ export default function JournalScreen() {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [filteredEntries, setFilteredEntries] = useState<JournalEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [saving, setSaving] = useState(false);
   
   // Modal states
   const [showEntryModal, setShowEntryModal] = useState(false);
@@ -48,60 +51,60 @@ export default function JournalScreen() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedMood, setSelectedMood] = useState<string>('');
   const [customTag, setCustomTag] = useState('');
   
-  // Filter states
+  // Search state
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterTag, setFilterTag] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
-    loadEntries();
-  }, []);
+    if (user) {
+      loadEntries();
+    } else {
+      // Clear entries when user logs out
+      setEntries([]);
+      setFilteredEntries([]);
+    }
+  }, [user?.id]); // Reload when user ID changes (e.g., switching accounts)
 
   useEffect(() => {
-    applyFilters();
-  }, [entries, searchQuery, filterTag]);
+    if (searchQuery.trim()) {
+      performSearch();
+    } else {
+      setFilteredEntries(entries);
+    }
+  }, [searchQuery, entries]);
 
   const loadEntries = async () => {
     if (!user) return;
     
+    setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('journal_entries')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error loading entries:', error);
-      } else {
-        setEntries(data || []);
-      }
+      const data = await fetchJournalEntries(user.id);
+      setEntries(data);
+      setFilteredEntries(data);
+      console.log(`✅ Loaded ${data.length} journal entries`);
     } catch (error) {
       console.error('Error loading entries:', error);
+      Alert.alert('Error', 'Failed to load journal entries. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const applyFilters = () => {
-    let filtered = [...entries];
-
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(entry => 
-        entry.title?.toLowerCase().includes(query) ||
-        entry.content?.toLowerCase().includes(query) ||
-        entry.tags?.some(tag => tag.toLowerCase().includes(query))
-      );
+  const performSearch = async () => {
+    if (!user || !searchQuery.trim()) {
+      setFilteredEntries(entries);
+      return;
     }
-
-    if (filterTag) {
-      filtered = filtered.filter(entry => entry.tags?.includes(filterTag));
+    
+    try {
+      const results = await searchJournalEntries(user.id, searchQuery);
+      setFilteredEntries(results);
+    } catch (error) {
+      console.error('Error searching:', error);
+      setFilteredEntries(entries);
     }
-
-    setFilteredEntries(filtered);
   };
 
   const openNewEntry = () => {
@@ -111,6 +114,8 @@ export default function JournalScreen() {
     setTitle('');
     setContent('');
     setSelectedTags([]);
+    setSelectedMood('');
+    setCustomTag('');
     setShowEntryModal(true);
   };
 
@@ -121,12 +126,14 @@ export default function JournalScreen() {
     setTitle(entry.title || '');
     setContent(entry.content || '');
     setSelectedTags(entry.tags || []);
+    setSelectedMood(entry.mood || '');
+    setCustomTag('');
     setShowEntryModal(true);
   };
 
-  const saveEntry = async () => {
+  const handleSave = async () => {
     if (!content.trim()) {
-      Alert.alert('Error', 'Please write something in your journal');
+      Alert.alert('Error', 'Please write something in your journal entry');
       return;
     }
 
@@ -135,65 +142,74 @@ export default function JournalScreen() {
       return;
     }
 
+    setSaving(true);
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
-      const entryData = {
-        user_id: user.id,
-        title: title.trim() || 'Untitled Entry',
-        content: content.trim(),
-        tags: selectedTags,
-        updated_at: new Date().toISOString(),
-      };
-
       if (isEditing && selectedEntry) {
-        const { error } = await supabase
-          .from('journal_entries')
-          .update(entryData)
-          .eq('id', selectedEntry.id);
-
-        if (error) {
-          console.error('Error updating entry:', error);
-          Alert.alert('Error', 'Failed to update entry');
-        } else {
-          Alert.alert('Success', 'Your journal entry has been updated');
-          setShowEntryModal(false);
-          loadEntries();
+        // Update existing entry
+        const updated = await updateJournalEntry(
+          selectedEntry.id,
+          title,
+          content,
+          selectedTags,
+          selectedMood
+        );
+        
+        if (!updated) {
+          throw new Error('Failed to update entry');
         }
+        
+        console.log('✅ Journal entry updated and saved to your profile');
+        Alert.alert('Success', 'Your journal entry has been updated and saved to your profile');
       } else {
-        const { error } = await supabase
-          .from('journal_entries')
-          .insert(entryData);
-
-        if (error) {
-          console.error('Error saving entry:', error);
-          Alert.alert('Error', 'Failed to save entry');
-        } else {
-          Alert.alert('Success', 'Your journal entry has been saved');
-          
-          // Update Iman Tracker - journal activity
-          if (amanahGoals) {
-            const updatedGoals = {
-              ...amanahGoals,
-              weeklyJournalCompleted: Math.min(
-                amanahGoals.weeklyJournalCompleted + 1,
-                amanahGoals.weeklyJournalGoal
-              ),
-            };
-            await updateAmanahGoals(updatedGoals);
-          }
-          
-          setShowEntryModal(false);
-          loadEntries();
+        // Create new entry - saved to Supabase with user_id for cross-device sync
+        const saved = await saveJournalEntry(
+          user.id, // This ensures entry is linked to user's profile
+          title,
+          content,
+          selectedTags,
+          selectedMood
+        );
+        
+        if (!saved) {
+          throw new Error('Failed to save entry');
         }
+        
+        console.log('✅ Journal entry saved to your profile (accessible on all devices)');
+        
+        // Update Iman Tracker - journal activity
+        if (amanahGoals) {
+          const updatedGoals = {
+            ...amanahGoals,
+            weeklyJournalCompleted: Math.min(
+              (amanahGoals.weeklyJournalCompleted || 0) + 1,
+              amanahGoals.weeklyJournalGoal || 10
+            ),
+          };
+          await updateAmanahGoals(updatedGoals);
+          console.log('✅ Updated Iman Tracker journal goal');
+        }
+        
+        // Track journal entry for achievements
+        await trackJournalEntry(user.id);
+        
+        Alert.alert('Success', 'Your journal entry has been saved to your profile');
       }
-    } catch (error) {
+      
+      setShowEntryModal(false);
+      // Reload entries from Supabase to ensure we have the latest data
+      await loadEntries();
+    } catch (error: any) {
       console.error('Error saving entry:', error);
-      Alert.alert('Error', 'Failed to save entry');
+      const errorMessage = error.message || 'Failed to save entry. Please check your connection and try again.';
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const deleteEntry = async (entryId: string) => {
+  const handleDelete = async (entryId: string) => {
     Alert.alert(
       'Delete Entry',
       'Are you sure you want to delete this journal entry? This action cannot be undone.',
@@ -205,21 +221,12 @@ export default function JournalScreen() {
           onPress: async () => {
             try {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-              const { error } = await supabase
-                .from('journal_entries')
-                .delete()
-                .eq('id', entryId);
-
-              if (error) {
-                console.error('Error deleting entry:', error);
-                Alert.alert('Error', 'Failed to delete entry');
-              } else {
-                setShowEntryModal(false);
-                loadEntries();
-              }
+              await deleteJournalEntry(entryId);
+              setShowEntryModal(false);
+              await loadEntries();
             } catch (error) {
               console.error('Error deleting entry:', error);
-              Alert.alert('Error', 'Failed to delete entry');
+              Alert.alert('Error', 'Failed to delete entry. Please try again.');
             }
           },
         },
@@ -261,15 +268,16 @@ export default function JournalScreen() {
     });
   };
 
-  const clearFilters = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSearchQuery('');
-    setFilterTag('');
-  };
-
-  const hasActiveFilters = searchQuery || filterTag;
-
-  const allTags = Array.from(new Set(entries.flatMap(e => e.tags || [])));
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateTitle}>Please Log In</Text>
+          <Text style={styles.emptyStateText}>You must be logged in to use the journal</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -293,29 +301,43 @@ export default function JournalScreen() {
             <View>
               <Text style={styles.headerTitle}>My Journal</Text>
               <Text style={styles.headerSubtitle}>
-                {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
+                {entries.length} {entries.length === 1 ? 'entry' : 'entries'} • Synced to your profile
               </Text>
             </View>
           </View>
-          <TouchableOpacity
-            style={styles.newEntryButton}
-            onPress={openNewEntry}
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={colors.gradientAccent}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.newEntryGradient}
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              style={styles.refreshButton}
+              onPress={loadEntries}
+              activeOpacity={0.7}
             >
               <IconSymbol
-                ios_icon_name="plus"
-                android_material_icon_name="add"
-                size={24}
-                color={colors.card}
+                ios_icon_name="arrow.clockwise"
+                android_material_icon_name="refresh"
+                size={20}
+                color={colors.textSecondary}
               />
-            </LinearGradient>
-          </TouchableOpacity>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.newEntryButton}
+              onPress={openNewEntry}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={colors.gradientAccent}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.newEntryGradient}
+              >
+                <IconSymbol
+                  ios_icon_name="plus"
+                  android_material_icon_name="add"
+                  size={24}
+                  color={colors.card}
+                />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Search Bar */}
@@ -344,99 +366,6 @@ export default function JournalScreen() {
             </TouchableOpacity>
           ) : null}
         </View>
-
-        {/* Filter Bar */}
-        <View style={styles.filterBar}>
-          <TouchableOpacity
-            style={[styles.filterButton, showFilters && styles.filterButtonActive]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setShowFilters(!showFilters);
-            }}
-          >
-            <IconSymbol
-              ios_icon_name="line.3.horizontal.decrease.circle"
-              android_material_icon_name="filter-list"
-              size={20}
-              color={showFilters ? colors.primary : colors.text}
-            />
-            <Text style={[styles.filterButtonText, showFilters && styles.filterButtonTextActive]}>
-              Filters
-            </Text>
-            {hasActiveFilters && <View style={styles.filterBadge} />}
-          </TouchableOpacity>
-
-          {hasActiveFilters && (
-            <TouchableOpacity
-              style={styles.clearFiltersButton}
-              onPress={clearFilters}
-            >
-              <Text style={styles.clearFiltersText}>Clear All</Text>
-            </TouchableOpacity>
-          )}
-
-          <View style={styles.filterSpacer} />
-
-          <TouchableOpacity
-            style={[styles.viewModeButton, viewMode === 'list' && styles.viewModeButtonActive]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setViewMode('list');
-            }}
-          >
-            <IconSymbol
-              ios_icon_name="list.bullet"
-              android_material_icon_name="view-list"
-              size={20}
-              color={viewMode === 'list' ? colors.primary : colors.textSecondary}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.viewModeButton, viewMode === 'calendar' && styles.viewModeButtonActive]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setViewMode('calendar');
-            }}
-          >
-            <IconSymbol
-              ios_icon_name="calendar"
-              android_material_icon_name="calendar-month"
-              size={20}
-              color={viewMode === 'calendar' ? colors.primary : colors.textSecondary}
-            />
-          </TouchableOpacity>
-        </View>
-
-        {/* Expandable Filters */}
-        {showFilters && allTags.length > 0 && (
-          <View style={styles.filtersExpanded}>
-            <Text style={styles.filterSectionTitle}>Filter by Tag</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagFilterScroll}>
-              {allTags.map((tag, index) => (
-                <React.Fragment key={index}>
-                  <TouchableOpacity
-                    style={[
-                      styles.tagFilterChip,
-                      filterTag === tag && styles.tagFilterChipActive,
-                    ]}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setFilterTag(filterTag === tag ? '' : tag);
-                    }}
-                  >
-                    <Text style={[
-                      styles.tagFilterText,
-                      filterTag === tag && styles.tagFilterTextActive,
-                    ]}>
-                      {tag}
-                    </Text>
-                  </TouchableOpacity>
-                </React.Fragment>
-              ))}
-            </ScrollView>
-          </View>
-        )}
       </View>
 
       {/* Content */}
@@ -447,6 +376,7 @@ export default function JournalScreen() {
       >
         {loading ? (
           <View style={styles.emptyState}>
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.emptyStateText}>Loading entries...</Text>
           </View>
         ) : filteredEntries.length === 0 ? (
@@ -458,15 +388,15 @@ export default function JournalScreen() {
               color={colors.textSecondary}
             />
             <Text style={styles.emptyStateTitle}>
-              {hasActiveFilters ? 'No Matching Entries' : 'Start Your Journey'}
+              {searchQuery ? 'No Matching Entries' : 'Start Your Journey'}
             </Text>
             <Text style={styles.emptyStateText}>
-              {hasActiveFilters 
-                ? 'Try adjusting your filters to see more entries'
+              {searchQuery 
+                ? 'Try adjusting your search to see more entries'
                 : 'Begin documenting your thoughts, reflections, and spiritual journey'
               }
             </Text>
-            {!hasActiveFilters && (
+            {!searchQuery && (
               <TouchableOpacity
                 style={styles.emptyStateButton}
                 onPress={openNewEntry}
@@ -490,57 +420,61 @@ export default function JournalScreen() {
             )}
           </View>
         ) : (
-          <View style={styles.entriesGrid}>
-            {filteredEntries.map((entry, index) => (
-              <React.Fragment key={index}>
-                <TouchableOpacity
-                  style={styles.entryCard}
-                  activeOpacity={0.8}
-                  onPress={() => openEditEntry(entry)}
+          <View style={styles.entriesList}>
+            {filteredEntries.map((entry) => (
+              <TouchableOpacity
+                key={entry.id}
+                style={styles.entryCard}
+                activeOpacity={0.8}
+                onPress={() => openEditEntry(entry)}
+              >
+                <LinearGradient
+                  colors={colors.gradientPrimary}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.entryCardHeader}
                 >
-                  <LinearGradient
-                    colors={colors.gradientPrimary}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.entryCardHeader}
-                  >
-                    <IconSymbol
-                      ios_icon_name="book.fill"
-                      android_material_icon_name="menu-book"
-                      size={28}
-                      color={colors.card}
-                    />
-                    <View style={styles.entryCardHeaderText}>
-                      <Text style={styles.entryCardDate}>{formatDate(entry.created_at)}</Text>
-                      <Text style={styles.entryCardTime}>{formatTime(entry.created_at)}</Text>
-                    </View>
-                  </LinearGradient>
-                  
-                  <View style={styles.entryCardBody}>
-                    <Text style={styles.entryCardTitle} numberOfLines={2}>
-                      {entry.title || 'Untitled Entry'}
-                    </Text>
-                    <Text style={styles.entryCardContent} numberOfLines={3}>
-                      {entry.content}
-                    </Text>
-                    
-                    {entry.tags && entry.tags.length > 0 && (
-                      <View style={styles.entryCardTags}>
-                        {entry.tags.slice(0, 3).map((tag, tagIndex) => (
-                          <React.Fragment key={tagIndex}>
-                            <View style={styles.entryCardTag}>
-                              <Text style={styles.entryCardTagText}>{tag}</Text>
-                            </View>
-                          </React.Fragment>
-                        ))}
-                        {entry.tags.length > 3 && (
-                          <Text style={styles.entryCardTagMore}>+{entry.tags.length - 3}</Text>
-                        )}
-                      </View>
-                    )}
+                  <IconSymbol
+                    ios_icon_name="book.fill"
+                    android_material_icon_name="menu-book"
+                    size={24}
+                    color={colors.card}
+                  />
+                  <View style={styles.entryCardHeaderText}>
+                    <Text style={styles.entryCardDate}>{formatDate(entry.created_at)}</Text>
+                    <Text style={styles.entryCardTime}>{formatTime(entry.created_at)}</Text>
                   </View>
-                </TouchableOpacity>
-              </React.Fragment>
+                  {entry.mood && (
+                    <View style={styles.moodBadge}>
+                      <Text style={styles.moodBadgeText}>
+                        {MOODS.find(m => m.value === entry.mood)?.label || entry.mood}
+                      </Text>
+                    </View>
+                  )}
+                </LinearGradient>
+                
+                <View style={styles.entryCardBody}>
+                  <Text style={styles.entryCardTitle} numberOfLines={2}>
+                    {entry.title || 'Untitled Entry'}
+                  </Text>
+                  <Text style={styles.entryCardContent} numberOfLines={4}>
+                    {entry.content}
+                  </Text>
+                  
+                  {entry.tags && entry.tags.length > 0 && (
+                    <View style={styles.entryCardTags}>
+                      {entry.tags.slice(0, 3).map((tag, tagIndex) => (
+                        <View key={tagIndex} style={styles.entryCardTag}>
+                          <Text style={styles.entryCardTagText}>{tag}</Text>
+                        </View>
+                      ))}
+                      {entry.tags.length > 3 && (
+                        <Text style={styles.entryCardTagMore}>+{entry.tags.length - 3}</Text>
+                      )}
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
             ))}
           </View>
         )}
@@ -555,71 +489,101 @@ export default function JournalScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowEntryModal(false)}
       >
-        <SafeAreaView style={styles.modalContainer} edges={['top']}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity
-              onPress={() => setShowEntryModal(false)}
-              style={styles.modalCloseButton}
-            >
-              <IconSymbol
-                ios_icon_name="xmark"
-                android_material_icon_name="close"
-                size={24}
-                color={colors.text}
-              />
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>
-              {isEditing ? 'Edit Entry' : 'New Entry'}
-            </Text>
-            {isEditing && selectedEntry && (
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalContainer}
+        >
+          <SafeAreaView style={styles.modalContainer} edges={['top']}>
+            <View style={styles.modalHeader}>
               <TouchableOpacity
-                onPress={() => deleteEntry(selectedEntry.id)}
-                style={styles.modalDeleteButton}
+                onPress={() => setShowEntryModal(false)}
+                style={styles.modalCloseButton}
               >
                 <IconSymbol
-                  ios_icon_name="trash"
-                  android_material_icon_name="delete"
+                  ios_icon_name="xmark"
+                  android_material_icon_name="close"
                   size={24}
-                  color={colors.error}
+                  color={colors.text}
                 />
               </TouchableOpacity>
-            )}
-            {!isEditing && <View style={styles.modalHeaderSpacer} />}
-          </View>
+              <Text style={styles.modalTitle}>
+                {isEditing ? 'Edit Entry' : 'New Entry'}
+              </Text>
+              {isEditing && selectedEntry ? (
+                <TouchableOpacity
+                  onPress={() => handleDelete(selectedEntry.id)}
+                  style={styles.modalDeleteButton}
+                >
+                  <IconSymbol
+                    ios_icon_name="trash"
+                    android_material_icon_name="delete"
+                    size={24}
+                    color={colors.error}
+                  />
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.modalHeaderSpacer} />
+              )}
+            </View>
 
-          <ScrollView
-            style={styles.modalScroll}
-            contentContainerStyle={styles.modalContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Title Input */}
-            <Text style={styles.formLabel}>Title (Optional)</Text>
-            <TextInput
-              style={styles.titleInput}
-              placeholder="Give your entry a title..."
-              placeholderTextColor={colors.textSecondary}
-              value={title}
-              onChangeText={setTitle}
-            />
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Title Input */}
+              <Text style={styles.formLabel}>Title (Optional)</Text>
+              <TextInput
+                style={styles.titleInput}
+                placeholder="Give your entry a title..."
+                placeholderTextColor={colors.textSecondary}
+                value={title}
+                onChangeText={setTitle}
+              />
 
-            {/* Content Input */}
-            <Text style={styles.formLabel}>Your Thoughts *</Text>
-            <TextInput
-              style={styles.contentInput}
-              placeholder="Write your thoughts, reflections, and feelings..."
-              placeholderTextColor={colors.textSecondary}
-              value={content}
-              onChangeText={setContent}
-              multiline
-              textAlignVertical="top"
-            />
+              {/* Content Input */}
+              <Text style={styles.formLabel}>Your Thoughts *</Text>
+              <TextInput
+                style={styles.contentInput}
+                placeholder="Write your thoughts, reflections, and feelings..."
+                placeholderTextColor={colors.textSecondary}
+                value={content}
+                onChangeText={setContent}
+                multiline
+                textAlignVertical="top"
+              />
 
-            {/* Tags */}
-            <Text style={styles.formLabel}>Tags (Optional)</Text>
-            <View style={styles.tagsContainer}>
-              {SUGGESTED_TAGS.map((tag, index) => (
-                <React.Fragment key={index}>
+              {/* Mood Selection */}
+              <Text style={styles.formLabel}>Mood (Optional)</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.moodScroll}>
+                {MOODS.map((mood) => (
                   <TouchableOpacity
+                    key={mood.value}
+                    style={[
+                      styles.moodChip,
+                      selectedMood === mood.value && styles.moodChipSelected,
+                    ]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setSelectedMood(selectedMood === mood.value ? '' : mood.value);
+                    }}
+                  >
+                    <Text style={[
+                      styles.moodChipText,
+                      selectedMood === mood.value && styles.moodChipTextSelected,
+                    ]}>
+                      {mood.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Tags */}
+              <Text style={styles.formLabel}>Tags (Optional)</Text>
+              <View style={styles.tagsContainer}>
+                {SUGGESTED_TAGS.map((tag) => (
+                  <TouchableOpacity
+                    key={tag}
                     style={[
                       styles.tagChip,
                       selectedTags.includes(tag) && styles.tagChipSelected,
@@ -633,41 +597,39 @@ export default function JournalScreen() {
                       {tag}
                     </Text>
                   </TouchableOpacity>
-                </React.Fragment>
-              ))}
-            </View>
+                ))}
+              </View>
 
-            {/* Custom Tag Input */}
-            <View style={styles.customTagContainer}>
-              <TextInput
-                style={styles.customTagInput}
-                placeholder="Add custom tag..."
-                placeholderTextColor={colors.textSecondary}
-                value={customTag}
-                onChangeText={setCustomTag}
-                onSubmitEditing={addCustomTag}
-              />
-              <TouchableOpacity
-                style={styles.customTagButton}
-                onPress={addCustomTag}
-              >
-                <IconSymbol
-                  ios_icon_name="plus.circle.fill"
-                  android_material_icon_name="add-circle"
-                  size={28}
-                  color={colors.primary}
+              {/* Custom Tag Input */}
+              <View style={styles.customTagContainer}>
+                <TextInput
+                  style={styles.customTagInput}
+                  placeholder="Add custom tag..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={customTag}
+                  onChangeText={setCustomTag}
+                  onSubmitEditing={addCustomTag}
                 />
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity
+                  style={styles.customTagButton}
+                  onPress={addCustomTag}
+                >
+                  <IconSymbol
+                    ios_icon_name="plus.circle.fill"
+                    android_material_icon_name="add-circle"
+                    size={28}
+                    color={colors.primary}
+                  />
+                </TouchableOpacity>
+              </View>
 
-            {/* Selected Tags Display */}
-            {selectedTags.length > 0 && (
-              <View style={styles.selectedTagsContainer}>
-                <Text style={styles.selectedTagsLabel}>Selected Tags:</Text>
-                <View style={styles.selectedTagsWrap}>
-                  {selectedTags.map((tag, index) => (
-                    <React.Fragment key={index}>
-                      <View style={styles.selectedTag}>
+              {/* Selected Tags Display */}
+              {selectedTags.length > 0 && (
+                <View style={styles.selectedTagsContainer}>
+                  <Text style={styles.selectedTagsLabel}>Selected Tags:</Text>
+                  <View style={styles.selectedTagsWrap}>
+                    {selectedTags.map((tag) => (
+                      <View key={tag} style={styles.selectedTag}>
                         <Text style={styles.selectedTagText}>{tag}</Text>
                         <TouchableOpacity onPress={() => toggleTag(tag)}>
                           <IconSymbol
@@ -678,43 +640,48 @@ export default function JournalScreen() {
                           />
                         </TouchableOpacity>
                       </View>
-                    </React.Fragment>
-                  ))}
+                    ))}
+                  </View>
                 </View>
-              </View>
-            )}
+              )}
 
-            {/* Save Button */}
-            <TouchableOpacity
-              style={styles.saveButton}
-              onPress={saveEntry}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={colors.gradientPrimary}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.saveButtonGradient}
+              {/* Save Button */}
+              <TouchableOpacity
+                style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+                onPress={handleSave}
+                activeOpacity={0.8}
+                disabled={saving}
               >
-                <IconSymbol
-                  ios_icon_name="checkmark.circle.fill"
-                  android_material_icon_name="check-circle"
-                  size={24}
-                  color={colors.card}
-                />
-                <Text style={styles.saveButtonText}>
-                  {isEditing ? 'Update Entry' : 'Save Entry'}
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={colors.gradientPrimary}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.saveButtonGradient}
+                >
+                  {saving ? (
+                    <ActivityIndicator size="small" color={colors.card} />
+                  ) : (
+                    <IconSymbol
+                      ios_icon_name="checkmark.circle.fill"
+                      android_material_icon_name="check-circle"
+                      size={24}
+                      color={colors.card}
+                    />
+                  )}
+                  <Text style={styles.saveButtonText}>
+                    {saving ? 'Saving...' : (isEditing ? 'Update Entry' : 'Save Entry')}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
 
-            {!isEditing && (
-              <Text style={styles.imanTrackerHint}>
-                💫 Journaling counts toward your mental health goals
-              </Text>
-            )}
-          </ScrollView>
-        </SafeAreaView>
+              {!isEditing && (
+                <Text style={styles.imanTrackerHint}>
+                  💫 Journaling counts toward your mental health goals in the Iman Tracker
+                </Text>
+              )}
+            </ScrollView>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -744,6 +711,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    flex: 1,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  refreshButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.highlight,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerIconGradient: {
     width: 48,
@@ -779,102 +760,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.sm,
-    marginBottom: spacing.md,
   },
   searchInput: {
     flex: 1,
     ...typography.body,
     color: colors.text,
     padding: 0,
-  },
-  filterBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.highlight,
-  },
-  filterButtonActive: {
-    backgroundColor: colors.primary + '20',
-  },
-  filterButtonText: {
-    ...typography.bodyBold,
-    fontSize: 14,
-    color: colors.text,
-  },
-  filterButtonTextActive: {
-    color: colors.primary,
-  },
-  filterBadge: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.accent,
-  },
-  clearFiltersButton: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  clearFiltersText: {
-    ...typography.bodyBold,
-    fontSize: 14,
-    color: colors.accent,
-  },
-  filterSpacer: {
-    flex: 1,
-  },
-  viewModeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.highlight,
-  },
-  viewModeButtonActive: {
-    backgroundColor: colors.primary + '20',
-  },
-  filtersExpanded: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  filterSectionTitle: {
-    ...typography.bodyBold,
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  tagFilterScroll: {
-    marginBottom: spacing.sm,
-  },
-  tagFilterChip: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.highlight,
-    marginRight: spacing.sm,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  tagFilterChipActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary + '20',
-  },
-  tagFilterText: {
-    ...typography.caption,
-    color: colors.text,
-  },
-  tagFilterTextActive: {
-    color: colors.primary,
-    fontWeight: '600',
   },
   scrollView: {
     flex: 1,
@@ -916,7 +807,7 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.card,
   },
-  entriesGrid: {
+  entriesList: {
     gap: spacing.md,
   },
   entryCard: {
@@ -943,6 +834,16 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.card,
     opacity: 0.9,
+  },
+  moodBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+  },
+  moodBadgeText: {
+    ...typography.small,
+    color: colors.card,
   },
   entryCardBody: {
     padding: spacing.lg,
@@ -1051,6 +952,30 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     minHeight: 200,
   },
+  moodScroll: {
+    marginBottom: spacing.md,
+  },
+  moodChip: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginRight: spacing.sm,
+  },
+  moodChipSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  moodChipText: {
+    ...typography.caption,
+    color: colors.text,
+  },
+  moodChipTextSelected: {
+    color: colors.card,
+    fontWeight: '600',
+  },
   tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1135,6 +1060,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...shadows.large,
   },
+  saveButtonDisabled: {
+    opacity: 0.6,
+  },
   saveButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1152,5 +1080,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
     marginTop: spacing.md,
+  },
+  infoContainer: {
+    marginTop: spacing.md,
+    gap: spacing.xs,
+  },
+  syncHint: {
+    ...typography.caption,
+    color: colors.primary,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+    fontWeight: '500',
   },
 });

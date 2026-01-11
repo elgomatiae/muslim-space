@@ -58,12 +58,16 @@ export default function TabLayout() {
           title: 'Iman',
           tabBarIcon: ({ color, focused }) => (
             <IconSymbol 
-              ios_icon_name={focused ? 'heart.fill' : 'heart'}
-              android_material_icon_name="favorite"
-              size={36}
+              ios_icon_name={focused ? 'target' : 'target'}
+              android_material_icon_name="target"
+              size={44}
               color={color} 
             />
           ),
+          tabBarLabelStyle: {
+            fontSize: 14,
+            fontWeight: '800',
+          },
         }}
       />
       <Tabs.Screen

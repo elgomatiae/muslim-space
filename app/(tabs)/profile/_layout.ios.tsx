@@ -17,6 +17,22 @@ export default function ProfileLayout() {
           title: 'Notification Settings',
         }}
       />
+      <Stack.Screen 
+        name="prayer-settings"
+        options={{
+          presentation: 'modal',
+          headerShown: true,
+          title: 'Prayer Settings',
+        }}
+      />
+      <Stack.Screen 
+        name="health-check"
+        options={{
+          presentation: 'modal',
+          headerShown: true,
+          title: 'Health Check',
+        }}
+      />
     </Stack>
   );
 }

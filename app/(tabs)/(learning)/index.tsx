@@ -1,10 +1,15 @@
 
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity, Dimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import * as Haptics from 'expo-haptics';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_WIDTH = (SCREEN_WIDTH - spacing.xl * 2 - spacing.md) / 2;
 
 interface LearningSection {
   title: string;
@@ -15,8 +20,54 @@ interface LearningSection {
   route: string;
 }
 
+interface LearningCardProps {
+  title: string;
+  description: string;
+  icon: string;
+  androidIcon: string;
+  gradient: string[];
+  onPress: () => void;
+}
+
+const LearningCard: React.FC<LearningCardProps> = ({ title, description, icon, androidIcon, gradient, onPress }) => (
+  <TouchableOpacity
+    style={styles.learningCard}
+    activeOpacity={0.85}
+    onPress={onPress}
+  >
+    <LinearGradient
+      colors={gradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.cardGradient}
+    >
+      <View style={styles.cardIconWrapper}>
+        <IconSymbol
+          ios_icon_name={icon}
+          android_material_icon_name={androidIcon}
+          size={32}
+          color={colors.card}
+        />
+      </View>
+      <View style={styles.cardContent}>
+        <Text style={styles.cardTitle}>{title}</Text>
+        <Text style={styles.cardSubtitle}>{description}</Text>
+      </View>
+      <View style={styles.cardArrow}>
+        <IconSymbol
+          ios_icon_name="chevron.right"
+          android_material_icon_name="chevron-right"
+          size={18}
+          color={colors.card}
+        />
+      </View>
+    </LinearGradient>
+  </TouchableOpacity>
+);
+
 export default function LearningScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const sections: LearningSection[] = [
     {
@@ -54,6 +105,7 @@ export default function LearningScreen() {
   ];
 
   const handleSectionPress = (section: LearningSection) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (section.route) {
       router.push(section.route as any);
     } else {
@@ -63,76 +115,73 @@ export default function LearningScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
+      {/* Modern Header with Gradient Background */}
+      <LinearGradient
+        colors={colors.gradientOcean}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.headerGradient, { paddingTop: insets.top + spacing.lg }]}
       >
-        {/* Modern Header with Gradient Background */}
-        <LinearGradient
-          colors={colors.gradientOcean}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerGradient}
-        >
+        <View style={styles.headerContent}>
           <View style={styles.headerIconContainer}>
             <IconSymbol
               ios_icon_name="book.fill"
               android_material_icon_name="menu-book"
-              size={40}
+              size={36}
               color={colors.card}
             />
           </View>
-          <Text style={styles.header}>Learning Center</Text>
-          <Text style={styles.subtitle}>Expand your Islamic knowledge</Text>
-        </LinearGradient>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.header}>Learning Center</Text>
+            <Text style={styles.subtitle}>Expand your Islamic knowledge</Text>
+          </View>
+        </View>
+      </LinearGradient>
 
-        {/* Learning Sections */}
-        <View style={styles.sectionsContainer}>
+      {/* Learning Sections Grid */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.cardsGrid}>
           {sections.map((section, index) => (
-            <React.Fragment key={index}>
-              <TouchableOpacity
-                style={styles.sectionCard}
-                activeOpacity={0.7}
-                onPress={() => handleSectionPress(section)}
-              >
-                <LinearGradient
-                  colors={section.gradientColors}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.sectionGradient}
-                >
-                  <View style={styles.sectionContent}>
-                    <View style={styles.iconContainer}>
-                      <IconSymbol
-                        ios_icon_name={section.iosIcon}
-                        android_material_icon_name={section.androidIcon}
-                        size={34}
-                        color={colors.card}
-                      />
-                    </View>
-                    <View style={styles.sectionTextContainer}>
-                      <Text style={styles.sectionTitle}>{section.title}</Text>
-                      <Text style={styles.sectionDescription}>{section.description}</Text>
-                      {section.route && (
-                        <View style={styles.newBadge}>
-                          <Text style={styles.newBadgeText}>Available</Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                  <IconSymbol
-                    ios_icon_name="chevron.right"
-                    android_material_icon_name="chevron-right"
-                    size={26}
-                    color={colors.card}
-                  />
-                </LinearGradient>
-              </TouchableOpacity>
-            </React.Fragment>
+            <LearningCard
+              key={index}
+              title={section.title}
+              description={section.description}
+              icon={section.iosIcon}
+              androidIcon={section.androidIcon}
+              gradient={section.gradientColors}
+              onPress={() => handleSectionPress(section)}
+            />
           ))}
         </View>
 
+        {/* Inspirational Quote Card */}
+        <View style={styles.quoteCard}>
+          <LinearGradient
+            colors={colors.gradientSecondary}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.quoteGradient}
+          >
+            <View style={styles.quoteIconWrapper}>
+              <IconSymbol
+                ios_icon_name="quote.opening"
+                android_material_icon_name="format-quote"
+                size={28}
+                color={colors.card}
+              />
+            </View>
+            <Text style={styles.quoteText}>
+              &quot;Seek knowledge from the cradle to the grave.&quot;
+            </Text>
+            <Text style={styles.quoteSource}>Prophet Muhammad (PBUH)</Text>
+          </LinearGradient>
+        </View>
+
+        {/* Bottom Padding for Tab Bar */}
         <View style={styles.bottomPadding} />
       </ScrollView>
     </View>
@@ -144,97 +193,135 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    paddingTop: Platform.OS === 'android' ? 56 : 20,
-  },
   headerGradient: {
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.xxxl,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xxxl,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xl,
+    ...shadows.emphasis,
+  },
+  headerContent: {
+    flexDirection: 'row',
     alignItems: 'center',
-    ...shadows.large,
+    gap: spacing.md,
   },
   headerIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.lg,
+  },
+  headerTextContainer: {
+    flex: 1,
   },
   header: {
-    ...typography.h1,
+    ...typography.h2,
     color: colors.card,
-    marginBottom: spacing.sm,
-    textAlign: 'center',
+    marginBottom: spacing.xs,
   },
   subtitle: {
     ...typography.body,
+    fontSize: 14,
     color: colors.card,
-    opacity: 0.95,
-    textAlign: 'center',
+    opacity: 0.9,
   },
-  sectionsContainer: {
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
     paddingHorizontal: spacing.xl,
-    marginBottom: spacing.xxl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
   },
-  sectionCard: {
-    marginBottom: spacing.lg,
+  cardsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  learningCard: {
+    width: CARD_WIDTH,
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
     ...shadows.medium,
   },
-  sectionGradient: {
-    padding: spacing.xl,
-    flexDirection: 'row',
-    alignItems: 'center',
+  cardGradient: {
+    padding: spacing.lg,
+    minHeight: 140,
+    justifyContent: 'space-between',
   },
-  sectionContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  iconContainer: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+  cardIconWrapper: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.lg,
+    marginBottom: spacing.sm,
   },
-  sectionTextContainer: {
+  cardContent: {
     flex: 1,
-  },
-  sectionTitle: {
-    ...typography.h4,
-    color: colors.card,
+    gap: spacing.xs,
     marginBottom: spacing.sm,
   },
-  sectionDescription: {
+  cardTitle: {
+    ...typography.bodyBold,
+    fontSize: 16,
+    color: colors.card,
+    marginBottom: spacing.xs,
+  },
+  cardSubtitle: {
     ...typography.caption,
+    fontSize: 12,
     color: colors.card,
-    opacity: 0.95,
+    opacity: 0.9,
+    lineHeight: 16,
+  },
+  cardArrow: {
+    alignSelf: 'flex-end',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quoteCard: {
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    marginTop: spacing.md,
+    ...shadows.emphasis,
+  },
+  quoteGradient: {
+    padding: spacing.xl,
+    alignItems: 'center',
+  },
+  quoteIconWrapper: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  quoteText: {
+    ...typography.h4,
+    fontSize: 18,
+    color: colors.card,
+    textAlign: 'center',
     marginBottom: spacing.sm,
-    lineHeight: 20,
+    lineHeight: 26,
+    fontStyle: 'italic',
   },
-  newBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
-  },
-  newBadgeText: {
-    ...typography.smallBold,
+  quoteSource: {
+    ...typography.body,
+    fontSize: 14,
     color: colors.card,
+    opacity: 0.85,
+    textAlign: 'center',
   },
   bottomPadding: {
-    height: 120,
+    height: 100,
   },
 });

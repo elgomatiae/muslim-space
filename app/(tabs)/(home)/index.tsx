@@ -25,13 +25,9 @@ import {
 import { schedulePrayerNotifications } from "@/services/PrayerNotificationService";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { 
-  DailyVerse, 
-  DailyHadith, 
-  getOrAssignDailyContent,
-  getRandomDailyVerse,
-  getRandomDailyHadith,
-} from '@/services/ContentService';
+import { getDailyVerse, getDailyHadith } from '@/services/DailyContentService';
+import DailyVerseWidget from '@/components/DailyVerseWidget';
+import DailyHadithWidget from '@/components/DailyHadithWidget';
 import AchievementsHomeWidget from '@/components/iman/AchievementsHomeWidget';
 import { useAchievementCelebration } from '@/contexts/AchievementCelebrationContext';
 import { checkAndUnlockAchievements } from '@/utils/achievementService';
@@ -88,15 +84,44 @@ export default function HomeScreen() {
     checkLocationPermission();
   }, []);
 
+  // Guard to prevent multiple simultaneous location requests
+  const locationRequestInProgress = useRef(false);
+
   // Load prayer times
   const loadPrayerTimes = async () => {
+    // Prevent concurrent requests
+    if (locationRequestInProgress.current) {
+      return;
+    }
+
     try {
+      locationRequestInProgress.current = true;
       setPrayerTimesLoading(true);
-      console.log('🕌 HomeScreen: Loading prayer times...');
       
-      // Get location
-      const location = await getCurrentLocation(true);
-      console.log('📍 Location obtained:', location.city);
+      // Get location with error handling
+      let location: UserLocation;
+      try {
+        location = await getCurrentLocation(true);
+      } catch (locationError: any) {
+        // If location fails, try to use cached location or show manual input
+        const { getCachedLocation } = await import('@/services/LocationService');
+        const cached = await getCachedLocation();
+        if (cached) {
+          location = cached;
+        } else {
+          // No cached location available - show error but don't crash
+          setLocationInfo({
+            location: null,
+            locationName: null,
+            accuracy: null,
+            source: 'Permission denied',
+            confidence: 0,
+          });
+          setPrayerTimesLoading(false);
+          locationRequestInProgress.current = false;
+          return;
+        }
+      }
       
       // Get prayer times
       const prayerTimesData = await getTodayPrayerTimes(
@@ -145,36 +170,47 @@ export default function HomeScreen() {
 
       // Schedule notifications if permissions are granted
       if (notificationPermissionGranted && locationPermissionGranted && settings.prayerReminders) {
-        console.log('🔔 Scheduling prayer notifications from home screen...');
-        await schedulePrayerNotifications(prayerTimesData);
+        schedulePrayerNotifications(prayerTimesData).catch(err => {
+          // Non-critical, log but don't block
+        });
       }
-    } catch (error) {
-      console.error('❌ HomeScreen: Error loading prayer times:', error);
-      Alert.alert(
-        'Prayer Times',
-        'Unable to calculate prayer times. Please enable location permissions for accurate times.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Enable Location', 
-            onPress: async () => {
-              await requestLocationPermission();
-              const { hasLocationPermission } = await import('@/services/LocationService');
-              setLocationPermissionGranted(await hasLocationPermission());
-              await loadPrayerTimes();
-            }
-          }
-        ]
-      );
+    } catch (error: any) {
+      // Log error but don't show alert on every failure (prevent spam)
+      if (error?.message?.includes('permission')) {
+        // Only show alert once for permission errors
+        if (!locationPermissionGranted) {
+          Alert.alert(
+            'Location Permission',
+            'Location permission is required for accurate prayer times. You can enable it in settings or enter your city manually.',
+            [
+              { text: 'Later', style: 'cancel' },
+              { 
+                text: 'Settings', 
+                onPress: async () => {
+                  const { requestLocationPermission } = await import('@/services/LocationService');
+                  await requestLocationPermission();
+                  const { hasLocationPermission } = await import('@/services/LocationService');
+                  setLocationPermissionGranted(await hasLocationPermission());
+                }
+              }
+            ]
+          );
+        }
+      }
     } finally {
       setPrayerTimesLoading(false);
+      locationRequestInProgress.current = false;
     }
   };
 
-  // Load prayer times on mount
+  // Load prayer times on mount (with guard to prevent multiple calls)
+  const loadPrayerTimesRef = useRef(false);
   useEffect(() => {
-    loadPrayerTimes();
-  }, []);
+    if (!loadPrayerTimesRef.current && user?.id) {
+      loadPrayerTimesRef.current = true;
+      loadPrayerTimes();
+    }
+  }, [user?.id]);
 
   // Sync prayers with ibadahGoals from context
   useEffect(() => {
@@ -204,40 +240,30 @@ export default function HomeScreen() {
   // Load daily content
   useEffect(() => {
     loadDailyContent();
-  }, [user]);
+  }, []);
 
   const loadDailyContent = async () => {
-    console.log('📖 HomeScreen: Loading daily content...');
-    setLoading(true);
-    
+    setContentLoading(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
-      
-      if (user) {
-        const { verse, hadith } = await getOrAssignDailyContent(user.id, today);
-        if (verse) setDailyVerse(verse);
-        if (hadith) setDailyHadith(hadith);
-      } else {
-        const [verse, hadith] = await Promise.all([
-          getRandomDailyVerse(today),
-          getRandomDailyHadith(today),
-        ]);
-        if (verse) setDailyVerse(verse);
-        if (hadith) setDailyHadith(hadith);
-      }
+      const [verse, hadith] = await Promise.all([
+        getDailyVerse(),
+        getDailyHadith(),
+      ]);
+      setDailyVerse(verse);
+      setDailyHadith(hadith);
     } catch (error) {
-      console.error('❌ Error loading daily content:', error);
+      console.error('Error loading daily content:', error);
     } finally {
-      setLoading(false);
+      setContentLoading(false);
     }
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
     await Promise.all([
-      refreshScores(), 
-      loadDailyContent(), 
-      loadPrayerTimes()
+      refreshScores(),
+      loadDailyContent(),
+      loadPrayerTimes(),
     ]);
     setRefreshing(false);
   };
@@ -540,7 +566,7 @@ export default function HomeScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
       >
-        {/* Header with Gradient */}
+        {/* Header with Enhanced Gradient */}
         <LinearGradient
           colors={colors.gradientPrimary as unknown as readonly [string, string, ...string[]]}
           start={{ x: 0, y: 0 }}
@@ -704,41 +730,8 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Daily Quran Verse Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionIconContainer}>
-              <IconSymbol
-                ios_icon_name="book.closed.fill"
-                android_material_icon_name="book"
-                size={18}
-                color={colors.primary}
-              />
-            </View>
-            <Text style={styles.sectionTitle}>Daily Verse</Text>
-          </View>
-          {loading ? (
-            <View style={styles.loadingCard}>
-              <Text style={styles.loadingText}>Loading verse...</Text>
-            </View>
-          ) : dailyVerse ? (
-            <LinearGradient
-              colors={colors.gradientPrimary as unknown as readonly [string, string, ...string[]]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.verseCard}
-            >
-              <Text style={styles.verseArabic}>{dailyVerse.arabic_text}</Text>
-              <View style={styles.verseDivider} />
-              <Text style={styles.verseText}>{dailyVerse.translation}</Text>
-              <Text style={styles.verseReference}>{dailyVerse.reference}</Text>
-            </LinearGradient>
-          ) : (
-            <View style={styles.contentCard}>
-              <Text style={styles.contentText}>No verse available today. Pull down to refresh.</Text>
-            </View>
-          )}
-        </View>
+        {/* Daily Quran Verse Widget */}
+        <DailyVerseWidget verse={dailyVerse} loading={contentLoading} />
 
         {/* Iman Score Rings */}
         <View style={styles.section}>
@@ -775,7 +768,7 @@ export default function HomeScreen() {
             <Text style={styles.sectionTitle}>Prayer Tracker</Text>
           </View>
           
-          {/* Progress Summary Card */}
+          {/* Progress Summary Card with Enhanced Gradient */}
           <LinearGradient
             colors={colors.gradientPrimary as unknown as readonly [string, string, ...string[]]}
             start={{ x: 0, y: 0 }}
@@ -859,47 +852,9 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Daily Hadith Section */}
+        {/* Daily Hadith Widget */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionIconContainer}>
-              <IconSymbol
-                ios_icon_name="book.fill"
-                android_material_icon_name="menu-book"
-                size={18}
-                color={colors.accent}
-              />
-            </View>
-            <Text style={styles.sectionTitle}>Daily Hadith</Text>
-          </View>
-          {loading ? (
-            <View style={styles.loadingCard}>
-              <Text style={styles.loadingText}>Loading hadith...</Text>
-            </View>
-          ) : dailyHadith ? (
-            <View style={styles.contentCard}>
-              <View style={styles.quoteIconContainer}>
-                <IconSymbol
-                  ios_icon_name="quote.opening"
-                  android_material_icon_name="format-quote"
-                  size={24}
-                  color={colors.accent}
-                />
-              </View>
-              {dailyHadith.arabic_text && (
-                <Text style={styles.hadithArabic}>{dailyHadith.arabic_text}</Text>
-              )}
-              <Text style={styles.contentText}>{dailyHadith.translation}</Text>
-              <View style={styles.sourceContainer}>
-                <View style={styles.sourceDivider} />
-                <Text style={styles.contentSource}>{dailyHadith.source}</Text>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.contentCard}>
-              <Text style={styles.contentText}>No hadith available today. Pull down to refresh.</Text>
-            </View>
-          )}
+          <DailyHadithWidget hadith={dailyHadith} loading={contentLoading} />
         </View>
 
         <View style={styles.bottomPadding} />
@@ -918,14 +873,15 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingTop: Platform.OS === 'android' ? 48 : 56,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xxl,
   },
   headerGradient: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
     marginBottom: spacing.xl,
-    ...shadows.colored,
+    ...shadows.emphasis,
+    overflow: 'hidden',
   },
   headerContent: {
     flexDirection: 'row',
@@ -933,12 +889,14 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   headerIconContainer: {
-    width: 48,
-    height: 48,
+    width: 56,
+    height: 56,
     borderRadius: borderRadius.round,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   headerTextSection: {
     flex: 1,
@@ -963,10 +921,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   sectionIconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.highlight,
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.highlightPurple,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -977,9 +935,9 @@ const styles = StyleSheet.create({
   },
   imanScoreCard: {
     backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    ...shadows.medium,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    ...shadows.card,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -1035,11 +993,12 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   summaryCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
     marginBottom: spacing.md,
     alignItems: 'center',
-    ...shadows.colored,
+    ...shadows.emphasis,
+    overflow: 'hidden',
   },
   progressCircleContainer: {
     position: 'relative',
@@ -1074,12 +1033,12 @@ const styles = StyleSheet.create({
   },
   prayerCard: {
     backgroundColor: colors.card,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    ...shadows.medium,
+    ...shadows.card,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -1148,9 +1107,9 @@ const styles = StyleSheet.create({
   },
   contentCard: {
     backgroundColor: colors.card,
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
-    ...shadows.medium,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    ...shadows.card,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -1204,9 +1163,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   verseCard: {
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
-    ...shadows.colored,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    ...shadows.emphasis,
+    overflow: 'hidden',
   },
   verseArabic: {
     fontSize: 20,
@@ -1240,12 +1200,13 @@ const styles = StyleSheet.create({
   },
   nextPrayerCard: {
     backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
     marginBottom: spacing.xl,
     ...shadows.medium,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
+    overflow: 'hidden',
   },
   nextPrayerHeader: {
     flexDirection: 'row',

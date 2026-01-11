@@ -105,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, []); // Empty deps - subscription handles user state internally
 
   const signOut = async () => {
     try {

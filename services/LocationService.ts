@@ -99,8 +99,13 @@ async function cacheLocation(location: UserLocation): Promise<void> {
   }
 }
 
+// Track permission denial to prevent infinite retries
+let permissionDeniedTimestamp: number | null = null;
+const PERMISSION_DENIED_COOLDOWN = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Get current user location with high accuracy
+ * Includes guards to prevent infinite retry loops
  */
 export async function getCurrentLocation(useCache: boolean = true): Promise<UserLocation> {
   try {
@@ -110,47 +115,67 @@ export async function getCurrentLocation(useCache: boolean = true): Promise<User
       if (cached) return cached;
     }
 
+    // Check if permission was recently denied (prevent retry storms)
+    const now = Date.now();
+    if (permissionDeniedTimestamp && (now - permissionDeniedTimestamp) < PERMISSION_DENIED_COOLDOWN) {
+      const cached = await getCachedLocation();
+      if (cached) {
+        return cached;
+      }
+      throw new Error('Location permission denied. Please enable location in settings.');
+    }
+
     // Check permission and request if not granted
     let hasPermission = await hasLocationPermission();
     if (!hasPermission) {
-      console.log('Location permission not granted, requesting...');
       hasPermission = await requestLocationPermission();
       if (!hasPermission) {
+        // Record denial timestamp
+        permissionDeniedTimestamp = now;
+        // Try cached location as fallback
+        const cached = await getCachedLocation();
+        if (cached) {
+          return cached;
+        }
         throw new Error('Location permission not granted');
       }
     }
 
-    console.log('Fetching current location...');
+    // Reset denial timestamp on success
+    permissionDeniedTimestamp = null;
 
-    // Get current position with high accuracy
-    const position = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
-    });
+    // Get current position with high accuracy (with timeout)
+    const position = await Promise.race([
+      Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      }),
+      new Promise<Location.LocationObject>((_, reject) =>
+        setTimeout(() => reject(new Error('Location request timeout')), 15000)
+      ),
+    ]);
 
-    console.log('Location obtained:', {
-      lat: position.coords.latitude,
-      lon: position.coords.longitude,
-      accuracy: position.coords.accuracy,
-    });
-
-    // Reverse geocode to get city name
+    // Reverse geocode to get city name (with timeout)
     let city: string | undefined;
     let country: string | undefined;
 
     try {
-      const addresses = await Location.reverseGeocodeAsync({
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-      });
+      const addresses = await Promise.race([
+        Location.reverseGeocodeAsync({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        }),
+        new Promise<Location.LocationGeocodedAddress[]>((_, reject) =>
+          setTimeout(() => reject(new Error('Geocoding timeout')), 10000)
+        ),
+      ]);
 
       if (addresses && addresses.length > 0) {
         const address = addresses[0];
         city = address.city || address.subregion || address.region;
         country = address.country;
-        console.log('Reverse geocoded:', { city, country });
       }
     } catch (geocodeError) {
-      console.warn('Reverse geocoding failed:', geocodeError);
+      // Non-critical, continue without city name
     }
 
     const location: UserLocation = {
@@ -167,12 +192,9 @@ export async function getCurrentLocation(useCache: boolean = true): Promise<User
 
     return location;
   } catch (error) {
-    console.error('Error getting current location:', error);
-    
     // Try to return cached location as fallback
     const cached = await getCachedLocation();
     if (cached) {
-      console.log('Returning cached location as fallback');
       return cached;
     }
 

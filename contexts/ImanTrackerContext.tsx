@@ -85,18 +85,11 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(true);
       setError(null);
       
-      console.log(`📥 Loading all goals for user: ${user.id}...`);
-      
       const [ibadah, ilm, amanah] = await Promise.all([
         loadIbadahGoals(user.id),
         loadIlmGoals(user.id),
         loadAmanahGoals(user.id)
       ]);
-      
-      console.log('✅ Goals loaded successfully');
-      console.log('   Ibadah goals:', ibadah);
-      console.log('   Ilm goals:', ilm);
-      console.log('   Amanah goals:', amanah);
       
       setIbadahGoals(ibadah);
       setIlmGoals(ilm);
@@ -104,12 +97,11 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       
       await refreshScores();
     } catch (err) {
-      console.error('❌ Error loading goals:', err);
       setError('Failed to load goals. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id]); // refreshScores is stable, no need to include
 
   const updateIbadahGoals = useCallback(async (goals: Partial<IbadahGoals>) => {
     if (!user?.id) {
@@ -209,28 +201,20 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
 
   const refreshScores = useCallback(async () => {
     if (!user?.id) {
-      console.log('ℹ️ No user logged in, skipping score refresh');
       return;
     }
 
     try {
-      console.log(`🔄 Refreshing scores for user: ${user.id}...`);
-      
       const [overall, sections] = await Promise.all([
         getOverallImanScore(user.id),
         getCurrentSectionScores(user.id)
       ]);
       
-      console.log('✅ Scores refreshed:');
-      console.log('   Overall:', overall);
-      console.log('   Sections:', sections);
-      
       setImanScore(overall);
       setSectionScores(sections);
     } catch (err) {
-      console.error('❌ Error refreshing scores:', err);
-      // Don't set error here as this is a background operation
-      // Just log it and continue
+      // Silent failure for background operation
+      // Error already logged in score calculator
     }
   }, [user?.id]);
 

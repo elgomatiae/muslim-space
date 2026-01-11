@@ -9,9 +9,11 @@ import { supabase } from '@/lib/supabase';
 
 interface QuizCategory {
   id: string;
-  name: string;
+  quiz_id: string;
+  title: string;
   description: string;
-  icon_name: string;
+  difficulty?: string;
+  color?: string;
   order_index: number;
 }
 
@@ -35,19 +37,25 @@ export default function QuizzesScreen() {
   const loadCategories = async () => {
     try {
       const { data, error } = await supabase
-        .from('quiz_categories')
-        .select('*')
-        .eq('is_active', true)
-        .order('order_index', { ascending: true });
+        .from('quizzes')
+        .select('id, quiz_id, title, description, difficulty, color, order_index')
+        .order('order_index', { ascending: true })
+        .limit(50); // Pagination limit
 
       if (error) {
-        console.error('Error loading quiz categories:', error);
+        console.error('Error loading quizzes:', error);
+        // If table doesn't exist, use empty array (will show empty state)
+        if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+          setCategories([]);
+          setLoading(false);
+          return;
+        }
         return;
       }
 
       setCategories(data || []);
     } catch (error) {
-      console.error('Error loading quiz categories:', error);
+      console.error('Error loading quizzes:', error);
     } finally {
       setLoading(false);
     }
@@ -58,27 +66,53 @@ export default function QuizzesScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
+      // First try to select with quiz_id (new schema)
+      let data, error;
+      let query = supabase
         .from('user_quiz_attempts')
-        .select('category_id, score, percentage')
+        .select('quiz_id, category_id, score, percentage')
         .eq('user_id', user.id);
+
+      const result = await query;
+      data = result.data;
+      error = result.error;
+
+      // If quiz_id column doesn't exist, fall back to category_id only
+      if (error && (error.code === '42703' || error.message?.includes('does not exist'))) {
+        const fallbackResult = await supabase
+          .from('user_quiz_attempts')
+          .select('category_id, score, percentage')
+          .eq('user_id', user.id);
+        
+        data = fallbackResult.data;
+        error = fallbackResult.error;
+      }
 
       if (error) {
         console.error('Error loading quiz stats:', error);
+        // If table doesn't exist, use empty stats
+        if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+          setStats({});
+          return;
+        }
         return;
       }
 
       const statsMap: Record<string, QuizStats> = {};
       data?.forEach((attempt) => {
-        if (!statsMap[attempt.category_id]) {
-          statsMap[attempt.category_id] = {
+        // Use quiz_id if available, fallback to category_id for backwards compatibility
+        const statKey = attempt.quiz_id || attempt.category_id;
+        if (!statKey) return;
+        
+        if (!statsMap[statKey]) {
+          statsMap[statKey] = {
             totalAttempts: 0,
             averageScore: 0,
             bestScore: 0,
           };
         }
         
-        const stat = statsMap[attempt.category_id];
+        const stat = statsMap[statKey];
         stat.totalAttempts++;
         stat.averageScore = ((stat.averageScore * (stat.totalAttempts - 1)) + attempt.percentage) / stat.totalAttempts;
         stat.bestScore = Math.max(stat.bestScore, attempt.percentage);
@@ -93,7 +127,7 @@ export default function QuizzesScreen() {
   const handleCategoryPress = (category: QuizCategory) => {
     router.push({
       pathname: '/(tabs)/(learning)/quiz-take',
-      params: { categoryId: category.id, categoryName: category.name },
+      params: { quizId: category.quiz_id, categoryName: category.title },
     });
   };
 
@@ -109,16 +143,16 @@ export default function QuizzesScreen() {
     return gradients[index % gradients.length];
   };
 
-  const getIconForCategory = (iconName: string): { ios: string; android: string } => {
+  const getIconForQuizId = (quizId: string): { ios: string; android: string } => {
     const iconMap: Record<string, { ios: string; android: string }> = {
-      'book.fill': { ios: 'book.fill', android: 'menu-book' },
-      'text.quote': { ios: 'text.quote', android: 'format-quote' },
-      'scale.3d': { ios: 'scale.3d', android: 'balance' },
-      'clock.fill': { ios: 'clock.fill', android: 'history' },
-      'person.3.fill': { ios: 'person.3.fill', android: 'groups' },
-      'heart.fill': { ios: 'heart.fill', android: 'favorite' },
+      'quran': { ios: 'book.fill', android: 'menu-book' },
+      'seerah': { ios: 'person.circle.fill', android: 'account-circle' },
+      'history': { ios: 'clock.fill', android: 'history' },
+      'pillars': { ios: 'star.fill', android: 'star' },
+      'fiqh': { ios: 'scale.3d', android: 'balance' },
+      'prophets': { ios: 'person.3.fill', android: 'groups' },
     };
-    return iconMap[iconName] || { ios: 'questionmark.circle.fill', android: 'quiz' };
+    return iconMap[quizId] || { ios: 'questionmark.circle.fill', android: 'quiz' };
   };
 
   if (loading) {
@@ -163,8 +197,8 @@ export default function QuizzesScreen() {
         {/* Quiz Categories */}
         <View style={styles.categoriesContainer}>
           {categories.map((category, index) => {
-            const categoryStats = stats[category.id];
-            const icons = getIconForCategory(category.icon_name);
+            const categoryStats = stats[category.quiz_id] || stats[category.id];
+            const icons = getIconForQuizId(category.quiz_id);
             
             return (
               <React.Fragment key={category.id}>
@@ -188,9 +222,9 @@ export default function QuizzesScreen() {
                           color={colors.card}
                         />
                       </View>
-                      <View style={styles.categoryTextContainer}>
-                        <Text style={styles.categoryTitle}>{category.name}</Text>
-                        <Text style={styles.categoryDescription}>{category.description}</Text>
+                    <View style={styles.categoryTextContainer}>
+                      <Text style={styles.categoryTitle}>{category.title}</Text>
+                      <Text style={styles.categoryDescription}>{category.description}</Text>
                         
                         {categoryStats && (
                           <View style={styles.statsContainer}>
@@ -315,9 +349,11 @@ const styles = StyleSheet.create({
   },
   categoryCard: {
     marginBottom: spacing.lg,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     overflow: 'hidden',
-    ...shadows.medium,
+    ...shadows.card,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   categoryGradient: {
     padding: spacing.xl,

@@ -88,84 +88,8 @@ async function saveActivityLog(log: ActivityLog): Promise<void> {
 // LEGACY COMPATIBILITY FUNCTIONS
 // ============================================================================
 
-/**
- * @deprecated The decay logic is now integrated into imanScoreCalculator.ts
- */
-export async function updateScoresWithDecay(
-  currentGoals: {
-    ibadah: IbadahGoals;
-    ilm: IlmGoals;
-    amanah: AmanahGoals;
-  },
-  freshScores: SectionScores
-): Promise<SectionScores> {
-  // Decay is now handled automatically in getCurrentSectionScores()
-  return freshScores;
-}
+// Deprecated functions removed - decay logic is now integrated into imanScoreCalculator.ts
 
-/**
- * @deprecated The decay logic is now integrated into imanScoreCalculator.ts
- */
-export async function applyDecayToScores(): Promise<SectionScores> {
-  // Decay is now handled automatically in getCurrentSectionScores()
-  return { ibadah: 0, ilm: 0, amanah: 0 };
-}
-
-/**
- * Reset momentum state (for testing or manual reset)
- */
-export async function resetDecayState(): Promise<void> {
-  try {
-    const now = Date.now();
-    const state = {
-      lastActivityTimestamp: now,
-      consecutiveDaysActive: 0,
-      historicalAverage: 0,
-      momentumMultiplier: 1.0,
-      lastScores: { ibadah: 0, ilm: 0, amanah: 0 },
-    };
-    
-    await AsyncStorage.setItem('imanMomentumState', JSON.stringify(state));
-    console.log('✅ Momentum state reset');
-  } catch (error) {
-    console.log('❌ Error resetting momentum state:', error);
-  }
-}
-
-/**
- * Get momentum diagnostics (for debugging)
- */
-export async function getDecayDiagnostics(): Promise<{
-  lastActivityTimestamp: number;
-  hoursSinceActivity: number;
-  consecutiveDaysActive: number;
-  momentumMultiplier: number;
-  historicalAverage: number;
-}> {
-  try {
-    const saved = await AsyncStorage.getItem('imanMomentumState');
-    if (saved) {
-      const state = JSON.parse(saved);
-      const now = Date.now();
-      const hoursSinceActivity = (now - state.lastActivityTimestamp) / (1000 * 60 * 60);
-      
-      return {
-        lastActivityTimestamp: state.lastActivityTimestamp,
-        hoursSinceActivity,
-        consecutiveDaysActive: state.consecutiveDaysActive,
-        momentumMultiplier: state.momentumMultiplier,
-        historicalAverage: state.historicalAverage,
-      };
-    }
-  } catch (error) {
-    console.log('Error getting momentum diagnostics:', error);
-  }
-  
-  return {
-    lastActivityTimestamp: Date.now(),
-    hoursSinceActivity: 0,
-    consecutiveDaysActive: 0,
-    momentumMultiplier: 1.0,
-    historicalAverage: 0,
-  };
-}
+// Utility functions for debugging/testing (not currently used but kept for future use):
+// - resetDecayState() - Reset momentum state
+// - getDecayDiagnostics() - Get momentum diagnostics

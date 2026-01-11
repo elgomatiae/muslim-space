@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, ScrollView } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
@@ -11,16 +11,6 @@ import { router } from "expo-router";
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = (SCREEN_WIDTH - spacing.lg * 3) / 2;
-
-// Header animation constants
-const HEADER_MAX_HEIGHT = 280;
-const HEADER_MIN_HEIGHT = 80;
-const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
-
-// Tab animation constants
-const TAB_MAX_HEIGHT = 70;
-const TAB_MIN_HEIGHT = 0;
-const TAB_SCROLL_DISTANCE = 100;
 
 type WellnessTab = 'mental' | 'physical';
 
@@ -33,84 +23,74 @@ interface WellnessCardProps {
   onPress: () => void;
 }
 
-const WellnessCard: React.FC<WellnessCardProps> = ({ title, subtitle, icon, androidIcon, gradient, onPress }) => (
-  <TouchableOpacity
-    style={styles.wellnessCard}
-    activeOpacity={0.85}
-    onPress={onPress}
-  >
-    <LinearGradient
-      colors={gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.cardGradient}
-    >
-      <View style={styles.cardIconWrapper}>
-        <IconSymbol
-          ios_icon_name={icon}
-          android_material_icon_name={androidIcon}
-          size={32}
-          color={colors.card}
-        />
-      </View>
-      <View style={styles.cardContent}>
-        <Text style={styles.cardTitle}>{title}</Text>
-        <Text style={styles.cardSubtitle}>{subtitle}</Text>
-      </View>
-      <View style={styles.cardArrow}>
-        <IconSymbol
-          ios_icon_name="chevron.right"
-          android_material_icon_name="chevron-right"
-          size={20}
-          color={colors.card}
-        />
-      </View>
-    </LinearGradient>
-  </TouchableOpacity>
-);
+const WellnessCard: React.FC<WellnessCardProps> = ({ title, subtitle, icon, androidIcon, gradient, onPress }) => {
+  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity
+        style={styles.wellnessCard}
+        activeOpacity={1}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+      >
+        <LinearGradient
+          colors={gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.cardGradient}
+        >
+          <View style={styles.cardTopSection}>
+            <View style={styles.cardIconWrapper}>
+              <IconSymbol
+                ios_icon_name={icon}
+                android_material_icon_name={androidIcon}
+                size={38}
+                color={colors.card}
+              />
+            </View>
+            <View style={styles.cardArrow}>
+              <IconSymbol
+                ios_icon_name="arrow.right.circle.fill"
+                android_material_icon_name="arrow-forward-circle"
+                size={20}
+                color={colors.card}
+              />
+            </View>
+          </View>
+          <View style={styles.cardContent}>
+            <Text style={styles.cardTitle}>{title}</Text>
+            <Text style={styles.cardSubtitle}>{subtitle}</Text>
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
 
 export default function WellnessScreen() {
-  const insets = useSafeAreaInsets();
   const { amanahGoals, sectionScores } = useImanTracker();
   const [activeTab, setActiveTab] = useState<WellnessTab>('mental');
-
-  // Animation values
-  const scrollY = useRef(new Animated.Value(0)).current;
-
-  // Header height animation
-  const headerHeight = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
-    extrapolate: 'clamp',
-  });
-
-  // Header content opacity
-  const headerContentOpacity = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE / 2, HEADER_SCROLL_DISTANCE],
-    outputRange: [1, 0.5, 0],
-    extrapolate: 'clamp',
-  });
-
-  // Header title scale for collapsed state
-  const headerTitleScale = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [1, 0.7],
-    extrapolate: 'clamp',
-  });
-
-  // Tab switcher height animation
-  const tabHeight = scrollY.interpolate({
-    inputRange: [0, TAB_SCROLL_DISTANCE],
-    outputRange: [TAB_MAX_HEIGHT, TAB_MIN_HEIGHT],
-    extrapolate: 'clamp',
-  });
-
-  // Tab switcher opacity
-  const tabOpacity = scrollY.interpolate({
-    inputRange: [0, TAB_SCROLL_DISTANCE / 2, TAB_SCROLL_DISTANCE],
-    outputRange: [1, 0.5, 0],
-    extrapolate: 'clamp',
-  });
+  const tabScaleAnim = useRef(new Animated.Value(1)).current;
 
   // Calculate Amanah completion percentage
   const calculateAmanahCompletion = () => {
@@ -156,7 +136,24 @@ export default function WellnessScreen() {
   const amanahScore = sectionScores.amanah || 0;
 
   const handleTabChange = (tab: WellnessTab) => {
+    if (tab === activeTab) return;
+    
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    // Smooth scale animation on tab change
+    Animated.sequence([
+      Animated.timing(tabScaleAnim, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(tabScaleAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    
     setActiveTab(tab);
   };
 
@@ -241,74 +238,74 @@ export default function WellnessScreen() {
   const activeCards = activeTab === 'mental' ? mentalHealthCards : physicalHealthCards;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Collapsing Header Section */}
-      <Animated.View 
-        style={[
-          styles.headerSection,
-          { height: headerHeight }
-        ]}
-      >
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Fixed Header Section */}
+      <View style={styles.headerSection}>
         <LinearGradient
           colors={colors.gradientOcean}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
         >
-          <Animated.View 
-            style={[
-              styles.headerContent,
-              { opacity: headerContentOpacity }
-            ]}
-          >
-            <Animated.View 
-              style={[
-                styles.headerTop,
-                { transform: [{ scale: headerTitleScale }] }
-              ]}
-            >
+          <View style={styles.headerContent}>
+            <View style={styles.headerTop}>
               <View style={styles.headerIconContainer}>
-                <IconSymbol
-                  ios_icon_name="heart.circle.fill"
-                  android_material_icon_name="favorite"
-                  size={40}
-                  color={colors.card}
-                />
+                <LinearGradient
+                  colors={['rgba(255, 255, 255, 0.3)', 'rgba(255, 255, 255, 0.1)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.headerIconGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="heart.circle.fill"
+                    android_material_icon_name="favorite"
+                    size={40}
+                    color={colors.card}
+                  />
+                </LinearGradient>
               </View>
               <View style={styles.headerTextContainer}>
                 <Text style={styles.headerTitle}>Wellness Hub</Text>
                 <Text style={styles.headerSubtitle}>Nurture mind, body & soul</Text>
               </View>
-            </Animated.View>
-
-            {/* Well-Being Score Card */}
-            <View style={styles.scoreCard}>
+              
+              {/* Amanah Score - Aligned with title */}
               <View style={styles.scoreCircle}>
-                <Text style={styles.scoreNumber}>{Math.round(amanahScore)}</Text>
-                <Text style={styles.scoreLabel}>Score</Text>
-              </View>
-              <View style={styles.scoreInfo}>
-                <Text style={styles.scoreTitle}>Well-Being Score</Text>
-                <Text style={styles.scoreDescription}>
-                  {amanahCompletion}% of daily goals completed
-                </Text>
-                <View style={styles.progressBar}>
-                  <View style={[styles.progressFill, { width: `${amanahCompletion}%` }]} />
-                </View>
+                <LinearGradient
+                  colors={colors.gradientPrimary}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.scoreCircleGradient}
+                >
+                  <Text style={styles.scoreNumber}>{Math.round(amanahScore)}</Text>
+                  <Text style={styles.scoreLabel}>Score</Text>
+                </LinearGradient>
               </View>
             </View>
-          </Animated.View>
-        </LinearGradient>
-      </Animated.View>
 
-      {/* Collapsing Tab Switcher */}
+            {/* Well-Being Progress Info */}
+            <View style={styles.scoreInfoRow}>
+              <Text style={styles.scoreInfoText}>
+                {amanahCompletion}% of goals completed today
+              </Text>
+              <View style={styles.progressBar}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    { width: `${amanahCompletion}%` },
+                  ]}
+                />
+              </View>
+            </View>
+          </View>
+        </LinearGradient>
+      </View>
+
+      {/* Fixed Tab Switcher */}
       <Animated.View 
         style={[
           styles.tabContainer,
-          { 
-            height: tabHeight,
-            opacity: tabOpacity,
-          }
+          { transform: [{ scale: tabScaleAnim }] }
         ]}
       >
         <View style={styles.tabSwitcher}>
@@ -324,22 +321,26 @@ export default function WellnessScreen() {
                 end={{ x: 1, y: 1 }}
                 style={styles.tabGradient}
               >
-                <IconSymbol
-                  ios_icon_name="brain.head.profile"
-                  android_material_icon_name="psychology"
-                  size={22}
-                  color={colors.card}
-                />
+                <View style={styles.tabIconContainer}>
+                  <IconSymbol
+                    ios_icon_name="brain.head.profile"
+                    android_material_icon_name="psychology"
+                    size={22}
+                    color={colors.card}
+                  />
+                </View>
                 <Text style={styles.tabTextActive}>Mental Health</Text>
               </LinearGradient>
             ) : (
               <View style={styles.tabInactive}>
-                <IconSymbol
-                  ios_icon_name="brain.head.profile"
-                  android_material_icon_name="psychology"
-                  size={22}
-                  color={colors.textSecondary}
-                />
+                <View style={styles.tabIconContainerInactive}>
+                  <IconSymbol
+                    ios_icon_name="brain.head.profile"
+                    android_material_icon_name="psychology"
+                    size={22}
+                    color={colors.textSecondary}
+                  />
+                </View>
                 <Text style={styles.tabText}>Mental Health</Text>
               </View>
             )}
@@ -348,7 +349,7 @@ export default function WellnessScreen() {
           <TouchableOpacity
             style={[styles.tab, activeTab === 'physical' && styles.tabActive]}
             onPress={() => handleTabChange('physical')}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
             {activeTab === 'physical' ? (
               <LinearGradient
@@ -357,22 +358,26 @@ export default function WellnessScreen() {
                 end={{ x: 1, y: 1 }}
                 style={styles.tabGradient}
               >
-                <IconSymbol
-                  ios_icon_name="figure.run"
-                  android_material_icon_name="directions-run"
-                  size={22}
-                  color={colors.card}
-                />
+                <View style={styles.tabIconContainer}>
+                  <IconSymbol
+                    ios_icon_name="figure.run"
+                    android_material_icon_name="directions-run"
+                    size={22}
+                    color={colors.card}
+                  />
+                </View>
                 <Text style={styles.tabTextActive}>Physical Health</Text>
               </LinearGradient>
             ) : (
               <View style={styles.tabInactive}>
-                <IconSymbol
-                  ios_icon_name="figure.run"
-                  android_material_icon_name="directions-run"
-                  size={22}
-                  color={colors.textSecondary}
-                />
+                <View style={styles.tabIconContainerInactive}>
+                  <IconSymbol
+                    ios_icon_name="figure.run"
+                    android_material_icon_name="directions-run"
+                    size={22}
+                    color={colors.textSecondary}
+                  />
+                </View>
                 <Text style={styles.tabText}>Physical Health</Text>
               </View>
             )}
@@ -381,21 +386,16 @@ export default function WellnessScreen() {
       </Animated.View>
 
       {/* Scrollable Content */}
-      <Animated.ScrollView
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
       >
         {/* Wellness Cards Grid */}
         <View style={styles.cardsGrid}>
           {activeCards.map((card, index) => (
             <WellnessCard
-              key={index}
+              key={`${activeTab}-${index}`}
               title={card.title}
               subtitle={card.subtitle}
               icon={card.icon}
@@ -417,25 +417,30 @@ export default function WellnessScreen() {
             end={{ x: 1, y: 1 }}
             style={styles.quoteGradient}
           >
-            <View style={styles.quoteIconWrapper}>
-              <IconSymbol
-                ios_icon_name="quote.opening"
-                android_material_icon_name="format-quote"
-                size={28}
-                color={colors.card}
-              />
+            <View style={styles.quoteTopSection}>
+              <View style={styles.quoteIconWrapper}>
+                <IconSymbol
+                  ios_icon_name="quote.opening"
+                  android_material_icon_name="format-quote"
+                  size={32}
+                  color={colors.card}
+                />
+              </View>
             </View>
             <Text style={styles.quoteText}>
               &quot;Verily, with hardship comes ease.&quot;
             </Text>
-            <Text style={styles.quoteSource}>Quran 94:6</Text>
+            <View style={styles.quoteFooter}>
+              <View style={styles.quoteDivider} />
+              <Text style={styles.quoteSource}>Quran 94:6</Text>
+            </View>
           </LinearGradient>
         </View>
 
         {/* Bottom Padding for Tab Bar */}
         <View style={styles.bottomPadding} />
-      </Animated.ScrollView>
-    </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -447,91 +452,99 @@ const styles = StyleSheet.create({
   headerSection: {
     marginHorizontal: spacing.lg,
     marginTop: spacing.md,
-    borderRadius: borderRadius.xl,
+    marginBottom: spacing.xl,
+    borderRadius: borderRadius.xxxl,
     overflow: 'hidden',
     ...shadows.large,
   },
   headerGradient: {
-    flex: 1,
     padding: spacing.xl,
+    minHeight: 140,
     justifyContent: 'center',
   },
   headerContent: {
-    gap: spacing.lg,
+    gap: spacing.md,
   },
   headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    minHeight: 64,
   },
   headerIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    overflow: 'hidden',
+    ...shadows.medium,
+  },
+  headerIconGradient: {
+    width: '100%',
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTextContainer: {
     flex: 1,
+    justifyContent: 'center',
   },
   headerTitle: {
-    ...typography.h2,
+    ...typography.h1,
     color: colors.card,
-    fontWeight: '800',
+    fontWeight: '900',
     marginBottom: spacing.xs,
+    fontSize: 28,
+    letterSpacing: -0.5,
   },
   headerSubtitle: {
     ...typography.body,
     color: colors.card,
     opacity: 0.95,
-  },
-  scoreCard: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    gap: spacing.lg,
-    alignItems: 'center',
+    fontSize: 15,
+    fontWeight: '500',
   },
   scoreCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.card,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    overflow: 'hidden',
+    ...shadows.medium,
+    flexShrink: 0,
+  },
+  scoreCircleGradient: {
+    width: '100%',
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.medium,
   },
   scoreNumber: {
     ...typography.h2,
-    color: colors.primary,
-    fontWeight: '800',
+    color: colors.card,
+    fontWeight: '900',
+    fontSize: 20,
   },
   scoreLabel: {
-    ...typography.small,
-    color: colors.textSecondary,
-    fontWeight: '600',
-    marginTop: -4,
-  },
-  scoreInfo: {
-    flex: 1,
-  },
-  scoreTitle: {
-    ...typography.bodyBold,
+    ...typography.smallBold,
     color: colors.card,
-    marginBottom: spacing.xs,
-    fontSize: 16,
+    opacity: 0.9,
+    marginTop: -2,
+    fontSize: 8,
+    letterSpacing: 0.5,
   },
-  scoreDescription: {
+  scoreInfoRow: {
+    marginTop: spacing.sm,
+    gap: spacing.xs,
+  },
+  scoreInfoText: {
     ...typography.caption,
     color: colors.card,
     opacity: 0.95,
-    marginBottom: spacing.sm,
+    fontSize: 12,
+    fontWeight: '500',
   },
   progressBar: {
-    height: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    height: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     borderRadius: borderRadius.sm,
     overflow: 'hidden',
   },
@@ -543,15 +556,16 @@ const styles = StyleSheet.create({
   tabContainer: {
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
-    overflow: 'hidden',
   },
   tabSwitcher: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.sm,
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
     padding: spacing.xs,
     ...shadows.medium,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   tab: {
     flex: 1,
@@ -569,6 +583,14 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
   },
+  tabIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   tabInactive: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -578,15 +600,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     backgroundColor: 'transparent',
   },
+  tabIconContainerInactive: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.highlight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   tabText: {
     ...typography.bodyBold,
     fontSize: 14,
     color: colors.textSecondary,
+    fontWeight: '600',
   },
   tabTextActive: {
     ...typography.bodyBold,
     fontSize: 14,
     color: colors.card,
+    fontWeight: '700',
   },
   scrollView: {
     flex: 1,
@@ -596,6 +628,21 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.xl,
   },
+  sectionHeader: {
+    marginBottom: spacing.lg,
+    gap: spacing.xs,
+  },
+  sectionTitle: {
+    ...typography.h3,
+    color: colors.text,
+    fontWeight: '800',
+    fontSize: 22,
+  },
+  sectionSubtitle: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontSize: 14,
+  },
   cardsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -604,75 +651,111 @@ const styles = StyleSheet.create({
   },
   wellnessCard: {
     width: CARD_WIDTH,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     overflow: 'hidden',
     ...shadows.medium,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   cardGradient: {
     padding: spacing.lg,
-    minHeight: 130,
+    minHeight: 160,
     justifyContent: 'space-between',
+  },
+  cardTopSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
   },
   cardIconWrapper: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
+    ...shadows.small,
   },
   cardContent: {
     flex: 1,
     gap: spacing.xs,
   },
   cardTitle: {
-    ...typography.bodyBold,
+    ...typography.h4,
     fontSize: 16,
     color: colors.card,
-    fontWeight: '700',
+    fontWeight: '800',
+    marginBottom: spacing.xs / 2,
   },
   cardSubtitle: {
-    ...typography.small,
+    ...typography.caption,
     color: colors.card,
-    opacity: 0.95,
+    opacity: 0.9,
     fontSize: 12,
+    lineHeight: 16,
   },
   cardArrow: {
-    alignSelf: 'flex-end',
-    marginTop: spacing.xs,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   quoteCard: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
     borderRadius: borderRadius.xl,
     overflow: 'hidden',
     ...shadows.medium,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   quoteGradient: {
     padding: spacing.xl,
     alignItems: 'center',
   },
+  quoteTopSection: {
+    width: '100%',
+    alignItems: 'flex-start',
+    marginBottom: spacing.lg,
+  },
   quoteIconWrapper: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.lg,
+    ...shadows.small,
   },
   quoteText: {
     ...typography.h4,
     color: colors.card,
     textAlign: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
     fontStyle: 'italic',
-    lineHeight: 28,
+    lineHeight: 26,
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  quoteFooter: {
+    width: '100%',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  quoteDivider: {
+    width: 50,
+    height: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: borderRadius.sm,
   },
   quoteSource: {
     ...typography.bodyBold,
     color: colors.card,
     opacity: 0.95,
+    fontSize: 13,
+    letterSpacing: 0.5,
   },
   bottomPadding: {
     height: 100,

@@ -412,11 +412,16 @@ async function savePrayerTimesToDatabase(
 
     if (error) {
       console.error('Error saving prayer times to database:', error);
+      // If table doesn't exist, continue without saving (prayer times are cached locally)
+      if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+        console.log('⚠️ prayer_times table not found, continuing without database save (using local cache)');
+      }
     } else {
       console.log('Prayer times saved to database');
     }
   } catch (error) {
     console.error('Error saving prayer times to database:', error);
+    // Continue without saving - prayer times are already cached locally
   }
 }
 
@@ -424,14 +429,20 @@ async function savePrayerTimesToDatabase(
  * Get user's prayer time adjustments from database
  */
 export async function getUserAdjustments(userId: string): Promise<PrayerAdjustments> {
+  // Try database first, fallback to local storage
   try {
+    // SECURITY: Always scope by user_id
     const { data, error } = await supabase
       .from('prayer_time_adjustments')
-      .select('*')
-      .eq('user_id', userId)
+      .select('fajr_offset, dhuhr_offset, asr_offset, maghrib_offset, isha_offset')
+      .eq('user_id', userId) // SECURITY: Ensure user can only access their own adjustments
       .single();
 
     if (error || !data) {
+      // If table doesn't exist, return defaults (adjustments stored locally)
+      if (error && (error.code === 'PGRST205' || error.message?.includes('Could not find the table'))) {
+        console.log('⚠️ prayer_time_adjustments table not found, using default adjustments');
+      }
       return { fajr: 0, dhuhr: 0, asr: 0, maghrib: 0, isha: 0 };
     }
 
@@ -472,11 +483,16 @@ export async function saveUserAdjustments(
 
     if (error) {
       console.error('Error saving user adjustments:', error);
+      // If table doesn't exist, continue without saving (adjustments are stored locally)
+      if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+        console.log('⚠️ prayer_time_adjustments table not found, continuing without database save (using local storage)');
+      }
     } else {
       console.log('User adjustments saved');
     }
   } catch (error) {
     console.error('Error saving user adjustments:', error);
+    // Continue without saving - adjustments can be stored locally
   }
 }
 

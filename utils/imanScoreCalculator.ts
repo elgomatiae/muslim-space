@@ -122,6 +122,8 @@ interface MomentumState {
   historicalAverage: number; // Rolling 7-day average
   momentumMultiplier: number; // 1.0 to 1.3
   lastScores: SectionScores;
+  lastScoreTimestamp: number; // When scores were last calculated
+  lastStoredScores: SectionScores; // Last stored scores before decay
 }
 
 // ============================================================================
@@ -130,28 +132,30 @@ interface MomentumState {
 
 const WEIGHTS = {
   // Overall ring weights (must sum to 1.0)
-  ibadah: 0.50,  // 50% - Most important
-  ilm: 0.25,     // 25% - Knowledge
-  amanah: 0.25,  // 25% - Well-being
+  // Ibadah (Worship) is most important, followed by Ilm (Knowledge), then Amanah (Well-being)
+  ibadah: 0.60,  // 60% - Most important (Worship is the foundation)
+  ilm: 0.25,     // 25% - Knowledge (Understanding and learning)
+  amanah: 0.15,  // 15% - Well-being (Physical and mental health)
   
-  // Within Ibadah ring (relative weights)
+  // Within Ibadah ring (relative weights - normalized to enabled goals only)
+  // Daily prayers (Fard) should have the BIGGEST impact on the Ibadah ring
   ibadahComponents: {
-    fardPrayers: 50,    // Prayers are most important
-    quran: 25,          // Qur'an second
-    dhikr: 15,          // Dhikr third
-    dua: 10,            // Dua fourth
-    sunnah: 8,          // Sunnah prayers
-    tahajjud: 7,        // Night prayer
-    memorization: 10,   // Memorization
-    fasting: 5,         // Fasting
+    fardPrayers: 60,    // Daily prayers - MOST IMPORTANT (always enabled, mandatory)
+    quran: 18,          // Qur'an reading (daily or weekly)
+    dhikr: 10,          // Dhikr (daily remembrance)
+    dua: 6,             // Dua (daily supplications)
+    sunnah: 4,          // Sunnah prayers (optional daily)
+    tahajjud: 2,        // Night prayer (optional weekly)
+    memorization: 4,    // Quran memorization (optional weekly)
+    fasting: 2,         // Fasting (optional weekly)
   },
 };
 
 const DECAY_CONFIG = {
-  gracePeriodHours: 20,        // No decay for 20 hours
-  baseDecayPerDay: 3,          // Very gentle: 3% per day
-  maxDecayPerDay: 10,          // Cap at 10% per day
-  minScore: 20,                // Never go below 20% (encouraging)
+  gracePeriodHours: 24,        // No decay for 24 hours (full day grace)
+  baseDecayPerDay: 2.5,        // Very gentle: 2.5% per day after grace period
+  maxDecayPerDay: 8,           // Cap at 8% per day (prevents too aggressive decay)
+  minScore: 15,                // Never go below 15% (maintains hope and encouragement)
   
   // Momentum system
   momentumBuildRate: 0.02,     // +2% per consecutive day (max +30%)
@@ -162,6 +166,9 @@ const DECAY_CONFIG = {
   // Recovery
   recoveryBoostDays: 3,        // Faster recovery for first 3 days back
   recoveryMultiplier: 1.5,     // 50% faster recovery
+  
+  // Score persistence
+  scorePersistenceDays: 30,    // Keep decaying scores for 30 days even with no activity
 };
 
 // ============================================================================
@@ -244,7 +251,10 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
   
   breakdown.fardPrayers = { progress: fardProgress, weight: fardWeight, enabled: true };
   
-  console.log(`📿 Fard Prayers: ${completedDuePrayers}/${totalDue} due = ${(fardProgress * 100).toFixed(1)}% (weight: ${fardWeight})`);
+  // Daily prayers have the biggest impact on Ibadah ring
+  // Calculate impact percentage based on current enabled goals
+  const prayerImpactPercent = totalWeight > 0 ? (fardWeight / totalWeight) * 100 : 100;
+  console.log(`📿 Fard Prayers: ${completedDuePrayers}/${totalDue} due = ${(fardProgress * 100).toFixed(1)}% (weight: ${fardWeight}, ${prayerImpactPercent.toFixed(0)}% of Ibadah ring)`);
   
   // ===== SUNNAH PRAYERS =====
   if (goals.sunnahDailyGoal > 0) {
@@ -363,9 +373,16 @@ export async function calculateIbadahScore(goals: IbadahGoals): Promise<number> 
   }
   
   // Calculate final score
+  // Only count enabled goals (totalWeight only includes enabled components)
+  // This ensures percentages are ONLY affected by goals the user has toggled/enabled
   const finalScore = totalWeight > 0 ? (totalWeightedProgress / totalWeight) * 100 : 0;
   
-  console.log(`\n✨ IBADAH FINAL: ${finalScore.toFixed(1)}% (total weight: ${totalWeight.toFixed(1)})`);
+  console.log(`\n✨ IBADAH FINAL: ${finalScore.toFixed(1)}%`);
+  console.log(`   Enabled components weight: ${totalWeight.toFixed(1)}`);
+  console.log(`   Total weighted progress: ${totalWeightedProgress.toFixed(1)}`);
+  if (totalWeight === 0) {
+    console.log(`   ⚠️ No goals enabled - returning 0% (neutral state, not failing)`);
+  }
   console.log(`================================================\n`);
   
   return Math.round(finalScore);
@@ -506,9 +523,15 @@ export function calculateAmanahScore(goals: AmanahGoals): number {
     console.log(`🧘 Stress: Disabled`);
   }
   
+  // Calculate final score - only enabled goals are counted (totalWeight only includes enabled components)
   const finalScore = totalWeight > 0 ? (totalWeightedProgress / totalWeight) * 100 : 0;
   
   console.log(`\n✨ AMANAH FINAL: ${finalScore.toFixed(1)}%`);
+  console.log(`   Enabled components weight: ${totalWeight.toFixed(1)}`);
+  console.log(`   Total weighted progress: ${totalWeightedProgress.toFixed(1)}`);
+  if (totalWeight === 0) {
+    console.log(`   ⚠️ No goals enabled - returning 0% (neutral state, not failing)`);
+  }
   console.log(`================================================\n`);
   
   return Math.round(finalScore);
@@ -537,22 +560,84 @@ async function loadMomentumState(): Promise<MomentumState> {
   };
 }
 
-async function saveMomentumState(state: MomentumState): Promise<void> {
+async function saveMomentumState(state: MomentumState, userId?: string | null): Promise<void> {
   try {
-    await AsyncStorage.setItem('imanMomentumState', JSON.stringify(state));
+    const key = userId ? `imanMomentumState_${userId}` : 'imanMomentumState';
+    await AsyncStorage.setItem(key, JSON.stringify(state));
   } catch (error) {
     console.error('Error saving momentum state:', error);
   }
 }
 
 /**
+ * Apply decay to stored scores based on time elapsed
+ * This gradually reduces scores over time instead of resetting to 0
+ */
+async function applyDecayToStoredScores(
+  storedScores: SectionScores,
+  lastScoreTimestamp: number,
+  userId?: string | null
+): Promise<SectionScores> {
+  const now = Date.now();
+  const hoursElapsed = (now - lastScoreTimestamp) / (1000 * 60 * 60);
+  const daysElapsed = hoursElapsed / 24;
+  
+  // If within grace period, no decay
+  if (hoursElapsed <= DECAY_CONFIG.gracePeriodHours) {
+    console.log(`✨ Within grace period (${hoursElapsed.toFixed(1)}h < ${DECAY_CONFIG.gracePeriodHours}h) - no decay`);
+    return storedScores;
+  }
+  
+  // Calculate decay
+  const daysPastGrace = (hoursElapsed - DECAY_CONFIG.gracePeriodHours) / 24;
+  const decayPercent = Math.min(
+    DECAY_CONFIG.baseDecayPerDay * daysPastGrace,
+    DECAY_CONFIG.maxDecayPerDay * daysPastGrace
+  );
+  
+  console.log(`\n⏳ ========== SCORE DECAY CALCULATION ==========`);
+  console.log(`   Hours elapsed: ${hoursElapsed.toFixed(1)}`);
+  console.log(`   Days elapsed: ${daysElapsed.toFixed(2)}`);
+  console.log(`   Days past grace: ${daysPastGrace.toFixed(2)}`);
+  console.log(`   Decay: ${decayPercent.toFixed(2)}%`);
+  
+  // Apply decay to each section
+  const decayedScores: SectionScores = {
+    ibadah: Math.max(
+      DECAY_CONFIG.minScore,
+      storedScores.ibadah - (storedScores.ibadah * decayPercent / 100)
+    ),
+    ilm: Math.max(
+      DECAY_CONFIG.minScore,
+      storedScores.ilm - (storedScores.ilm * decayPercent / 100)
+    ),
+    amanah: Math.max(
+      DECAY_CONFIG.minScore,
+      storedScores.amanah - (storedScores.amanah * decayPercent / 100)
+    ),
+  };
+  
+  console.log(`   Ibadah: ${storedScores.ibadah.toFixed(1)}% → ${decayedScores.ibadah.toFixed(1)}%`);
+  console.log(`   Ilm: ${storedScores.ilm.toFixed(1)}% → ${decayedScores.ilm.toFixed(1)}%`);
+  console.log(`   Amanah: ${storedScores.amanah.toFixed(1)}% → ${decayedScores.amanah.toFixed(1)}%`);
+  console.log(`================================================\n`);
+  
+  return {
+    ibadah: Math.round(decayedScores.ibadah),
+    ilm: Math.round(decayedScores.ilm),
+    amanah: Math.round(decayedScores.amanah),
+  };
+}
+
+/**
  * Apply momentum and decay to create final scores
- * This blends today's progress with historical momentum
+ * This blends today's progress with historical momentum and decayed scores
  */
 async function applyMomentumAndDecay(
-  freshScores: SectionScores
+  freshScores: SectionScores,
+  userId?: string | null
 ): Promise<SectionScores> {
-  const state = await loadMomentumState();
+  const state = await loadMomentumState(userId);
   const now = Date.now();
   const hoursSinceLastActivity = (now - state.lastActivityTimestamp) / (1000 * 60 * 60);
   const daysSinceLastActivity = hoursSinceLastActivity / 24;
@@ -593,59 +678,60 @@ async function applyMomentumAndDecay(
     state.lastActivityTimestamp = now;
   }
   
-  // Calculate decay if no activity in grace period
-  let decayFactor = 1.0;
-  if (hoursSinceLastActivity > DECAY_CONFIG.gracePeriodHours) {
-    const decayDays = (hoursSinceLastActivity - DECAY_CONFIG.gracePeriodHours) / 24;
-    const decayPercent = Math.min(
-      DECAY_CONFIG.maxDecayPerDay * decayDays,
-      DECAY_CONFIG.baseDecayPerDay * decayDays
+  // Apply decay to stored scores if there's been time since last calculation
+  const hoursSinceLastCalculation = (now - state.lastScoreTimestamp) / (1000 * 60 * 60);
+  let baseScores = state.lastStoredScores;
+  
+  if (hoursSinceLastCalculation > DECAY_CONFIG.gracePeriodHours) {
+    // Apply decay to stored scores
+    baseScores = await applyDecayToStoredScores(
+      state.lastStoredScores,
+      state.lastScoreTimestamp,
+      userId
     );
-    decayFactor = 1 - (decayPercent / 100);
-    console.log(`⏳ Decay applied: ${decayPercent.toFixed(1)}% (factor: ${decayFactor.toFixed(2)})`);
-  } else {
-    console.log(`✨ Within grace period - no decay`);
   }
   
-  // Blend today's progress with momentum
-  // Formula: (today's score * 0.7) + (historical average * 0.3) * momentum * decay
-  const blendWeight = hasNewActivity ? 0.7 : 0.5; // More weight on today if active
+  // Blend today's fresh scores with decayed stored scores
+  // More weight on fresh scores if there's new activity
+  const blendWeight = hasNewActivity ? 0.75 : 0.5;
   
-  const finalScores: SectionScores = {
+  console.log(`\n🔄 BLENDING SCORES:`);
+  console.log(`   Fresh scores: Ibadah=${freshScores.ibadah}%, Ilm=${freshScores.ilm}%, Amanah=${freshScores.amanah}%`);
+  console.log(`   Stored scores: Ibadah=${baseScores.ibadah}%, Ilm=${baseScores.ilm}%, Amanah=${baseScores.amanah}%`);
+  console.log(`   Blend weight: ${(blendWeight * 100).toFixed(0)}% fresh, ${((1 - blendWeight) * 100).toFixed(0)}% stored`);
+  
+  const blendedScores: SectionScores = {
     ibadah: Math.max(
       DECAY_CONFIG.minScore,
-      Math.round(
-        (freshScores.ibadah * blendWeight + state.lastScores.ibadah * (1 - blendWeight)) *
-        state.momentumMultiplier *
-        decayFactor
-      )
+      Math.round(freshScores.ibadah * blendWeight + baseScores.ibadah * (1 - blendWeight))
     ),
     ilm: Math.max(
       DECAY_CONFIG.minScore,
-      Math.round(
-        (freshScores.ilm * blendWeight + state.lastScores.ilm * (1 - blendWeight)) *
-        state.momentumMultiplier *
-        decayFactor
-      )
+      Math.round(freshScores.ilm * blendWeight + baseScores.ilm * (1 - blendWeight))
     ),
     amanah: Math.max(
       DECAY_CONFIG.minScore,
-      Math.round(
-        (freshScores.amanah * blendWeight + state.lastScores.amanah * (1 - blendWeight)) *
-        state.momentumMultiplier *
-        decayFactor
-      )
+      Math.round(freshScores.amanah * blendWeight + baseScores.amanah * (1 - blendWeight))
     ),
   };
   
-  // Cap at 100
-  finalScores.ibadah = Math.min(100, finalScores.ibadah);
-  finalScores.ilm = Math.min(100, finalScores.ilm);
-  finalScores.amanah = Math.min(100, finalScores.amanah);
+  // Apply momentum multiplier
+  const finalScores: SectionScores = {
+    ibadah: Math.min(100, Math.round(blendedScores.ibadah * state.momentumMultiplier)),
+    ilm: Math.min(100, Math.round(blendedScores.ilm * state.momentumMultiplier)),
+    amanah: Math.min(100, Math.round(blendedScores.amanah * state.momentumMultiplier)),
+  };
   
-  // Update state
+  // Ensure minimum score
+  finalScores.ibadah = Math.max(DECAY_CONFIG.minScore, finalScores.ibadah);
+  finalScores.ilm = Math.max(DECAY_CONFIG.minScore, finalScores.ilm);
+  finalScores.amanah = Math.max(DECAY_CONFIG.minScore, finalScores.amanah);
+  
+  // Update state with new scores and timestamp
   state.lastScores = finalScores;
-  await saveMomentumState(state);
+  state.lastStoredScores = finalScores; // Store for next decay calculation
+  state.lastScoreTimestamp = now;
+  await saveMomentumState(state, userId);
   
   console.log(`\n📊 FINAL SCORES (after momentum & decay):`);
   console.log(`   Ibadah: ${finalScores.ibadah}%`);
@@ -663,7 +749,8 @@ async function applyMomentumAndDecay(
 export async function calculateAllSectionScores(
   ibadahGoals: IbadahGoals,
   ilmGoals: IlmGoals,
-  amanahGoals: AmanahGoals
+  amanahGoals: AmanahGoals,
+  userId?: string | null
 ): Promise<SectionScores> {
   // Calculate fresh scores for today
   const freshScores: SectionScores = {
@@ -677,8 +764,8 @@ export async function calculateAllSectionScores(
   console.log(`   Ilm: ${freshScores.ilm}%`);
   console.log(`   Amanah: ${freshScores.amanah}%`);
   
-  // Apply momentum and decay
-  const finalScores = await applyMomentumAndDecay(freshScores);
+  // Apply momentum and decay with gradual decay system
+  const finalScores = await applyMomentumAndDecay(freshScores, userId);
   
   return finalScores;
 }
@@ -714,16 +801,20 @@ export async function getCurrentSectionScores(userId?: string | null): Promise<S
 export async function getOverallImanScore(userId?: string | null): Promise<number> {
   const scores = await getCurrentSectionScores(userId);
   
+  // Calculate weighted score: Ibadah (60%) > Ilm (25%) > Amanah (15%)
+  // Only enabled goals within each ring are counted (already handled in section calculations)
   const weightedScore = 
     (scores.ibadah * WEIGHTS.ibadah) +
     (scores.ilm * WEIGHTS.ilm) +
     (scores.amanah * WEIGHTS.amanah);
   
   console.log(`\n🌟 ========== OVERALL IMAN SCORE ==========`);
-  console.log(`   Ibadah: ${scores.ibadah}% × ${WEIGHTS.ibadah} = ${(scores.ibadah * WEIGHTS.ibadah).toFixed(1)}`);
-  console.log(`   Ilm: ${scores.ilm}% × ${WEIGHTS.ilm} = ${(scores.ilm * WEIGHTS.ilm).toFixed(1)}`);
-  console.log(`   Amanah: ${scores.amanah}% × ${WEIGHTS.amanah} = ${(scores.amanah * WEIGHTS.amanah).toFixed(1)}`);
+  console.log(`   Ring Weights: Ibadah (${(WEIGHTS.ibadah * 100).toFixed(0)}%), Ilm (${(WEIGHTS.ilm * 100).toFixed(0)}%), Amanah (${(WEIGHTS.amanah * 100).toFixed(0)}%)`);
+  console.log(`   Ibadah: ${scores.ibadah}% × ${(WEIGHTS.ibadah * 100).toFixed(0)}% = ${(scores.ibadah * WEIGHTS.ibadah).toFixed(1)}%`);
+  console.log(`   Ilm: ${scores.ilm}% × ${(WEIGHTS.ilm * 100).toFixed(0)}% = ${(scores.ilm * WEIGHTS.ilm).toFixed(1)}%`);
+  console.log(`   Amanah: ${scores.amanah}% × ${(WEIGHTS.amanah * 100).toFixed(0)}% = ${(scores.amanah * WEIGHTS.amanah).toFixed(1)}%`);
   console.log(`   TOTAL: ${Math.round(weightedScore)}%`);
+  console.log(`   Note: Only enabled goals are counted in each ring`);
   console.log(`================================================\n`);
   
   return Math.round(weightedScore);
@@ -811,6 +902,11 @@ export async function resetWeeklyGoals(userId?: string | null): Promise<void> {
   }
 }
 
+/**
+ * Check and handle goal resets
+ * NOTE: This only resets completion counters for tracking, NOT scores.
+ * Scores now decay gradually over time instead of resetting to 0.
+ */
 export async function checkAndHandleResets(userId?: string | null): Promise<void> {
   try {
     const now = new Date();
@@ -818,8 +914,11 @@ export async function checkAndHandleResets(userId?: string | null): Promise<void
     const lastDate = await AsyncStorage.getItem(lastDateKey);
     const today = now.toDateString();
     
+    // Only reset daily completion counters if it's a new day
+    // This is for tracking purposes only - scores decay gradually, not reset to 0
     if (lastDate !== today) {
-      console.log(`📅 New day detected for user ${userId || 'unknown'}, applying daily reset...`);
+      console.log(`📅 New day detected for user ${userId || 'unknown'}, resetting daily completion counters...`);
+      console.log(`   Note: Scores will decay gradually, not reset to 0`);
       await resetDailyGoals(userId);
       await AsyncStorage.setItem(lastDateKey, today);
     }
@@ -828,8 +927,10 @@ export async function checkAndHandleResets(userId?: string | null): Promise<void
     const lastWeeklyReset = await AsyncStorage.getItem(lastWeeklyResetKey);
     const isSunday = now.getDay() === 0;
     
+    // Weekly reset for completion counters only
     if (isSunday && lastWeeklyReset !== today) {
-      console.log(`📅 Sunday detected for user ${userId || 'unknown'}, applying weekly reset...`);
+      console.log(`📅 Sunday detected for user ${userId || 'unknown'}, resetting weekly completion counters...`);
+      console.log(`   Note: Scores will decay gradually, not reset to 0`);
       await resetWeeklyGoals(userId);
       await AsyncStorage.setItem(lastWeeklyResetKey, today);
     }

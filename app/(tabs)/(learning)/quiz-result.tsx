@@ -300,10 +300,10 @@ const styles = StyleSheet.create({
   },
   categoryCard: {
     backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xxxl,
     marginBottom: spacing.xxl,
-    ...shadows.medium,
+    ...shadows.card,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
@@ -318,10 +318,10 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   pointsCard: {
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     overflow: 'hidden',
     marginBottom: spacing.xxl,
-    ...shadows.medium,
+    ...shadows.emphasis,
   },
   pointsGradient: {
     flexDirection: 'row',

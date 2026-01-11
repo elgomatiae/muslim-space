@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Platform, ActivityIndicator, TouchableOpacity, TextInput, Keyboard, Alert, Modal, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, TextInput, Keyboard, Alert, Image } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import VideoPlayer from '@/components/VideoPlayer';
@@ -10,46 +9,94 @@ import {
   getLectureCategories, 
   searchLectures, 
   incrementLectureViews,
-  isSupabaseConfigured, 
-  isYouTubeUrl, 
-  getYouTubeWatchUrl,
-  getYouTubeThumbnailUrl,
-  type Lecture 
-} from '@/services/ContentService';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
+  type LectureDisplay 
+} from '@/services/LectureService';
 import { supabase } from '@/app/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useImanTracker } from '@/contexts/ImanTrackerContext';
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
+import { LinearGradient } from 'expo-linear-gradient';
 
-// Helper function to shuffle an array
-const shuffleArray = <T,>(array: T[]): T[] => {
+// Helper functions
+function isSupabaseConfigured(): boolean {
+  try {
+    const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
+    const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+    return !!(url && key);
+  } catch {
+    return false;
+  }
+}
+
+function isYouTubeUrl(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+    return urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be');
+  } catch {
+    return false;
+  }
+}
+
+function getYouTubeWatchUrl(url: string): string {
+  try {
+    const urlObj = new URL(url);
+    if (urlObj.pathname.includes('/watch')) {
+      return url;
+    }
+    if (urlObj.hostname === 'youtu.be') {
+      const videoId = urlObj.pathname.slice(1);
+      return `https://www.youtube.com/watch?v=${videoId}`;
+    }
+    return url;
+  } catch {
+    return url;
+  }
+}
+
+function getYouTubeThumbnailUrl(url: string): string {
+  try {
+    const urlObj = new URL(url);
+    let videoId = '';
+    if (urlObj.hostname === 'youtu.be') {
+      videoId = urlObj.pathname.slice(1);
+    } else if (urlObj.pathname.includes('/watch')) {
+      videoId = urlObj.searchParams.get('v') || '';
+    }
+    if (videoId) {
+      return `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+    }
+    return '';
+  } catch {
+    return '';
+  }
+}
+
+function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   return shuffled;
-};
+}
 
 export default function LecturesScreen() {
   const { user } = useAuth();
   const { ilmGoals, updateIlmGoals } = useImanTracker();
   const [categories, setCategories] = useState<string[]>([]);
-  const [lecturesByCategory, setLecturesByCategory] = useState<{ [key: string]: Lecture[] }>({});
-  const [uncategorizedLectures, setUncategorizedLectures] = useState<Lecture[]>([]);
+  const [lecturesByCategory, setLecturesByCategory] = useState<{ [key: string]: LectureDisplay[] }>({});
+  const [uncategorizedLectures, setUncategorizedLectures] = useState<LectureDisplay[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedLecture, setSelectedLecture] = useState<Lecture | null>(null);
+  const [selectedLecture, setSelectedLecture] = useState<LectureDisplay | null>(null);
   const [supabaseEnabled, setSupabaseEnabled] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Lecture[]>([]);
+  const [searchResults, setSearchResults] = useState<LectureDisplay[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
-  const [pendingLecture, setPendingLecture] = useState<Lecture | null>(null);
+  const [pendingLecture, setPendingLecture] = useState<LectureDisplay | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -57,17 +104,27 @@ export default function LecturesScreen() {
     setSupabaseEnabled(configured);
 
     if (!configured) {
+      console.warn('⚠️ Supabase not configured');
       setLoading(false);
       return;
     }
 
     try {
-      // Fetch all lectures first
+      console.log('📚 Loading lectures...');
       const allLectures = await fetchAllLectures();
       
-      // Separate categorized and uncategorized lectures
-      const categorized: { [key: string]: Lecture[] } = {};
-      const uncategorized: Lecture[] = [];
+      console.log(`✅ Fetched ${allLectures.length} lectures`);
+      
+      if (allLectures.length === 0) {
+        console.warn('⚠️ No lectures found. Make sure:');
+        console.warn('   1. Tables exist (run migration 008)');
+        console.warn('   2. Data imported (run migration 009)');
+        console.warn('   3. RLS policies allow SELECT');
+      }
+      
+      // Separate categorized and uncategorized
+      const categorized: { [key: string]: LectureDisplay[] } = {};
+      const uncategorized: LectureDisplay[] = [];
       
       allLectures.forEach(lecture => {
         if (lecture.category && lecture.category.trim() !== '') {
@@ -80,109 +137,75 @@ export default function LecturesScreen() {
         }
       });
       
-      // Randomize the order of videos within each category
+      // Shuffle within categories
       Object.keys(categorized).forEach(category => {
         categorized[category] = shuffleArray(categorized[category]);
       });
       
-      // Randomize uncategorized lectures as well
-      const shuffledUncategorized = shuffleArray(uncategorized);
-      
-      // Get unique categories
       const uniqueCategories = Object.keys(categorized).sort();
       
       setCategories(uniqueCategories);
       setLecturesByCategory(categorized);
-      setUncategorizedLectures(shuffledUncategorized);
+      setUncategorizedLectures(shuffleArray(uncategorized));
       
-      console.log(`Loaded ${allLectures.length} lectures: ${uniqueCategories.length} categories, ${uncategorized.length} uncategorized`);
+      console.log(`✅ Loaded: ${allLectures.length} lectures, ${uniqueCategories.length} categories`);
     } catch (error) {
-      console.error('Error loading lectures:', error);
+      console.error('❌ Error loading lectures:', error);
+      Alert.alert('Error', 'Failed to load lectures. Please check your connection.');
     } finally {
       setLoading(false);
     }
   }, []);
 
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
   const performSearch = useCallback(async () => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    
     setIsSearching(true);
     try {
       const results = await searchLectures(searchQuery);
       setSearchResults(results);
+      console.log(`🔍 Found ${results.length} results for "${searchQuery}"`);
     } catch (error) {
-      console.error('Error searching lectures:', error);
+      console.error('Error searching:', error);
+      setSearchResults([]);
     } finally {
       setIsSearching(false);
     }
   }, [searchQuery]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  useEffect(() => {
-    if (searchQuery.trim().length > 0) {
-      performSearch();
-    } else {
-      setSearchResults([]);
-      setIsSearching(false);
-    }
-  }, [searchQuery, performSearch]);
-
-  const trackLecture = async (lecture: Lecture) => {
-    if (!user) {
-      console.log('User not logged in, skipping tracking');
-      return;
-    }
-
-    try {
-      // Check if this lecture is already tracked
-      const { data: existingTracking, error: checkError } = await supabase
-        .from('tracked_content')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('content_type', 'lecture')
-        .eq('video_url', lecture.url)
-        .maybeSingle();
-
-      if (checkError) {
-        console.error('Error checking existing tracking:', checkError);
-        Alert.alert('Error', 'Failed to track lecture. Please try again.');
-        return;
+    const timer = setTimeout(() => {
+      if (showSearch && searchQuery.trim()) {
+        performSearch();
       }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery, showSearch, performSearch]);
 
-      if (existingTracking) {
-        // Already tracked, just update the timestamp
-        const { error: updateError } = await supabase
-          .from('tracked_content')
-          .update({
-            tracked_at: new Date().toISOString(),
-          })
-          .eq('id', existingTracking.id);
-
-        if (updateError) {
-          console.error('Error updating tracking:', updateError);
-          Alert.alert('Error', 'Failed to update tracking. Please try again.');
-          return;
-        }
-      } else {
-        // Not tracked yet, insert new record
-        const { error: insertError } = await supabase
-          .from('tracked_content')
-          .insert({
-            user_id: user.id,
-            content_type: 'lecture',
-            video_id: null, // Lectures table is separate, so we don't have a video_id
-            video_title: lecture.title,
-            video_url: lecture.url,
-            scholar_name: lecture.scholar_name,
-            tracked_at: new Date().toISOString(),
-          });
-
-        if (insertError) {
-          console.error('Error inserting tracking:', insertError);
-          Alert.alert('Error', 'Failed to track lecture. Please try again.');
-          return;
-        }
+  const trackLecture = async (lecture: LectureDisplay) => {
+    if (!user) return;
+    
+    try {
+      await incrementLectureViews(lecture.id);
+      
+      // Track in tracked_content table if it exists
+      try {
+        await supabase.from('tracked_content').insert({
+          user_id: user.id,
+          content_type: 'lecture',
+          content_id: lecture.id,
+          title: lecture.title,
+        });
+      } catch (err) {
+        // Table might not exist, that's okay
+        console.debug('Could not track in tracked_content:', err);
       }
 
       // Update ilm goals
@@ -190,100 +213,65 @@ export default function LecturesScreen() {
         const updatedGoals = {
           ...ilmGoals,
           ilm_weekly_lectures_completed: Math.min(
-            ilmGoals.ilm_weekly_lectures_completed + 1,
-            ilmGoals.ilm_weekly_lectures_goal
+            (ilmGoals.ilm_weekly_lectures_completed || 0) + 1,
+            ilmGoals.ilm_weekly_lectures_goal || 10
           ),
         };
         await updateIlmGoals(updatedGoals);
       }
 
-      console.log('Lecture tracked successfully');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error('Error tracking lecture:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     }
   };
 
-  const openYouTubeVideo = async (lecture: Lecture) => {
+  const openYouTubeVideo = async (lecture: LectureDisplay) => {
     try {
       const youtubeUrl = getYouTubeWatchUrl(lecture.url);
-      console.log('Opening YouTube video:', youtubeUrl);
-      
-      // Check if the URL can be opened
       const canOpen = await Linking.canOpenURL(youtubeUrl);
-      console.log('Can open URL:', canOpen);
       
       if (canOpen) {
-        // Try to open with WebBrowser first (better UX with in-app browser)
-        const result = await WebBrowser.openBrowserAsync(youtubeUrl, {
+        await WebBrowser.openBrowserAsync(youtubeUrl, {
           dismissButtonStyle: 'close',
           readerMode: false,
-          enableBarCollapsing: false,
         });
-        console.log('WebBrowser result:', result);
       } else {
-        // Fallback to Linking if WebBrowser fails
         await Linking.openURL(youtubeUrl);
       }
     } catch (error) {
-      console.error('Error opening YouTube video:', error);
-      // Try fallback method
-      try {
-        const youtubeUrl = getYouTubeWatchUrl(lecture.url);
-        await Linking.openURL(youtubeUrl);
-      } catch (fallbackError) {
-        console.error('Fallback error:', fallbackError);
-        Alert.alert('Error', 'Could not open YouTube video. Please try again.');
-      }
+      console.error('Error opening video:', error);
+      Alert.alert('Error', 'Could not open video. Please try again.');
     }
   };
 
-  const handleLecturePress = async (lecture: Lecture) => {
-    console.log('Lecture pressed:', lecture.title);
-    console.log('Lecture URL:', lecture.url);
+  const handleLecturePress = async (lecture: LectureDisplay) => {
     await incrementLectureViews(lecture.id);
 
     if (isYouTubeUrl(lecture.url)) {
-      console.log('YouTube URL detected, showing tracking modal');
       setPendingLecture(lecture);
       setShowTrackingModal(true);
     } else {
-      console.log('Non-YouTube URL, opening video player');
       setSelectedLecture(lecture);
     }
   };
 
   const handleTrackAndWatch = async () => {
-    console.log('Track and watch clicked');
     if (pendingLecture) {
-      const lectureToOpen = pendingLecture;
-      
-      // First, close the modal
       setShowTrackingModal(false);
+      const lecture = pendingLecture;
       setPendingLecture(null);
-      
-      // Track the lecture
-      await trackLecture(lectureToOpen);
-      
-      // Open the video immediately after tracking
-      console.log('Opening YouTube video');
-      await openYouTubeVideo(lectureToOpen);
+      await trackLecture(lecture);
+      await openYouTubeVideo(lecture);
     }
   };
 
   const handleWatchWithoutTracking = async () => {
-    console.log('Watch without tracking clicked');
     if (pendingLecture) {
-      const lectureToOpen = pendingLecture;
-      
-      // First, close the modal
       setShowTrackingModal(false);
+      const lecture = pendingLecture;
       setPendingLecture(null);
-      
-      // Open the video immediately
-      console.log('Opening YouTube video');
-      await openYouTubeVideo(lectureToOpen);
+      await openYouTubeVideo(lecture);
     }
   };
 
@@ -300,18 +288,13 @@ export default function LecturesScreen() {
     }
   };
 
-  const handleClearSearch = () => {
-    setSearchQuery('');
-    setSearchResults([]);
-  };
-
   if (selectedLecture) {
     return (
       <VideoPlayer 
         video={{
           id: selectedLecture.id,
           title: selectedLecture.title,
-          description: selectedLecture.description,
+          description: undefined,
           thumbnail_url: selectedLecture.image_url,
           video_url: selectedLecture.url,
           scholar_name: selectedLecture.scholar_name,
@@ -325,28 +308,12 @@ export default function LecturesScreen() {
   if (!supabaseEnabled) {
     return (
       <View style={styles.container}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
-        >
-          <LinearGradient
-            colors={colors.gradientPrimary}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.setupBanner}
-          >
-            <View style={styles.setupIconContainer}>
-              <IconSymbol
-                ios_icon_name="cloud.fill"
-                android_material_icon_name="cloud"
-                size={48}
-                color={colors.card}
-              />
-            </View>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
+          <LinearGradient colors={colors.gradientPrimary} style={styles.setupBanner}>
+            <IconSymbol ios_icon_name="cloud.fill" android_material_icon_name="cloud" size={48} color={colors.card} />
             <Text style={styles.setupTitle}>Connect to Supabase</Text>
             <Text style={styles.setupDescription}>
-              To access Islamic lectures, please enable Supabase by pressing the Supabase button and connecting to your project.
+              To access Islamic lectures, please configure Supabase in your .env file.
             </Text>
           </LinearGradient>
         </ScrollView>
@@ -368,23 +335,16 @@ export default function LecturesScreen() {
   if (totalLectures === 0) {
     return (
       <View style={styles.container}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
           <View style={styles.emptyCard}>
-            <View style={styles.emptyIconContainer}>
-              <IconSymbol
-                ios_icon_name="video.slash.fill"
-                android_material_icon_name="videocam-off"
-                size={64}
-                color={colors.textSecondary}
-              />
-            </View>
+            <IconSymbol ios_icon_name="video.slash.fill" android_material_icon_name="videocam-off" size={64} color={colors.textSecondary} />
             <Text style={styles.emptyTitle}>No Lectures Yet</Text>
             <Text style={styles.emptyText}>
               Islamic lectures will appear here once they are added to your Supabase database.
+              {'\n\n'}
+              Run migrations:
+              {'\n'}1. 008_create_lectures_recitations_tables.sql
+              {'\n'}2. 009_import_lectures_recitations.sql
             </Text>
           </View>
         </ScrollView>
@@ -402,31 +362,20 @@ export default function LecturesScreen() {
               {totalLectures} lecture{totalLectures !== 1 ? 's' : ''} • {categories.length} categories
             </Text>
           </View>
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={styles.searchButton}
-              onPress={handleSearchToggle}
-              activeOpacity={0.7}
-            >
-              <IconSymbol
-                ios_icon_name={showSearch ? 'xmark' : 'magnifyingglass'}
-                android_material_icon_name={showSearch ? 'close' : 'search'}
-                size={24}
-                color={colors.text}
-              />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.searchButton} onPress={handleSearchToggle} activeOpacity={0.7}>
+            <IconSymbol
+              ios_icon_name={showSearch ? 'xmark' : 'magnifyingglass'}
+              android_material_icon_name={showSearch ? 'close' : 'search'}
+              size={24}
+              color={colors.text}
+            />
+          </TouchableOpacity>
         </View>
 
         {showSearch && (
           <View style={styles.searchContainer}>
             <View style={styles.searchInputContainer}>
-              <IconSymbol
-                ios_icon_name="magnifyingglass"
-                android_material_icon_name="search"
-                size={20}
-                color={colors.textSecondary}
-              />
+              <IconSymbol ios_icon_name="magnifyingglass" android_material_icon_name="search" size={20} color={colors.textSecondary} />
               <TextInput
                 style={styles.searchInput}
                 placeholder="Search lectures, scholars..."
@@ -437,13 +386,8 @@ export default function LecturesScreen() {
                 returnKeyType="search"
               />
               {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={handleClearSearch} activeOpacity={0.7}>
-                  <IconSymbol
-                    ios_icon_name="xmark.circle.fill"
-                    android_material_icon_name="cancel"
-                    size={20}
-                    color={colors.textSecondary}
-                  />
+                <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
+                  <IconSymbol ios_icon_name="xmark.circle.fill" android_material_icon_name="cancel" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
               )}
             </View>
@@ -451,13 +395,8 @@ export default function LecturesScreen() {
         )}
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {searchQuery.trim().length > 0 ? (
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        {showSearch && searchQuery.trim().length > 0 ? (
           <View style={styles.searchResultsContainer}>
             {isSearching ? (
               <View style={styles.searchLoadingContainer}>
@@ -465,142 +404,65 @@ export default function LecturesScreen() {
                 <Text style={styles.searchLoadingText}>Searching...</Text>
               </View>
             ) : searchResults.length > 0 ? (
-              <React.Fragment>
-                <Text style={styles.searchResultsTitle}>
-                  Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
-                </Text>
+              <>
+                <Text style={styles.searchResultsTitle}>Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}</Text>
                 <View style={styles.searchResultsList}>
-                  {searchResults.map((lecture, index) => {
+                  {searchResults.map((lecture) => {
                     const thumbnailUrl = lecture.thumbnail_url || (lecture.url ? getYouTubeThumbnailUrl(lecture.url) : '');
                     return (
                       <TouchableOpacity
-                        key={`search-${lecture.id}-${index}`}
+                        key={lecture.id}
                         style={styles.searchResultItem}
                         onPress={() => handleLecturePress(lecture)}
                         activeOpacity={0.7}
                       >
                         {thumbnailUrl ? (
-                          <View style={styles.searchResultThumbnailContainer}>
-                            <Image 
-                              source={{ uri: thumbnailUrl }} 
-                              style={styles.searchResultThumbnailImage}
-                              resizeMode="cover"
-                            />
-                            <View style={styles.searchPlayOverlay}>
-                              <IconSymbol
-                                ios_icon_name="play.circle.fill"
-                                android_material_icon_name="play-circle"
-                                size={32}
-                                color={colors.card}
-                              />
-                            </View>
-                          </View>
+                          <Image source={{ uri: thumbnailUrl }} style={styles.searchResultThumbnail} resizeMode="cover" />
                         ) : (
-                          <View style={styles.searchResultThumbnail}>
-                            <IconSymbol
-                              ios_icon_name="play.circle.fill"
-                              android_material_icon_name="play-circle"
-                              size={32}
-                              color={colors.primary}
-                            />
+                          <View style={[styles.searchResultThumbnail, styles.placeholderThumbnail]}>
+                            <IconSymbol ios_icon_name="video.fill" android_material_icon_name="videocam" size={24} color={colors.textSecondary} />
                           </View>
                         )}
-                        <View style={styles.searchResultInfo}>
-                          <Text style={styles.searchResultTitle} numberOfLines={2}>
-                            {lecture.title}
-                          </Text>
-                          {lecture.scholar_name && (
-                            <Text style={styles.searchResultScholar} numberOfLines={1}>
-                              {lecture.scholar_name}
-                            </Text>
-                          )}
-                          <View style={styles.searchResultMeta}>
-                            {lecture.category && (
-                              <Text style={styles.searchResultCategory}>{lecture.category}</Text>
-                            )}
-                            <Text style={styles.searchResultViews}>{lecture.category ? ' • ' : ''}{lecture.views || 0} views</Text>
-                          </View>
+                        <View style={styles.searchResultContent}>
+                          <Text style={styles.searchResultTitle} numberOfLines={2}>{lecture.title}</Text>
+                          {lecture.scholar_name && <Text style={styles.searchResultSubtitle}>{lecture.scholar_name}</Text>}
                         </View>
                       </TouchableOpacity>
                     );
                   })}
                 </View>
-              </React.Fragment>
+              </>
             ) : (
-              <View style={styles.noResultsContainer}>
-                <IconSymbol
-                  ios_icon_name="magnifyingglass"
-                  android_material_icon_name="search"
-                  size={48}
-                  color={colors.textSecondary}
-                />
-                <Text style={styles.noResultsTitle}>No results found</Text>
-                <Text style={styles.noResultsText}>
-                  Try searching with different keywords
-                </Text>
+              <View style={styles.emptySearchContainer}>
+                <Text style={styles.emptySearchText}>No results found for "{searchQuery}"</Text>
               </View>
             )}
           </View>
         ) : (
-          <React.Fragment>
-            {/* Show uncategorized lectures */}
+          <>
             {uncategorizedLectures.length > 0 && (
-              <View key="uncategorized-section" style={styles.categorySection}>
-                <View style={styles.categoryHeader}>
-                  <Text style={styles.categoryTitle}>Recently Added</Text>
-                  <Text style={styles.categoryCount}>{uncategorizedLectures.length} lectures</Text>
-                </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.lecturesRow}
-                >
-                  {uncategorizedLectures.map((lecture, lectureIndex) => {
+              <View style={styles.categorySection}>
+                <Text style={styles.categoryTitle}>Uncategorized</Text>
+                <Text style={styles.categoryCount}>{uncategorizedLectures.length} lectures</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+                  {uncategorizedLectures.map((lecture) => {
                     const thumbnailUrl = lecture.thumbnail_url || (lecture.url ? getYouTubeThumbnailUrl(lecture.url) : '');
                     return (
                       <TouchableOpacity
-                        key={`uncategorized-${lecture.id}-${lectureIndex}`}
+                        key={lecture.id}
                         style={styles.lectureCard}
                         onPress={() => handleLecturePress(lecture)}
                         activeOpacity={0.7}
                       >
                         {thumbnailUrl ? (
-                          <View style={styles.lectureThumbnailContainer}>
-                            <Image 
-                              source={{ uri: thumbnailUrl }} 
-                              style={styles.lectureThumbnailImage}
-                              resizeMode="cover"
-                            />
-                            <View style={styles.playOverlay}>
-                              <IconSymbol
-                                ios_icon_name="play.circle.fill"
-                                android_material_icon_name="play-circle"
-                                size={40}
-                                color={colors.card}
-                              />
-                            </View>
-                          </View>
+                          <Image source={{ uri: thumbnailUrl }} style={styles.lectureThumbnail} resizeMode="cover" />
                         ) : (
-                          <View style={styles.lectureThumbnail}>
-                            <IconSymbol
-                              ios_icon_name="play.circle.fill"
-                              android_material_icon_name="play-circle"
-                              size={40}
-                              color={colors.primary}
-                            />
+                          <View style={[styles.lectureThumbnail, styles.placeholderThumbnail]}>
+                            <IconSymbol ios_icon_name="video.fill" android_material_icon_name="videocam" size={32} color={colors.textSecondary} />
                           </View>
                         )}
-                        <View style={styles.lectureInfo}>
-                          <Text style={styles.lectureTitle} numberOfLines={2}>
-                            {lecture.title}
-                          </Text>
-                          {lecture.scholar_name && (
-                            <Text style={styles.lectureScholar} numberOfLines={1}>
-                              {lecture.scholar_name}
-                            </Text>
-                          )}
-                          <Text style={styles.lectureViews}>{lecture.views || 0} views</Text>
-                        </View>
+                        <Text style={styles.lectureCardTitle} numberOfLines={2}>{lecture.title}</Text>
+                        {lecture.scholar_name && <Text style={styles.lectureCardSubtitle} numberOfLines={1}>{lecture.scholar_name}</Text>}
                       </TouchableOpacity>
                     );
                   })}
@@ -608,68 +470,33 @@ export default function LecturesScreen() {
               </View>
             )}
 
-            {/* Show categorized lectures */}
-            {categories.map((category, catIndex) => {
+            {categories.map((category) => {
               const lectures = lecturesByCategory[category] || [];
               if (lectures.length === 0) return null;
-
+              
               return (
-                <View key={`category-${category}-${catIndex}`} style={styles.categorySection}>
-                  <View style={styles.categoryHeader}>
-                    <Text style={styles.categoryTitle}>{category}</Text>
-                    <Text style={styles.categoryCount}>{lectures.length} lectures</Text>
-                  </View>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.lecturesRow}
-                  >
-                    {lectures.map((lecture, lectureIndex) => {
+                <View key={category} style={styles.categorySection}>
+                  <Text style={styles.categoryTitle}>{category}</Text>
+                  <Text style={styles.categoryCount}>{lectures.length} lectures</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+                    {lectures.map((lecture) => {
                       const thumbnailUrl = lecture.thumbnail_url || (lecture.url ? getYouTubeThumbnailUrl(lecture.url) : '');
                       return (
                         <TouchableOpacity
-                          key={`${category}-${lecture.id}-${lectureIndex}`}
+                          key={lecture.id}
                           style={styles.lectureCard}
                           onPress={() => handleLecturePress(lecture)}
                           activeOpacity={0.7}
                         >
                           {thumbnailUrl ? (
-                            <View style={styles.lectureThumbnailContainer}>
-                              <Image 
-                                source={{ uri: thumbnailUrl }} 
-                                style={styles.lectureThumbnailImage}
-                                resizeMode="cover"
-                              />
-                              <View style={styles.playOverlay}>
-                                <IconSymbol
-                                  ios_icon_name="play.circle.fill"
-                                  android_material_icon_name="play-circle"
-                                  size={40}
-                                  color={colors.card}
-                                />
-                              </View>
-                            </View>
+                            <Image source={{ uri: thumbnailUrl }} style={styles.lectureThumbnail} resizeMode="cover" />
                           ) : (
-                            <View style={styles.lectureThumbnail}>
-                              <IconSymbol
-                                ios_icon_name="play.circle.fill"
-                                android_material_icon_name="play-circle"
-                                size={40}
-                                color={colors.primary}
-                              />
+                            <View style={[styles.lectureThumbnail, styles.placeholderThumbnail]}>
+                              <IconSymbol ios_icon_name="video.fill" android_material_icon_name="videocam" size={32} color={colors.textSecondary} />
                             </View>
                           )}
-                          <View style={styles.lectureInfo}>
-                            <Text style={styles.lectureTitle} numberOfLines={2}>
-                              {lecture.title}
-                            </Text>
-                            {lecture.scholar_name && (
-                              <Text style={styles.lectureScholar} numberOfLines={1}>
-                                {lecture.scholar_name}
-                              </Text>
-                            )}
-                            <Text style={styles.lectureViews}>{lecture.views || 0} views</Text>
-                          </View>
+                          <Text style={styles.lectureCardTitle} numberOfLines={2}>{lecture.title}</Text>
+                          {lecture.scholar_name && <Text style={styles.lectureCardSubtitle} numberOfLines={1}>{lecture.scholar_name}</Text>}
                         </TouchableOpacity>
                       );
                     })}
@@ -677,497 +504,83 @@ export default function LecturesScreen() {
                 </View>
               );
             })}
-          </React.Fragment>
+          </>
         )}
-
-        <View style={styles.bottomPadding} />
       </ScrollView>
 
-      <Modal
-        visible={showTrackingModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          console.log('Modal close requested');
-          setShowTrackingModal(false);
-          setPendingLecture(null);
-        }}
-      >
+      {showTrackingModal && pendingLecture && (
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <LinearGradient
-              colors={['#3B82F6', '#2563EB']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.modalHeader}
-            >
-              <IconSymbol
-                ios_icon_name="book.fill"
-                android_material_icon_name="menu-book"
-                size={32}
-                color="#FFFFFF"
-              />
-              <Text style={styles.modalTitle}>Track in Iman Tracker?</Text>
-            </LinearGradient>
-
-            <View style={styles.modalBody}>
-              <Text style={styles.modalText}>
-                Would you like to track this lecture in your Iman Tracker under ʿIlm (Knowledge)?
-              </Text>
-              {pendingLecture && (
-                <View style={styles.videoPreview}>
-                  <Text style={styles.videoPreviewTitle} numberOfLines={2}>
-                    {pendingLecture.title}
-                  </Text>
-                  {pendingLecture.scholar_name && (
-                    <Text style={styles.videoPreviewScholar}>
-                      by {pendingLecture.scholar_name}
-                    </Text>
-                  )}
-                </View>
-              )}
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalButtonSecondary}
-                onPress={handleWatchWithoutTracking}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.modalButtonSecondaryText}>No, Just Watch</Text>
+            <Text style={styles.modalTitle}>Track This Lecture?</Text>
+            <Text style={styles.modalText}>
+              Would you like to track this lecture for your learning goals?
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={[styles.modalButton, styles.trackButton]} onPress={handleTrackAndWatch} activeOpacity={0.7}>
+                <Text style={styles.trackButtonText}>Track & Watch</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalButtonPrimary}
-                onPress={handleTrackAndWatch}
-                activeOpacity={0.7}
-              >
-                <LinearGradient
-                  colors={['#3B82F6', '#2563EB']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.modalButtonGradient}
-                >
-                  <IconSymbol
-                    ios_icon_name="checkmark.circle.fill"
-                    android_material_icon_name="check-circle"
-                    size={20}
-                    color="#FFFFFF"
-                  />
-                  <Text style={styles.modalButtonPrimaryText}>Track & Watch</Text>
-                </LinearGradient>
+              <TouchableOpacity style={[styles.modalButton, styles.watchButton]} onPress={handleWatchWithoutTracking} activeOpacity={0.7}>
+                <Text style={styles.watchButtonText}>Watch Only</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
-      </Modal>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    paddingTop: Platform.OS === 'android' ? 56 : 20,
-    paddingHorizontal: spacing.xl,
-    paddingBottom: 120,
-  },
-  scrollContent: {
-    paddingTop: spacing.md,
-    paddingBottom: 120,
-  },
-  centerContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginTop: spacing.lg,
-  },
-  headerContainer: {
-    paddingTop: Platform.OS === 'android' ? 56 : 20,
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.md,
-    backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerTextContainer: {
-    flex: 1,
-  },
-  headerTitle: {
-    ...typography.h2,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  headerSubtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  searchButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...shadows.small,
-  },
-  searchContainer: {
-    marginTop: spacing.md,
-  },
-  searchInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    ...shadows.small,
-  },
-  searchInput: {
-    flex: 1,
-    ...typography.body,
-    color: colors.text,
-    marginLeft: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  searchResultsContainer: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
-  },
-  searchLoadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xxl,
-  },
-  searchLoadingText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginLeft: spacing.md,
-  },
-  searchResultsTitle: {
-    ...typography.h4,
-    color: colors.text,
-    marginBottom: spacing.lg,
-  },
-  searchResultsList: {
-    gap: spacing.md,
-  },
-  searchResultItem: {
-    flexDirection: 'row',
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    ...shadows.small,
-  },
-  searchResultThumbnail: {
-    width: 80,
-    height: 80,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.backgroundAlt,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.md,
-  },
-  searchResultThumbnailContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-    marginRight: spacing.md,
-    position: 'relative',
-  },
-  searchResultThumbnailImage: {
-    width: '100%',
-    height: '100%',
-  },
-  searchPlayOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  searchResultInfo: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  searchResultTitle: {
-    ...typography.bodyBold,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  searchResultScholar: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  searchResultMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  searchResultCategory: {
-    ...typography.small,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  searchResultViews: {
-    ...typography.small,
-    color: colors.textSecondary,
-  },
-  noResultsContainer: {
-    alignItems: 'center',
-    paddingVertical: spacing.xxxl,
-  },
-  noResultsTitle: {
-    ...typography.h4,
-    color: colors.text,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  noResultsText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  setupBanner: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.xxxl,
-    alignItems: 'center',
-    marginBottom: spacing.xxl,
-    ...shadows.colored,
-  },
-  setupIconContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.lg,
-  },
-  setupTitle: {
-    ...typography.h2,
-    color: colors.card,
-    marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-  setupDescription: {
-    ...typography.body,
-    color: colors.card,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  emptyCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xxxl,
-    alignItems: 'center',
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  emptyIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: colors.backgroundAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.lg,
-  },
-  emptyTitle: {
-    ...typography.h3,
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  emptyText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: spacing.xl,
-  },
-  categorySection: {
-    marginBottom: spacing.xxl,
-  },
-  categoryHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    marginBottom: spacing.md,
-  },
-  categoryTitle: {
-    ...typography.h4,
-    color: colors.text,
-  },
-  categoryCount: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
-  lecturesRow: {
-    paddingHorizontal: spacing.xl,
-    gap: spacing.md,
-  },
-  lectureCard: {
-    width: 200,
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    ...shadows.small,
-  },
-  lectureThumbnail: {
-    width: '100%',
-    height: 120,
-    backgroundColor: colors.backgroundAlt,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  lectureThumbnailContainer: {
-    width: '100%',
-    height: 120,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  lectureThumbnailImage: {
-    width: '100%',
-    height: '100%',
-  },
-  playOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  lectureInfo: {
-    padding: spacing.md,
-  },
-  lectureTitle: {
-    ...typography.bodyBold,
-    color: colors.text,
-    marginBottom: spacing.xs,
-    minHeight: 40,
-  },
-  lectureScholar: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  lectureViews: {
-    ...typography.small,
-    color: colors.textSecondary,
-  },
-  bottomPadding: {
-    height: 40,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.xl,
-  },
-  modalContent: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.xl,
-    width: '100%',
-    maxWidth: 400,
-    overflow: 'hidden',
-    ...shadows.large,
-  },
-  modalHeader: {
-    padding: spacing.xl,
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  modalTitle: {
-    ...typography.h3,
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-  modalBody: {
-    padding: spacing.xl,
-    gap: spacing.lg,
-  },
-  modalText: {
-    ...typography.body,
-    color: colors.text,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  videoPreview: {
-    backgroundColor: colors.backgroundAlt,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    gap: spacing.xs,
-  },
-  videoPreviewTitle: {
-    ...typography.bodyBold,
-    color: colors.text,
-  },
-  videoPreviewScholar: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  modalButtonSecondary: {
-    flex: 1,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.backgroundAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalButtonSecondaryText: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  modalButtonPrimary: {
-    flex: 1,
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-    ...shadows.medium,
-  },
-  modalButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    padding: spacing.md,
-  },
-  modalButtonPrimaryText: {
-    ...typography.body,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
+  container: { flex: 1, backgroundColor: colors.background },
+  scrollView: { flex: 1 },
+  contentContainer: { padding: spacing.md },
+  centerContent: { justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: spacing.md, color: colors.textSecondary },
+  headerContainer: { backgroundColor: colors.card, padding: spacing.md, ...shadows.small },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+  headerTextContainer: { flex: 1 },
+  headerTitle: { ...typography.h2, color: colors.text, marginBottom: spacing.xs / 2 },
+  headerSubtitle: { ...typography.body, color: colors.textSecondary, fontSize: 14 },
+  searchButton: { padding: spacing.xs },
+  searchContainer: { marginTop: spacing.sm },
+  searchInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
+  searchInput: { flex: 1, ...typography.body, color: colors.text },
+  scrollContent: { padding: spacing.md },
+  searchResultsContainer: { marginTop: spacing.sm },
+  searchLoadingContainer: { alignItems: 'center', padding: spacing.xl },
+  searchLoadingText: { marginTop: spacing.sm, color: colors.textSecondary },
+  searchResultsTitle: { ...typography.h3, color: colors.text, marginBottom: spacing.md },
+  searchResultsList: { gap: spacing.md },
+  searchResultItem: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: borderRadius.md, padding: spacing.md, ...shadows.small, marginBottom: spacing.sm },
+  searchResultThumbnail: { width: 120, height: 68, borderRadius: borderRadius.sm, marginRight: spacing.md },
+  searchResultContent: { flex: 1, justifyContent: 'center' },
+  searchResultTitle: { ...typography.body, color: colors.text, fontWeight: '600', marginBottom: spacing.xs / 2 },
+  searchResultSubtitle: { ...typography.caption, color: colors.textSecondary },
+  emptySearchContainer: { padding: spacing.xl, alignItems: 'center' },
+  emptySearchText: { ...typography.body, color: colors.textSecondary },
+  categorySection: { marginBottom: spacing.xl },
+  categoryTitle: { ...typography.h3, color: colors.text, marginBottom: spacing.xs / 2 },
+  categoryCount: { ...typography.caption, color: colors.textSecondary, marginBottom: spacing.md },
+  horizontalScroll: { marginHorizontal: -spacing.md },
+  lectureCard: { width: 200, marginRight: spacing.md, backgroundColor: colors.card, borderRadius: borderRadius.md, overflow: 'hidden', ...shadows.small },
+  lectureThumbnail: { width: '100%', height: 112, backgroundColor: colors.background },
+  placeholderThumbnail: { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
+  lectureCardTitle: { ...typography.body, color: colors.text, fontWeight: '600', padding: spacing.sm, paddingBottom: spacing.xs / 2 },
+  lectureCardSubtitle: { ...typography.caption, color: colors.textSecondary, paddingHorizontal: spacing.sm, paddingBottom: spacing.sm },
+  setupBanner: { padding: spacing.xl, borderRadius: borderRadius.lg, alignItems: 'center', gap: spacing.md },
+  setupTitle: { ...typography.h2, color: colors.card, textAlign: 'center' },
+  setupDescription: { ...typography.body, color: colors.card, textAlign: 'center', opacity: 0.9 },
+  emptyCard: { backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.xl, alignItems: 'center', ...shadows.small },
+  emptyTitle: { ...typography.h3, color: colors.text, marginTop: spacing.md, marginBottom: spacing.sm },
+  emptyText: { ...typography.body, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.xl, width: '85%', ...shadows.large },
+  modalTitle: { ...typography.h3, color: colors.text, marginBottom: spacing.sm },
+  modalText: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.lg },
+  modalButtons: { flexDirection: 'row', gap: spacing.md },
+  modalButton: { flex: 1, padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center' },
+  trackButton: { backgroundColor: colors.primary },
+  trackButtonText: { ...typography.body, color: colors.card, fontWeight: '600' },
+  watchButton: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
+  watchButtonText: { ...typography.body, color: colors.text, fontWeight: '600' },
 });

@@ -140,3 +140,20 @@ export async function trackMeditationSession(userId: string): Promise<void> {
     console.log(`❌ Error tracking meditation session:`, error);
   }
 }
+
+/**
+ * Track journal entry
+ * Call this whenever a journal entry is saved
+ */
+export async function trackJournalEntry(userId: string): Promise<void> {
+  try {
+    console.log(`📔 Tracking journal entry for user ${userId}`);
+    
+    // Check for new achievements
+    await checkAndUnlockAchievements(userId);
+    
+    console.log(`✅ Journal entry tracked successfully`);
+  } catch (error) {
+    console.log(`❌ Error tracking journal entry:`, error);
+  }
+}

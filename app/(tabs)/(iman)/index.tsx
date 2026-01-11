@@ -19,8 +19,8 @@ import AchievementsBadges from "@/components/iman/AchievementsBadges";
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Header animation constants
-const HEADER_MAX_HEIGHT = 200;
-const HEADER_MIN_HEIGHT = 80;
+const HEADER_MAX_HEIGHT = 150;
+const HEADER_MIN_HEIGHT = 70;
 const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
 
 // Tab animation constants
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
   },
   headerGradient: {
     flex: 1,
-    padding: spacing.xl,
+    padding: spacing.lg,
     justifyContent: 'center',
   },
   headerContent: {
@@ -412,9 +412,9 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   headerIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
     color: '#FFFFFF',
     marginBottom: spacing.xs,
