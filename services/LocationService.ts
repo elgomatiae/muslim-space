@@ -1,36 +1,28 @@
-
 /**
- * LocationService - Fresh implementation for accurate location tracking
- * Uses expo-location for GPS coordinates
+ * LocationService - Get user's exact GPS location for accurate prayer times
  */
 
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const LOCATION_CACHE_KEY = '@location_cache';
-const LOCATION_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+const LOCATION_CACHE_KEY = '@user_location_cache';
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
 export interface UserLocation {
   latitude: number;
   longitude: number;
-  city?: string;
+  city: string;
   country?: string;
   accuracy?: number;
   timestamp: number;
 }
 
-interface CachedLocation extends UserLocation {
-  cachedAt: number;
-}
-
 /**
- * Request location permissions from the user
+ * Request location permission
  */
 export async function requestLocationPermission(): Promise<boolean> {
   try {
-    console.log('Requesting location permission...');
     const { status } = await Location.requestForegroundPermissionsAsync();
-    console.log('Location permission status:', status);
     return status === 'granted';
   } catch (error) {
     console.error('Error requesting location permission:', error);
@@ -46,136 +38,90 @@ export async function hasLocationPermission(): Promise<boolean> {
     const { status } = await Location.getForegroundPermissionsAsync();
     return status === 'granted';
   } catch (error) {
-    console.error('Error checking location permission:', error);
     return false;
   }
 }
 
 /**
- * Get cached location if available and not expired
+ * Get cached location
  */
 async function getCachedLocation(): Promise<UserLocation | null> {
   try {
     const cached = await AsyncStorage.getItem(LOCATION_CACHE_KEY);
     if (!cached) return null;
 
-    const cachedLocation: CachedLocation = JSON.parse(cached);
+    const location: UserLocation = JSON.parse(cached);
     const now = Date.now();
 
-    // Check if cache is still valid
-    if (now - cachedLocation.cachedAt < LOCATION_CACHE_DURATION) {
-      console.log('Using cached location:', cachedLocation.city);
-      return {
-        latitude: cachedLocation.latitude,
-        longitude: cachedLocation.longitude,
-        city: cachedLocation.city,
-        country: cachedLocation.country,
-        accuracy: cachedLocation.accuracy,
-        timestamp: cachedLocation.timestamp,
-      };
+    // Check if cache is still valid (24 hours)
+    if (now - location.timestamp < CACHE_DURATION) {
+      console.log('✅ Using cached location:', location.city);
+      return location;
     }
 
-    console.log('Cached location expired');
     return null;
   } catch (error) {
-    console.error('Error reading cached location:', error);
     return null;
   }
 }
 
 /**
- * Cache location for future use
+ * Cache location
  */
 async function cacheLocation(location: UserLocation): Promise<void> {
   try {
-    const cachedLocation: CachedLocation = {
-      ...location,
-      cachedAt: Date.now(),
-    };
-    await AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(cachedLocation));
-    console.log('Location cached successfully');
+    await AsyncStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(location));
   } catch (error) {
     console.error('Error caching location:', error);
   }
 }
 
-// Track permission denial to prevent infinite retries
-let permissionDeniedTimestamp: number | null = null;
-const PERMISSION_DENIED_COOLDOWN = 5 * 60 * 1000; // 5 minutes
-
 /**
- * Get current user location with high accuracy
- * Includes guards to prevent infinite retry loops
+ * Get user's current location using GPS
+ * Returns exact coordinates and city name for accurate prayer times
  */
 export async function getCurrentLocation(useCache: boolean = true): Promise<UserLocation> {
   try {
-    // Try to use cached location first
+    // Try cached location first
     if (useCache) {
       const cached = await getCachedLocation();
       if (cached) return cached;
     }
 
-    // Check if permission was recently denied (prevent retry storms)
-    const now = Date.now();
-    if (permissionDeniedTimestamp && (now - permissionDeniedTimestamp) < PERMISSION_DENIED_COOLDOWN) {
-      const cached = await getCachedLocation();
-      if (cached) {
-        return cached;
-      }
-      throw new Error('Location permission denied. Please enable location in settings.');
-    }
-
-    // Check permission and request if not granted
-    let hasPermission = await hasLocationPermission();
+    // Check permission
+    const hasPermission = await hasLocationPermission();
     if (!hasPermission) {
-      hasPermission = await requestLocationPermission();
-      if (!hasPermission) {
-        // Record denial timestamp
-        permissionDeniedTimestamp = now;
-        // Try cached location as fallback
+      const granted = await requestLocationPermission();
+      if (!granted) {
         const cached = await getCachedLocation();
-        if (cached) {
-          return cached;
-        }
-        throw new Error('Location permission not granted');
+        if (cached) return cached;
+        throw new Error('Location permission is required for accurate prayer times');
       }
     }
 
-    // Reset denial timestamp on success
-    permissionDeniedTimestamp = null;
+    // Get GPS coordinates with high accuracy
+    console.log('📍 Getting GPS location...');
+    const position = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.High,
+    });
 
-    // Get current position with high accuracy (with timeout)
-    const position = await Promise.race([
-      Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      }),
-      new Promise<Location.LocationObject>((_, reject) =>
-        setTimeout(() => reject(new Error('Location request timeout')), 15000)
-      ),
-    ]);
-
-    // Reverse geocode to get city name (with timeout)
-    let city: string | undefined;
+    // Reverse geocode to get city name
+    let city = 'Unknown';
     let country: string | undefined;
 
     try {
-      const addresses = await Promise.race([
-        Location.reverseGeocodeAsync({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        }),
-        new Promise<Location.LocationGeocodedAddress[]>((_, reject) =>
-          setTimeout(() => reject(new Error('Geocoding timeout')), 10000)
-        ),
-      ]);
+      const addresses = await Location.reverseGeocodeAsync({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
 
       if (addresses && addresses.length > 0) {
         const address = addresses[0];
-        city = address.city || address.subregion || address.region;
+        city = address.city || address.subregion || address.region || 'Unknown';
         country = address.country;
       }
     } catch (geocodeError) {
-      // Non-critical, continue without city name
+      console.warn('Could not get city name from coordinates');
     }
 
     const location: UserLocation = {
@@ -184,45 +130,33 @@ export async function getCurrentLocation(useCache: boolean = true): Promise<User
       city,
       country,
       accuracy: position.coords.accuracy || undefined,
-      timestamp: position.timestamp,
+      timestamp: Date.now(),
     };
 
     // Cache the location
     await cacheLocation(location);
 
+    console.log(`✅ Location acquired: ${city} (${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)})`);
     return location;
-  } catch (error) {
-    // Try to return cached location as fallback
+  } catch (error: any) {
+    // Try cached location as fallback
     const cached = await getCachedLocation();
     if (cached) {
+      console.log('⚠️ Using cached location due to error:', error.message);
       return cached;
     }
 
-    throw error;
+    throw new Error(error.message || 'Failed to get location');
   }
 }
 
 /**
- * Clear cached location
+ * Clear location cache
  */
 export async function clearLocationCache(): Promise<void> {
   try {
     await AsyncStorage.removeItem(LOCATION_CACHE_KEY);
-    console.log('Location cache cleared');
   } catch (error) {
     console.error('Error clearing location cache:', error);
   }
-}
-
-/**
- * Get location display name
- */
-export function getLocationDisplayName(location: UserLocation): string {
-  if (location.city && location.country) {
-    return `${location.city}, ${location.country}`;
-  }
-  if (location.city) {
-    return location.city;
-  }
-  return `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`;
 }

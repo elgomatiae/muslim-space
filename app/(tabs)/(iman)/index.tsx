@@ -268,83 +268,104 @@ export default function ImanTrackerScreen() {
           {/* IMAN RINGS DISPLAY */}
           <ImanRingsDisplay onRefresh={onRefresh} />
 
-          {/* DEDICATED SECTIONS FOR EACH RING */}
-          <IbadahSection />
-          <IlmSection />
-          <AmanahSection />
-
-          {/* QUICK ACCESS FEATURES */}
-          <View style={styles.featuresSection}>
-            <Text style={styles.featuresTitle}>Track & Grow</Text>
-            
-            <View style={styles.featuresGrid}>
+          {/* QUICK ACCESS FEATURES - MOVED UP */}
+          <View style={styles.quickAccessSection}>
+            <Text style={styles.sectionHeader}>Quick Access</Text>
+            <View style={styles.quickAccessGrid}>
               <TouchableOpacity
-                style={styles.featureCard}
-                onPress={() => router.push('/(tabs)/(iman)/activity' as any)}
-                activeOpacity={0.7}
+                style={styles.quickAccessCard}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/(tabs)/(iman)/activity' as any);
+                }}
+                activeOpacity={0.8}
               >
                 <LinearGradient
                   colors={['#8B5CF6', '#7C3AED']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
-                  style={styles.featureGradient}
+                  style={styles.quickAccessGradient}
                 >
-                  <IconSymbol
-                    ios_icon_name="list.bullet.clipboard.fill"
-                    android_material_icon_name="assignment"
-                    size={32}
-                    color="#FFFFFF"
-                  />
-                  <Text style={styles.featureTitle}>Activity</Text>
-                  <Text style={styles.featureSubtitle}>View log</Text>
+                  <View style={styles.quickAccessIconContainer}>
+                    <IconSymbol
+                      ios_icon_name="list.bullet.clipboard.fill"
+                      android_material_icon_name="assignment"
+                      size={28}
+                      color="#FFFFFF"
+                    />
+                  </View>
+                  <Text style={styles.quickAccessTitle}>Activity</Text>
+                  <Text style={styles.quickAccessSubtitle}>View log</Text>
                 </LinearGradient>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.featureCard}
-                onPress={() => router.push('/(tabs)/(iman)/trends' as any)}
-                activeOpacity={0.7}
+                style={styles.quickAccessCard}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/(tabs)/(iman)/trends' as any);
+                }}
+                activeOpacity={0.8}
               >
                 <LinearGradient
                   colors={['#F59E0B', '#D97706']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
-                  style={styles.featureGradient}
+                  style={styles.quickAccessGradient}
                 >
-                  <IconSymbol
-                    ios_icon_name="chart.line.uptrend.xyaxis"
-                    android_material_icon_name="trending-up"
-                    size={32}
-                    color="#FFFFFF"
-                  />
-                  <Text style={styles.featureTitle}>Trends</Text>
-                  <Text style={styles.featureSubtitle}>View progress</Text>
+                  <View style={styles.quickAccessIconContainer}>
+                    <IconSymbol
+                      ios_icon_name="chart.line.uptrend.xyaxis"
+                      android_material_icon_name="trending-up"
+                      size={28}
+                      color="#FFFFFF"
+                    />
+                  </View>
+                  <Text style={styles.quickAccessTitle}>Trends</Text>
+                  <Text style={styles.quickAccessSubtitle}>View progress</Text>
                 </LinearGradient>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.featureCard}
-                onPress={() => router.push('/(tabs)/(iman)/goals-settings' as any)}
-                activeOpacity={0.7}
+                style={styles.quickAccessCard}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/(tabs)/(iman)/goals-settings' as any);
+                }}
+                activeOpacity={0.8}
               >
                 <LinearGradient
                   colors={['#10B981', '#059669']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
-                  style={styles.featureGradient}
+                  style={styles.quickAccessGradient}
                 >
-                  <IconSymbol
-                    ios_icon_name="target"
-                    android_material_icon_name="flag"
-                    size={32}
-                    color="#FFFFFF"
-                  />
-                  <Text style={styles.featureTitle}>Goals</Text>
-                  <Text style={styles.featureSubtitle}>Set targets</Text>
+                  <View style={styles.quickAccessIconContainer}>
+                    <IconSymbol
+                      ios_icon_name="target"
+                      android_material_icon_name="flag"
+                      size={28}
+                      color="#FFFFFF"
+                    />
+                  </View>
+                  <Text style={styles.quickAccessTitle}>Goals</Text>
+                  <Text style={styles.quickAccessSubtitle}>Set targets</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* SECTION DIVIDER */}
+          <View style={styles.sectionDivider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>Your Goals</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* DEDICATED SECTIONS FOR EACH RING */}
+          <IbadahSection />
+          <IlmSection />
+          <AmanahSection />
 
           <View style={styles.bottomPadding} />
         </Animated.ScrollView>
@@ -504,41 +525,73 @@ const styles = StyleSheet.create({
   bottomPadding: {
     height: 100,
   },
-  featuresSection: {
-    marginBottom: spacing.xxl,
+  quickAccessSection: {
+    marginBottom: spacing.xl,
+    marginTop: spacing.md,
   },
-  featuresTitle: {
+  sectionHeader: {
     ...typography.h3,
     color: colors.text,
+    fontWeight: '700',
     marginBottom: spacing.md,
+    paddingHorizontal: spacing.xs,
   },
-  featuresGrid: {
+  quickAccessGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.md,
   },
-  featureCard: {
-    width: '31%',
-    borderRadius: borderRadius.lg,
+  quickAccessCard: {
+    flex: 1,
+    borderRadius: borderRadius.xl,
     overflow: 'hidden',
-    ...shadows.medium,
+    ...shadows.large,
   },
-  featureGradient: {
+  quickAccessGradient: {
     padding: spacing.lg,
     alignItems: 'center',
-    minHeight: 120,
+    minHeight: 130,
     justifyContent: 'center',
+    gap: spacing.xs,
   },
-  featureTitle: {
+  quickAccessIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  quickAccessTitle: {
     ...typography.bodyBold,
     color: '#FFFFFF',
-    marginTop: spacing.sm,
+    fontSize: 15,
     textAlign: 'center',
+    fontWeight: '700',
   },
-  featureSubtitle: {
-    ...typography.small,
+  quickAccessSubtitle: {
+    ...typography.caption,
     color: 'rgba(255, 255, 255, 0.9)',
-    marginTop: spacing.xs,
     textAlign: 'center',
+    fontSize: 11,
+  },
+  sectionDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: spacing.xl,
+    gap: spacing.md,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    fontSize: 11,
   },
 });

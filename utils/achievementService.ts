@@ -496,6 +496,35 @@ export async function checkAndUnlockAchievements(userId: string): Promise<string
       if (!unlockError) {
         console.log(`🎊 UNLOCKED ${achievementsToUnlock.length} NEW ACHIEVEMENTS!`);
         
+        // Log achievements as activities
+        try {
+          const { logActivity } = await import('./activityLogger');
+          for (const unlock of achievementsToUnlock) {
+            const achievement = achievements.find(a => a.id === unlock.achievement_id);
+            if (achievement) {
+              // Log achievement unlock activity
+              await logActivity({
+                userId,
+                activityType: 'achievement_unlocked',
+                activityCategory: (achievement.category as 'ibadah' | 'ilm' | 'amanah' | 'general') || 'general',
+                activityTitle: `Achievement Unlocked: ${achievement.title}`,
+                activityDescription: achievement.description,
+                pointsEarned: achievement.points || 50,
+                metadata: {
+                  achievement_id: achievement.id,
+                  tier: achievement.tier,
+                  requirement_type: achievement.requirement_type,
+                },
+              });
+            }
+          }
+        } catch (err) {
+          // Silently fail - activity logging is non-critical
+          if (__DEV__) {
+            console.log('Error logging achievement activities:', err);
+          }
+        }
+        
         // Send notifications for newly unlocked achievements
         for (const unlock of achievementsToUnlock) {
           const achievement = achievements.find(a => a.id === unlock.achievement_id);

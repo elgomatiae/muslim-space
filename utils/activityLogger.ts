@@ -74,12 +74,24 @@ export async function logActivity(params: LogActivityParams): Promise<void> {
     });
 
     if (error) {
-      console.error('Error logging activity:', error);
-    } else {
+      // Check if table doesn't exist (PGRST205 error)
+      if (error.code === 'PGRST205' || error.message?.includes('does not exist')) {
+        // Table doesn't exist yet - fail silently
+        return;
+      }
+      if (__DEV__) {
+        console.error('Error logging activity:', error);
+      }
+    } else if (__DEV__) {
       console.log('Activity logged successfully:', params.activityTitle);
     }
-  } catch (error) {
-    console.error('Error in logActivity:', error);
+  } catch (error: any) {
+    if (error?.code === 'PGRST205' || error?.message?.includes('does not exist')) {
+      return;
+    }
+    if (__DEV__) {
+      console.error('Error in logActivity:', error);
+    }
   }
 }
 
@@ -100,13 +112,27 @@ export async function getUserActivityLog(
       .range(offset, offset + limit - 1);
 
     if (error) {
-      console.error('Error fetching activity log:', error);
+      // Check if table doesn't exist (PGRST205 error)
+      if (error.code === 'PGRST205' || error.message?.includes('does not exist')) {
+        // Table doesn't exist yet - return empty array silently
+        return [];
+      }
+      // Only log non-table-missing errors in development
+      if (__DEV__) {
+        console.error('Error fetching activity log:', error);
+      }
       return [];
     }
 
     return data || [];
-  } catch (error) {
-    console.error('Error in getUserActivityLog:', error);
+  } catch (error: any) {
+    // Check if table doesn't exist
+    if (error?.code === 'PGRST205' || error?.message?.includes('does not exist')) {
+      return [];
+    }
+    if (__DEV__) {
+      console.error('Error in getUserActivityLog:', error);
+    }
     return [];
   }
 }
@@ -129,13 +155,24 @@ export async function getActivityLogByCategory(
       .limit(limit);
 
     if (error) {
-      console.error('Error fetching activity log by category:', error);
+      // Check if table doesn't exist (PGRST205 error)
+      if (error.code === 'PGRST205' || error.message?.includes('does not exist')) {
+        return [];
+      }
+      if (__DEV__) {
+        console.error('Error fetching activity log by category:', error);
+      }
       return [];
     }
 
     return data || [];
-  } catch (error) {
-    console.error('Error in getActivityLogByCategory:', error);
+  } catch (error: any) {
+    if (error?.code === 'PGRST205' || error?.message?.includes('does not exist')) {
+      return [];
+    }
+    if (__DEV__) {
+      console.error('Error in getActivityLogByCategory:', error);
+    }
     return [];
   }
 }
@@ -158,13 +195,23 @@ export async function getActivityLogByDateRange(
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching activity log by date range:', error);
+      if (error.code === 'PGRST205' || error.message?.includes('does not exist')) {
+        return [];
+      }
+      if (__DEV__) {
+        console.error('Error fetching activity log by date range:', error);
+      }
       return [];
     }
 
     return data || [];
-  } catch (error) {
-    console.error('Error in getActivityLogByDateRange:', error);
+  } catch (error: any) {
+    if (error?.code === 'PGRST205' || error?.message?.includes('does not exist')) {
+      return [];
+    }
+    if (__DEV__) {
+      console.error('Error in getActivityLogByDateRange:', error);
+    }
     return [];
   }
 }
@@ -193,7 +240,19 @@ export async function getTodayActivityStats(userId: string): Promise<{
       .lt('created_at', tomorrow.toISOString());
 
     if (error) {
-      console.error('Error fetching today activity stats:', error);
+      // Check if table doesn't exist (PGRST205 error)
+      if (error.code === 'PGRST205' || error.message?.includes('does not exist')) {
+        return {
+          totalActivities: 0,
+          ibadahCount: 0,
+          ilmCount: 0,
+          amanahCount: 0,
+          totalPoints: 0,
+        };
+      }
+      if (__DEV__) {
+        console.error('Error fetching today activity stats:', error);
+      }
       return {
         totalActivities: 0,
         ibadahCount: 0,
@@ -212,8 +271,19 @@ export async function getTodayActivityStats(userId: string): Promise<{
     };
 
     return stats;
-  } catch (error) {
-    console.error('Error in getTodayActivityStats:', error);
+  } catch (error: any) {
+    if (error?.code === 'PGRST205' || error?.message?.includes('does not exist')) {
+      return {
+        totalActivities: 0,
+        ibadahCount: 0,
+        ilmCount: 0,
+        amanahCount: 0,
+        totalPoints: 0,
+      };
+    }
+    if (__DEV__) {
+      console.error('Error in getTodayActivityStats:', error);
+    }
     return {
       totalActivities: 0,
       ibadahCount: 0,
@@ -239,11 +309,21 @@ export async function cleanupOldActivityLogs(userId: string): Promise<void> {
       .lt('created_at', ninetyDaysAgo.toISOString());
 
     if (error) {
-      console.error('Error cleaning up old activity logs:', error);
-    } else {
+      if (error.code === 'PGRST205' || error.message?.includes('does not exist')) {
+        return;
+      }
+      if (__DEV__) {
+        console.error('Error cleaning up old activity logs:', error);
+      }
+    } else if (__DEV__) {
       console.log('Old activity logs cleaned up successfully');
     }
-  } catch (error) {
-    console.error('Error in cleanupOldActivityLogs:', error);
+  } catch (error: any) {
+    if (error?.code === 'PGRST205' || error?.message?.includes('does not exist')) {
+      return;
+    }
+    if (__DEV__) {
+      console.error('Error in cleanupOldActivityLogs:', error);
+    }
   }
 }

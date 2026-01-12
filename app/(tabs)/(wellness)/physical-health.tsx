@@ -65,8 +65,30 @@ export default function PhysicalHealthScreen() {
   const [workoutDurations, setWorkoutDurations] = useState<WorkoutDurations>({});
   
   // Animation values
-  const fadeAnim = new Animated.Value(0);
-  const slideAnim = new Animated.Value(50);
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const slideAnim = React.useRef(new Animated.Value(50)).current;
+  const scrollY = React.useRef(new Animated.Value(0)).current;
+  
+  // Collapsing header animations
+  const HEADER_MAX_HEIGHT = 220;
+  const HEADER_MIN_HEIGHT = 100;
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, 120],
+    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
+    extrapolate: 'clamp',
+  });
+  
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [1, 0.4],
+    extrapolate: 'clamp',
+  });
+  
+  const linkOpacity = scrollY.interpolate({
+    inputRange: [0, 80],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
 
   useEffect(() => {
     loadAllData();
@@ -432,22 +454,32 @@ export default function PhysicalHealthScreen() {
     );
   }
 
+  const contentContainerStyle = [
+    styles.contentContainer,
+    { paddingTop: HEADER_MAX_HEIGHT + spacing.lg },
+  ];
+
   return (
-    <ScrollView
+    <Animated.ScrollView
       style={styles.scrollView}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={contentContainerStyle}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
       }
+      onScroll={Animated.event(
+        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+        { useNativeDriver: false }
+      )}
+      scrollEventThrottle={16}
     >
-      {/* Hero Section */}
+      {/* Hero Section - Collapsing */}
       <Animated.View 
         style={[
           styles.heroSection,
+          styles.heroSectionCollapsing,
           {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
+            height: headerHeight,
           },
         ]}
       >
@@ -457,42 +489,54 @@ export default function PhysicalHealthScreen() {
           end={{ x: 1, y: 1 }}
           style={styles.heroGradient}
         >
-          <View style={styles.heroHeader}>
-            <IconSymbol
-              ios_icon_name="figure.run"
-              android_material_icon_name="directions-run"
-              size={48}
-              color={colors.card}
-            />
+          <Animated.View style={[styles.heroHeader, { opacity: headerOpacity }]}>
+            <Animated.View style={{ transform: [{ scale: scrollY.interpolate({
+              inputRange: [0, 120],
+              outputRange: [1, 0.7],
+              extrapolate: 'clamp',
+            }) }] }}>
+              <IconSymbol
+                ios_icon_name="figure.run"
+                android_material_icon_name="directions-run"
+                size={48}
+                color={colors.card}
+              />
+            </Animated.View>
             <Text style={styles.heroTitle}>Physical Wellness</Text>
-            <Text style={styles.heroSubtitle}>
+            <Animated.Text style={[styles.heroSubtitle, { opacity: scrollY.interpolate({
+              inputRange: [0, 80],
+              outputRange: [1, 0],
+              extrapolate: 'clamp',
+            }) }]}>
               Strengthen your body, strengthen your faith
-            </Text>
-          </View>
+            </Animated.Text>
+          </Animated.View>
 
           {/* Quick Access to Iman Tracker */}
-          <TouchableOpacity
-            style={styles.imanTrackerLink}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push('/(tabs)/(iman)' as any);
-            }}
-            activeOpacity={0.8}
-          >
-            <IconSymbol
-              ios_icon_name="sparkles"
-              android_material_icon_name="auto-awesome"
-              size={20}
-              color={colors.card}
-            />
-            <Text style={styles.imanTrackerLinkText}>View in Iman Tracker</Text>
-            <IconSymbol
-              ios_icon_name="arrow.right"
-              android_material_icon_name="arrow-forward"
-              size={20}
-              color={colors.card}
-            />
-          </TouchableOpacity>
+          <Animated.View style={{ opacity: linkOpacity }}>
+            <TouchableOpacity
+              style={styles.imanTrackerLink}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(tabs)/(iman)' as any);
+              }}
+              activeOpacity={0.8}
+            >
+              <IconSymbol
+                ios_icon_name="sparkles"
+                android_material_icon_name="auto-awesome"
+                size={20}
+                color={colors.card}
+              />
+              <Text style={styles.imanTrackerLinkText}>View in Iman Tracker</Text>
+              <IconSymbol
+                ios_icon_name="arrow.right"
+                android_material_icon_name="arrow-forward"
+                size={20}
+                color={colors.card}
+              />
+            </TouchableOpacity>
+          </Animated.View>
         </LinearGradient>
       </Animated.View>
 
@@ -1083,7 +1127,7 @@ export default function PhysicalHealthScreen() {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
 
@@ -1111,6 +1155,13 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xxl,
     overflow: 'hidden',
     ...shadows.large,
+  },
+  heroSectionCollapsing: {
+    position: 'absolute',
+    top: 0,
+    left: spacing.xl,
+    right: spacing.xl,
+    zIndex: 1,
   },
   heroGradient: {
     padding: spacing.xxl,

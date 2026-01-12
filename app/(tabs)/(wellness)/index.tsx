@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, ScrollView } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
@@ -91,6 +91,35 @@ export default function WellnessScreen() {
   const { amanahGoals, sectionScores } = useImanTracker();
   const [activeTab, setActiveTab] = useState<WellnessTab>('mental');
   const tabScaleAnim = useRef(new Animated.Value(1)).current;
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
+  
+  // Collapsing header animations
+  const HEADER_MAX_HEIGHT = 160;
+  const HEADER_MIN_HEIGHT = 100;
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, 60],
+    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
+    extrapolate: 'clamp',
+  });
+  
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 60],
+    outputRange: [1, 0.95],
+    extrapolate: 'clamp',
+  });
+  
+  const subtitleOpacity = scrollY.interpolate({
+    inputRange: [0, 40],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+  
+  const scoreInfoOpacity = scrollY.interpolate({
+    inputRange: [0, 30],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
 
   // Calculate Amanah completion percentage
   const calculateAmanahCompletion = () => {
@@ -239,15 +268,15 @@ export default function WellnessScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Fixed Header Section */}
-      <View style={styles.headerSection}>
+      {/* Collapsing Header Section */}
+      <Animated.View style={[styles.headerSection, { height: headerHeight, top: insets.top + spacing.sm }]}>
         <LinearGradient
           colors={colors.gradientOcean}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
         >
-          <View style={styles.headerContent}>
+          <Animated.View style={[styles.headerContent, { opacity: headerOpacity }]}>
             <View style={styles.headerTop}>
               <View style={styles.headerIconContainer}>
                 <LinearGradient
@@ -259,32 +288,26 @@ export default function WellnessScreen() {
                   <IconSymbol
                     ios_icon_name="heart.circle.fill"
                     android_material_icon_name="favorite"
-                    size={40}
+                    size={32}
                     color={colors.card}
                   />
                 </LinearGradient>
               </View>
               <View style={styles.headerTextContainer}>
-                <Text style={styles.headerTitle}>Wellness Hub</Text>
-                <Text style={styles.headerSubtitle}>Nurture mind, body & soul</Text>
-              </View>
-              
-              {/* Amanah Score - Aligned with title */}
-              <View style={styles.scoreCircle}>
-                <LinearGradient
-                  colors={colors.gradientPrimary}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.scoreCircleGradient}
-                >
-                  <Text style={styles.scoreNumber}>{Math.round(amanahScore)}</Text>
-                  <Text style={styles.scoreLabel}>Score</Text>
-                </LinearGradient>
+                <View style={styles.headerTitleRow}>
+                  <Text style={styles.headerTitle}>Wellness Hub</Text>
+                  <View style={styles.amanahScoreBadge}>
+                    <Text style={styles.amanahScoreText}>{Math.round(amanahScore)}%</Text>
+                  </View>
+                </View>
+                <Animated.Text style={[styles.headerSubtitle, { opacity: subtitleOpacity }]}>
+                  Nurture mind, body & soul
+                </Animated.Text>
               </View>
             </View>
 
             {/* Well-Being Progress Info */}
-            <View style={styles.scoreInfoRow}>
+            <Animated.View style={[styles.scoreInfoRow, { opacity: scoreInfoOpacity }]}>
               <Text style={styles.scoreInfoText}>
                 {amanahCompletion}% of goals completed today
               </Text>
@@ -296,18 +319,30 @@ export default function WellnessScreen() {
                   ]}
                 />
               </View>
-            </View>
-          </View>
+            </Animated.View>
+          </Animated.View>
         </LinearGradient>
-      </View>
+      </Animated.View>
 
-      {/* Fixed Tab Switcher */}
+      {/* Collapsing Tab Switcher */}
       <Animated.View 
         style={[
-          styles.tabContainer,
-          { transform: [{ scale: tabScaleAnim }] }
+          styles.tabContainerWrapper,
+          {
+            top: scrollY.interpolate({
+              inputRange: [0, 60],
+              outputRange: [insets.top + spacing.sm + HEADER_MAX_HEIGHT - spacing.xs, insets.top + spacing.sm + HEADER_MIN_HEIGHT - spacing.xs],
+              extrapolate: 'clamp',
+            }),
+          }
         ]}
       >
+        <Animated.View 
+          style={[
+            styles.tabContainer,
+            { transform: [{ scale: tabScaleAnim }] }
+          ]}
+        >
         <View style={styles.tabSwitcher}>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'mental' && styles.tabActive]}
@@ -383,12 +418,21 @@ export default function WellnessScreen() {
             )}
           </TouchableOpacity>
         </View>
+        </Animated.View>
       </Animated.View>
 
       {/* Scrollable Content */}
-      <ScrollView
+      <Animated.ScrollView
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: HEADER_MAX_HEIGHT + 60 + spacing.xs },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Wellness Cards Grid */}
@@ -439,7 +483,7 @@ export default function WellnessScreen() {
 
         {/* Bottom Padding for Tab Bar */}
         <View style={styles.bottomPadding} />
-      </ScrollView>
+        </Animated.ScrollView>
     </SafeAreaView>
   );
 }
@@ -453,14 +497,20 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     marginTop: spacing.md,
     marginBottom: spacing.xl,
-    borderRadius: borderRadius.xxxl,
+    borderRadius: borderRadius.xxl,
     overflow: 'hidden',
     ...shadows.large,
+    position: 'absolute',
+    top: 0,
+    left: spacing.lg,
+    right: spacing.lg,
+    zIndex: 1,
   },
   headerGradient: {
-    padding: spacing.xl,
-    minHeight: 140,
+    padding: spacing.lg,
+    paddingVertical: spacing.xl,
     justifyContent: 'center',
+    minHeight: 160,
   },
   headerContent: {
     gap: spacing.md,
@@ -469,14 +519,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    minHeight: 64,
   },
   headerIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     overflow: 'hidden',
     ...shadows.medium,
+    flexShrink: 0,
   },
   headerIconGradient: {
     width: '100%',
@@ -488,28 +538,36 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.xs / 2,
+  },
   headerTitle: {
-    ...typography.h1,
+    ...typography.h2,
     color: colors.card,
-    fontWeight: '900',
-    marginBottom: spacing.xs,
-    fontSize: 28,
-    letterSpacing: -0.5,
+    fontWeight: '800',
+    fontSize: 22,
+  },
+  amanahScoreBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.md,
+  },
+  amanahScoreText: {
+    ...typography.bodyBold,
+    color: colors.card,
+    fontSize: 14,
+    fontWeight: '700',
   },
   headerSubtitle: {
     ...typography.body,
     color: colors.card,
-    opacity: 0.95,
-    fontSize: 15,
+    opacity: 0.9,
+    fontSize: 13,
     fontWeight: '500',
-  },
-  scoreCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    overflow: 'hidden',
-    ...shadows.medium,
-    flexShrink: 0,
   },
   scoreCircleGradient: {
     width: '100%',
@@ -553,9 +611,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: borderRadius.sm,
   },
-  tabContainer: {
+  tabContainerWrapper: {
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    position: 'absolute',
+    left: spacing.lg,
+    right: spacing.lg,
+    zIndex: 2,
+  },
+  tabContainer: {
+    width: '100%',
   },
   tabSwitcher: {
     flexDirection: 'row',

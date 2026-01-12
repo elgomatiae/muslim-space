@@ -72,6 +72,42 @@ export default function MentalHealthHubScreen() {
   // Animation values
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
   const slideAnim = React.useRef(new Animated.Value(50)).current;
+  const scrollY = React.useRef(new Animated.Value(0)).current;
+  
+  // Collapsing header animation
+  const HEADER_MAX_HEIGHT = 280;
+  const HEADER_MIN_HEIGHT = 100;
+  const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
+  
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
+    extrapolate: 'clamp',
+  });
+  
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE / 2, HEADER_SCROLL_DISTANCE],
+    outputRange: [1, 0.8, 0.3],
+    extrapolate: 'clamp',
+  });
+  
+  const titleScale = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [1, 0.8],
+    extrapolate: 'clamp',
+  });
+  
+  const statsOpacity = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE / 2],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+  
+  const linkOpacity = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE / 2],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
 
   const loadAllContent = useCallback(async () => {
     setLoading(true);
@@ -332,19 +368,30 @@ export default function MentalHealthHubScreen() {
     return moodObj ? moodObj.emoji : '📝';
   };
 
+  const contentContainerStyle = [
+    styles.contentContainer,
+    { paddingTop: HEADER_MAX_HEIGHT + spacing.lg },
+  ];
+
   return (
-    <ScrollView
+    <Animated.ScrollView
       style={styles.scrollView}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={contentContainerStyle}
       showsVerticalScrollIndicator={false}
+      onScroll={Animated.event(
+        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+        { useNativeDriver: false }
+      )}
+      scrollEventThrottle={16}
     >
-      {/* Hero Section with Stats */}
+      {/* Hero Section with Stats - Collapsing Header */}
       <Animated.View 
         style={[
           styles.heroSection,
+          styles.heroSectionCollapsing,
           {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
+            height: headerHeight,
+            opacity: headerOpacity,
           },
         ]}
       >
@@ -354,7 +401,14 @@ export default function MentalHealthHubScreen() {
           end={{ x: 1, y: 1 }}
           style={styles.heroGradient}
         >
-          <View style={styles.heroHeader}>
+          <Animated.View 
+            style={[
+              styles.heroHeader,
+              {
+                transform: [{ scale: titleScale }],
+              },
+            ]}
+          >
             <IconSymbol
               ios_icon_name="brain.head.profile"
               android_material_icon_name="psychology"
@@ -365,9 +419,16 @@ export default function MentalHealthHubScreen() {
             <Text style={styles.heroSubtitle}>
               Your journey to inner peace
             </Text>
-          </View>
+          </Animated.View>
           
-          <View style={styles.statsRow}>
+          <Animated.View 
+            style={[
+              styles.statsRow,
+              {
+                opacity: statsOpacity,
+              },
+            ]}
+          >
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{journalCount}</Text>
               <Text style={styles.statLabel}>Entries</Text>
@@ -382,31 +443,33 @@ export default function MentalHealthHubScreen() {
               <Text style={styles.statValue}>{duas.length}</Text>
               <Text style={styles.statLabel}>Duas</Text>
             </View>
-          </View>
+          </Animated.View>
 
           {/* Link to Iman Tracker */}
-          <TouchableOpacity
-            style={styles.imanTrackerLink}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push('/(tabs)/(iman)' as any);
-            }}
-            activeOpacity={0.8}
-          >
-            <IconSymbol
-              ios_icon_name="sparkles"
-              android_material_icon_name="auto-awesome"
-              size={20}
-              color={colors.card}
-            />
-            <Text style={styles.imanTrackerLinkText}>View in Iman Tracker</Text>
-            <IconSymbol
-              ios_icon_name="arrow.right"
-              android_material_icon_name="arrow-forward"
-              size={20}
-              color={colors.card}
-            />
-          </TouchableOpacity>
+          <Animated.View style={{ opacity: linkOpacity }}>
+            <TouchableOpacity
+              style={styles.imanTrackerLink}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(tabs)/(iman)' as any);
+              }}
+              activeOpacity={0.8}
+            >
+              <IconSymbol
+                ios_icon_name="sparkles"
+                android_material_icon_name="auto-awesome"
+                size={20}
+                color={colors.card}
+              />
+              <Text style={styles.imanTrackerLinkText}>View in Iman Tracker</Text>
+              <IconSymbol
+                ios_icon_name="arrow.right"
+                android_material_icon_name="arrow-forward"
+                size={20}
+                color={colors.card}
+              />
+            </TouchableOpacity>
+          </Animated.View>
         </LinearGradient>
       </Animated.View>
 
@@ -933,7 +996,7 @@ export default function MentalHealthHubScreen() {
       </Modal>
 
       <View style={styles.bottomPadding} />
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
 
@@ -950,6 +1013,13 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xxl,
     overflow: 'hidden',
     ...shadows.large,
+  },
+  heroSectionCollapsing: {
+    position: 'absolute',
+    top: 0,
+    left: spacing.xl,
+    right: spacing.xl,
+    zIndex: 1,
   },
   heroGradient: {
     padding: spacing.xxl,

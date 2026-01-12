@@ -16,6 +16,7 @@ import {
 } from '@/utils/imanScoreCalculator';
 import { useAuth } from './AuthContext';
 import { clearUserSpecificData } from '@/utils/userSpecificStorage';
+import { logIbadahActivity, logIlmActivity, logAmanahActivity } from '@/utils/activityLoggingHelper';
 
 interface ImanTrackerContextType {
   ibadahGoals: IbadahGoals;
@@ -112,6 +113,7 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
     try {
       console.log(`🔄 Updating Ibadah goals for user: ${user.id}...`, goals);
       
+      const oldGoals = { ...ibadahGoals };
       const updated = { ...ibadahGoals, ...goals };
       
       // Optimistically update UI
@@ -119,6 +121,13 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       
       // Save to storage with user-specific key
       await saveIbadahGoals(updated, user.id);
+      
+      // Log activities in background (non-blocking)
+      logIbadahActivity(user.id, oldGoals, updated).catch(err => {
+        if (__DEV__) {
+          console.log('Error logging Ibadah activity:', err);
+        }
+      });
       
       // Refresh scores in background
       refreshScores().catch(err => {
@@ -144,6 +153,7 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
     try {
       console.log(`🔄 Updating Ilm goals for user: ${user.id}...`, goals);
       
+      const oldGoals = { ...ilmGoals };
       const updated = { ...ilmGoals, ...goals };
       
       // Optimistically update UI
@@ -151,6 +161,13 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       
       // Save to storage with user-specific key
       await saveIlmGoals(updated, user.id);
+      
+      // Log activities in background (non-blocking)
+      logIlmActivity(user.id, oldGoals, updated).catch(err => {
+        if (__DEV__) {
+          console.log('Error logging Ilm activity:', err);
+        }
+      });
       
       // Refresh scores in background
       refreshScores().catch(err => {
@@ -176,6 +193,7 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
     try {
       console.log(`🔄 Updating Amanah goals for user: ${user.id}...`, goals);
       
+      const oldGoals = { ...amanahGoals };
       const updated = { ...amanahGoals, ...goals };
       
       // Optimistically update UI
@@ -183,6 +201,13 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       
       // Save to storage with user-specific key
       await saveAmanahGoals(updated, user.id);
+      
+      // Log activities in background (non-blocking)
+      logAmanahActivity(user.id, oldGoals, updated).catch(err => {
+        if (__DEV__) {
+          console.log('Error logging Amanah activity:', err);
+        }
+      });
       
       // Refresh scores in background
       refreshScores().catch(err => {

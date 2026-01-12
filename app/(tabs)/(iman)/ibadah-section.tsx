@@ -48,43 +48,49 @@ export default function IbadahSection() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <LinearGradient
-          colors={['#10B981', '#059669']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.iconContainer}
-        >
-          <IconSymbol
-            ios_icon_name="hands.sparkles.fill"
-            android_material_icon_name="auto-awesome"
-            size={24}
-            color="#FFFFFF"
-          />
-        </LinearGradient>
-        <View style={styles.headerTextContainer}>
-          <Text style={styles.title}>ʿIbādah (Worship)</Text>
-          <Text style={styles.subtitle}>العبادة - Direct acts of devotion</Text>
+      <LinearGradient
+        colors={['#10B98115', '#10B98105', '#FFFFFF']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.sectionWrapper}
+      >
+        <View style={styles.header}>
+          <LinearGradient
+            colors={['#10B981', '#059669']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.iconContainer}
+          >
+            <IconSymbol
+              ios_icon_name="hands.sparkles.fill"
+              android_material_icon_name="auto-awesome"
+              size={24}
+              color="#FFFFFF"
+            />
+          </LinearGradient>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.title}>ʿIbādah (Worship)</Text>
+            <Text style={styles.subtitle}>العبادة - Direct acts of devotion</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push({
+                pathname: '/(tabs)/(iman)/goals-settings',
+                params: { section: 'ibadah' }
+              });
+            }}
+            activeOpacity={0.7}
+          >
+            <IconSymbol
+              ios_icon_name="gearshape.fill"
+              android_material_icon_name="settings"
+              size={20}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={styles.settingsButton}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push({
-              pathname: '/(tabs)/(iman)/goals-settings',
-              params: { section: 'ibadah' }
-            });
-          }}
-          activeOpacity={0.7}
-        >
-          <IconSymbol
-            ios_icon_name="gearshape.fill"
-            android_material_icon_name="settings"
-            size={20}
-            color={colors.primary}
-          />
-        </TouchableOpacity>
-      </View>
 
       {/* Salah Section */}
       <View style={styles.subsection}>
@@ -621,13 +627,21 @@ export default function IbadahSection() {
           </View>
         </View>
       )}
+      </LinearGradient>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.xl,
+  },
+  sectionWrapper: {
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: '#10B98120',
+    ...shadows.medium,
   },
   header: {
     flexDirection: 'row',
@@ -671,7 +685,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#10B98115',
     ...shadows.small,
   },
   subsectionHeader: {

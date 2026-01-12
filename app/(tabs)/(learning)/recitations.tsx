@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, TextInput, Keyboard, Alert, Image } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import VideoPlayer from '@/components/VideoPlayer';
@@ -85,6 +86,7 @@ function shuffleArray<T>(array: T[]): T[] {
 export default function RecitationsScreen() {
   const { user } = useAuth();
   const { ilmGoals, updateIlmGoals } = useImanTracker();
+  const insets = useSafeAreaInsets();
   const [categories, setCategories] = useState<string[]>([]);
   const [recitationsByCategory, setRecitationsByCategory] = useState<{ [key: string]: RecitationDisplay[] }>({});
   const [uncategorizedRecitations, setUncategorizedRecitations] = useState<RecitationDisplay[]>([]);
@@ -212,9 +214,9 @@ export default function RecitationsScreen() {
       if (ilmGoals) {
         const updatedGoals = {
           ...ilmGoals,
-          ilm_weekly_lectures_completed: Math.min(
-            (ilmGoals.ilm_weekly_lectures_completed || 0) + 1,
-            ilmGoals.ilm_weekly_lectures_goal || 10
+          weeklyRecitationsCompleted: Math.min(
+            (ilmGoals.weeklyRecitationsCompleted || 0) + 1,
+            ilmGoals.weeklyRecitationsGoal || 10
           ),
         };
         await updateIlmGoals(updatedGoals);
@@ -354,48 +356,78 @@ export default function RecitationsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerContainer}>
-        <View style={styles.headerTop}>
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle}>Quran Recitations</Text>
-            <Text style={styles.headerSubtitle}>
-              {totalRecitations} recitation{totalRecitations !== 1 ? 's' : ''} • {categories.length} categories
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.searchButton} onPress={handleSearchToggle} activeOpacity={0.7}>
-            <IconSymbol
-              ios_icon_name={showSearch ? 'xmark' : 'magnifyingglass'}
-              android_material_icon_name={showSearch ? 'close' : 'search'}
-              size={24}
-              color={colors.text}
-            />
-          </TouchableOpacity>
-        </View>
-
-        {showSearch && (
-          <View style={styles.searchContainer}>
-            <View style={styles.searchInputContainer}>
-              <IconSymbol ios_icon_name="magnifyingglass" android_material_icon_name="search" size={20} color={colors.textSecondary} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search recitations, reciters..."
-                placeholderTextColor={colors.textSecondary}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                autoFocus
-                returnKeyType="search"
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
-                  <IconSymbol ios_icon_name="xmark.circle.fill" android_material_icon_name="cancel" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
-              )}
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        {/* Hero Header Section */}
+        <LinearGradient
+          colors={colors.gradientOcean}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.heroSection, { marginTop: insets.top + spacing.sm }]}
+        >
+          <View style={styles.heroContent}>
+            <View style={styles.heroHeader}>
+              <View style={styles.heroIconContainer}>
+                <LinearGradient
+                  colors={['rgba(255, 255, 255, 0.3)', 'rgba(255, 255, 255, 0.1)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.heroIconGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="music.note.list"
+                    android_material_icon_name="library-music"
+                    size={40}
+                    color={colors.card}
+                  />
+                </LinearGradient>
+              </View>
+              <View style={styles.heroTextContainer}>
+                <Text style={styles.heroTitle}>Quran Recitations</Text>
+                <Text style={styles.heroSubtitle}>
+                  {totalRecitations} recitation{totalRecitations !== 1 ? 's' : ''} • {categories.length} categories
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.searchButtonHero} onPress={handleSearchToggle} activeOpacity={0.7}>
+                <LinearGradient
+                  colors={['rgba(255, 255, 255, 0.3)', 'rgba(255, 255, 255, 0.1)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.searchButtonGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name={showSearch ? 'xmark' : 'magnifyingglass'}
+                    android_material_icon_name={showSearch ? 'close' : 'search'}
+                    size={22}
+                    color={colors.card}
+                  />
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
-          </View>
-        )}
-      </View>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+            {showSearch && (
+              <View style={styles.searchContainerHero}>
+                <View style={styles.searchInputContainerHero}>
+                  <IconSymbol ios_icon_name="magnifyingglass" android_material_icon_name="search" size={20} color={colors.card} />
+                  <TextInput
+                    style={styles.searchInputHero}
+                    placeholder="Search recitations, reciters..."
+                    placeholderTextColor="rgba(255, 255, 255, 0.7)"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    autoFocus
+                    returnKeyType="search"
+                  />
+                  {searchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
+                      <IconSymbol ios_icon_name="xmark.circle.fill" android_material_icon_name="cancel" size={20} color={colors.card} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            )}
+          </View>
+        </LinearGradient>
+
         {showSearch && searchQuery.trim().length > 0 ? (
           <View style={styles.searchResultsContainer}>
             {isSearching ? (
@@ -442,9 +474,25 @@ export default function RecitationsScreen() {
           <>
             {uncategorizedRecitations.length > 0 && (
               <View style={styles.categorySection}>
-                <Text style={styles.categoryTitle}>Uncategorized</Text>
-                <Text style={styles.categoryCount}>{uncategorizedRecitations.length} recitations</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+                <View style={styles.categoryHeader}>
+                  <View style={styles.categoryHeaderLeft}>
+                    <View style={styles.categoryIconContainer}>
+                      <LinearGradient
+                        colors={colors.gradientPrimary}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.categoryIconGradient}
+                      >
+                        <IconSymbol ios_icon_name="square.grid.2x2" android_material_icon_name="apps" size={18} color={colors.card} />
+                      </LinearGradient>
+                    </View>
+                    <View>
+                      <Text style={styles.categoryTitle}>Uncategorized</Text>
+                      <Text style={styles.categoryCount}>{uncategorizedRecitations.length} recitations</Text>
+                    </View>
+                  </View>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll} contentContainerStyle={styles.horizontalScrollContent}>
                   {uncategorizedRecitations.map((recitation) => {
                     const thumbnailUrl = recitation.image_url || (recitation.url ? getYouTubeThumbnailUrl(recitation.url) : '');
                     return (
@@ -452,17 +500,41 @@ export default function RecitationsScreen() {
                         key={recitation.id}
                         style={styles.recitationCard}
                         onPress={() => handleRecitationPress(recitation)}
-                        activeOpacity={0.7}
+                        activeOpacity={0.8}
                       >
-                        {thumbnailUrl ? (
-                          <Image source={{ uri: thumbnailUrl }} style={styles.recitationThumbnail} resizeMode="cover" />
-                        ) : (
-                          <View style={[styles.recitationThumbnail, styles.placeholderThumbnail]}>
-                            <IconSymbol ios_icon_name="music.note" android_material_icon_name="headset" size={32} color={colors.textSecondary} />
+                        <View style={styles.recitationCardImageContainer}>
+                          {thumbnailUrl ? (
+                            <Image source={{ uri: thumbnailUrl }} style={styles.recitationThumbnail} resizeMode="cover" />
+                          ) : (
+                            <LinearGradient
+                              colors={colors.gradientOcean}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 1 }}
+                              style={styles.recitationThumbnail}
+                            >
+                              <IconSymbol ios_icon_name="music.note" android_material_icon_name="headset" size={40} color={colors.card} />
+                            </LinearGradient>
+                          )}
+                          <View style={styles.playButtonOverlay}>
+                            <LinearGradient
+                              colors={['rgba(0, 0, 0, 0.5)', 'rgba(0, 0, 0, 0.3)']}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 0, y: 1 }}
+                              style={styles.playButtonGradient}
+                            >
+                              <IconSymbol ios_icon_name="play.circle.fill" android_material_icon_name="play-circle-filled" size={36} color={colors.card} />
+                            </LinearGradient>
                           </View>
-                        )}
-                        <Text style={styles.recitationCardTitle} numberOfLines={2}>{recitation.title}</Text>
-                        {recitation.reciter_name && <Text style={styles.recitationCardSubtitle} numberOfLines={1}>{recitation.reciter_name}</Text>}
+                        </View>
+                        <View style={styles.recitationCardContent}>
+                          <Text style={styles.recitationCardTitle} numberOfLines={2}>{recitation.title}</Text>
+                          {recitation.reciter_name && (
+                            <View style={styles.reciterInfo}>
+                              <IconSymbol ios_icon_name="person.fill" android_material_icon_name="person" size={14} color={colors.textSecondary} />
+                              <Text style={styles.recitationCardSubtitle} numberOfLines={1}>{recitation.reciter_name}</Text>
+                            </View>
+                          )}
+                        </View>
                       </TouchableOpacity>
                     );
                   })}
@@ -476,9 +548,25 @@ export default function RecitationsScreen() {
               
               return (
                 <View key={category} style={styles.categorySection}>
-                  <Text style={styles.categoryTitle}>{category}</Text>
-                  <Text style={styles.categoryCount}>{recitations.length} recitations</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+                  <View style={styles.categoryHeader}>
+                    <View style={styles.categoryHeaderLeft}>
+                      <View style={styles.categoryIconContainer}>
+                        <LinearGradient
+                          colors={colors.gradientPrimary}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.categoryIconGradient}
+                        >
+                          <IconSymbol ios_icon_name="folder.fill" android_material_icon_name="folder" size={18} color={colors.card} />
+                        </LinearGradient>
+                      </View>
+                      <View>
+                        <Text style={styles.categoryTitle}>{category}</Text>
+                        <Text style={styles.categoryCount}>{recitations.length} recitations</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll} contentContainerStyle={styles.horizontalScrollContent}>
                     {recitations.map((recitation) => {
                       const thumbnailUrl = recitation.image_url || (recitation.url ? getYouTubeThumbnailUrl(recitation.url) : '');
                       return (
@@ -486,17 +574,41 @@ export default function RecitationsScreen() {
                           key={recitation.id}
                           style={styles.recitationCard}
                           onPress={() => handleRecitationPress(recitation)}
-                          activeOpacity={0.7}
+                          activeOpacity={0.8}
                         >
-                          {thumbnailUrl ? (
-                            <Image source={{ uri: thumbnailUrl }} style={styles.recitationThumbnail} resizeMode="cover" />
-                          ) : (
-                            <View style={[styles.recitationThumbnail, styles.placeholderThumbnail]}>
-                              <IconSymbol ios_icon_name="music.note" android_material_icon_name="headset" size={32} color={colors.textSecondary} />
+                          <View style={styles.recitationCardImageContainer}>
+                            {thumbnailUrl ? (
+                              <Image source={{ uri: thumbnailUrl }} style={styles.recitationThumbnail} resizeMode="cover" />
+                            ) : (
+                              <LinearGradient
+                                colors={colors.gradientOcean}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={styles.recitationThumbnail}
+                              >
+                                <IconSymbol ios_icon_name="music.note" android_material_icon_name="headset" size={40} color={colors.card} />
+                              </LinearGradient>
+                            )}
+                            <View style={styles.playButtonOverlay}>
+                              <LinearGradient
+                                colors={['rgba(0, 0, 0, 0.5)', 'rgba(0, 0, 0, 0.3)']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 0, y: 1 }}
+                                style={styles.playButtonGradient}
+                              >
+                                <IconSymbol ios_icon_name="play.circle.fill" android_material_icon_name="play-circle-filled" size={36} color={colors.card} />
+                              </LinearGradient>
                             </View>
-                          )}
-                          <Text style={styles.recitationCardTitle} numberOfLines={2}>{recitation.title}</Text>
-                          {recitation.reciter_name && <Text style={styles.recitationCardSubtitle} numberOfLines={1}>{recitation.reciter_name}</Text>}
+                          </View>
+                          <View style={styles.recitationCardContent}>
+                            <Text style={styles.recitationCardTitle} numberOfLines={2}>{recitation.title}</Text>
+                            {recitation.reciter_name && (
+                              <View style={styles.reciterInfo}>
+                                <IconSymbol ios_icon_name="person.fill" android_material_icon_name="person" size={14} color={colors.textSecondary} />
+                                <Text style={styles.recitationCardSubtitle} numberOfLines={1}>{recitation.reciter_name}</Text>
+                              </View>
+                            )}
+                          </View>
                         </TouchableOpacity>
                       );
                     })}
@@ -506,6 +618,7 @@ export default function RecitationsScreen() {
             })}
           </>
         )}
+        <View style={styles.bottomPadding} />
       </ScrollView>
 
       {showTrackingModal && pendingRecitation && (
@@ -536,37 +649,203 @@ const styles = StyleSheet.create({
   contentContainer: { padding: spacing.md },
   centerContent: { justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: spacing.md, color: colors.textSecondary },
-  headerContainer: { backgroundColor: colors.card, padding: spacing.md, ...shadows.small },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
-  headerTextContainer: { flex: 1 },
-  headerTitle: { ...typography.h2, color: colors.text, marginBottom: spacing.xs / 2 },
-  headerSubtitle: { ...typography.body, color: colors.textSecondary, fontSize: 14 },
-  searchButton: { padding: spacing.xs },
-  searchContainer: { marginTop: spacing.sm },
-  searchInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
-  searchInput: { flex: 1, ...typography.body, color: colors.text },
-  scrollContent: { padding: spacing.md },
-  searchResultsContainer: { marginTop: spacing.sm },
+  heroSection: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    marginBottom: spacing.xl,
+    borderRadius: borderRadius.xxl,
+    overflow: 'hidden',
+    ...shadows.large,
+  },
+  heroContent: {
+    padding: spacing.xl,
+  },
+  heroHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  heroIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    marginRight: spacing.md,
+  },
+  heroIconGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroTextContainer: {
+    flex: 1,
+  },
+  heroTitle: {
+    ...typography.h2,
+    color: colors.card,
+    fontWeight: '800',
+    marginBottom: spacing.xs / 2,
+  },
+  heroSubtitle: {
+    ...typography.body,
+    color: colors.card,
+    opacity: 0.9,
+    fontSize: 14,
+  },
+  searchButtonHero: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+  },
+  searchButtonGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchContainerHero: {
+    marginTop: spacing.md,
+  },
+  searchInputContainerHero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  searchInputHero: {
+    flex: 1,
+    ...typography.body,
+    color: colors.card,
+    fontSize: 16,
+  },
+  scrollContent: {
+    paddingBottom: spacing.xxl,
+  },
+  searchResultsContainer: { marginTop: spacing.sm, paddingHorizontal: spacing.lg },
   searchLoadingContainer: { alignItems: 'center', padding: spacing.xl },
   searchLoadingText: { marginTop: spacing.sm, color: colors.textSecondary },
-  searchResultsTitle: { ...typography.h3, color: colors.text, marginBottom: spacing.md },
+  searchResultsTitle: { ...typography.h3, color: colors.text, marginBottom: spacing.md, fontWeight: '700' },
   searchResultsList: { gap: spacing.md },
-  searchResultItem: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: borderRadius.md, padding: spacing.md, ...shadows.small, marginBottom: spacing.sm },
-  searchResultThumbnail: { width: 120, height: 68, borderRadius: borderRadius.sm, marginRight: spacing.md },
+  searchResultItem: {
+    flexDirection: 'row',
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    ...shadows.medium,
+    marginBottom: spacing.sm,
+  },
+  searchResultThumbnail: { width: 120, height: 68, borderRadius: borderRadius.md, marginRight: spacing.md },
   searchResultContent: { flex: 1, justifyContent: 'center' },
   searchResultTitle: { ...typography.body, color: colors.text, fontWeight: '600', marginBottom: spacing.xs / 2 },
   searchResultSubtitle: { ...typography.caption, color: colors.textSecondary },
   emptySearchContainer: { padding: spacing.xl, alignItems: 'center' },
   emptySearchText: { ...typography.body, color: colors.textSecondary },
-  categorySection: { marginBottom: spacing.xl },
-  categoryTitle: { ...typography.h3, color: colors.text, marginBottom: spacing.xs / 2 },
-  categoryCount: { ...typography.caption, color: colors.textSecondary, marginBottom: spacing.md },
-  horizontalScroll: { marginHorizontal: -spacing.md },
-  recitationCard: { width: 200, marginRight: spacing.md, backgroundColor: colors.card, borderRadius: borderRadius.md, overflow: 'hidden', ...shadows.small },
-  recitationThumbnail: { width: '100%', height: 112, backgroundColor: colors.background },
-  placeholderThumbnail: { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
-  recitationCardTitle: { ...typography.body, color: colors.text, fontWeight: '600', padding: spacing.sm, paddingBottom: spacing.xs / 2 },
-  recitationCardSubtitle: { ...typography.caption, color: colors.textSecondary, paddingHorizontal: spacing.sm, paddingBottom: spacing.sm },
+  categorySection: {
+    marginBottom: spacing.xxl,
+    paddingHorizontal: spacing.lg,
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  categoryHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  categoryIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+  },
+  categoryIconGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  categoryTitle: {
+    ...typography.h3,
+    color: colors.text,
+    fontWeight: '700',
+    marginBottom: spacing.xs / 2,
+  },
+  categoryCount: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 13,
+  },
+  horizontalScroll: {
+    marginHorizontal: -spacing.lg,
+  },
+  horizontalScrollContent: {
+    paddingHorizontal: spacing.lg,
+  },
+  recitationCard: {
+    width: 240,
+    marginRight: spacing.md,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    ...shadows.medium,
+  },
+  recitationCardImageContainer: {
+    position: 'relative',
+    width: '100%',
+    height: 140,
+  },
+  recitationThumbnail: {
+    width: '100%',
+    height: '100%',
+  },
+  placeholderThumbnail: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playButtonOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playButtonGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recitationCardContent: {
+    padding: spacing.md,
+  },
+  recitationCardTitle: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  reciterInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs / 2,
+  },
+  recitationCardSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 13,
+  },
   setupBanner: { padding: spacing.xl, borderRadius: borderRadius.lg, alignItems: 'center', gap: spacing.md },
   setupTitle: { ...typography.h2, color: colors.card, textAlign: 'center' },
   setupDescription: { ...typography.body, color: colors.card, textAlign: 'center', opacity: 0.9 },
@@ -583,4 +862,7 @@ const styles = StyleSheet.create({
   trackButtonText: { ...typography.body, color: colors.card, fontWeight: '600' },
   watchButton: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
   watchButtonText: { ...typography.body, color: colors.text, fontWeight: '600' },
+  bottomPadding: {
+    height: spacing.xxl,
+  },
 });

@@ -7,38 +7,15 @@ import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle } from 'react-native-svg';
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNotifications } from "@/contexts/NotificationContext";
-import { router } from "expo-router";
-import * as Haptics from 'expo-haptics';
-import { 
-  getTodayPrayerTimes,
-  getNextPrayer, 
-  getTimeUntilNextPrayer, 
-  PrayerTime,
-  DailyPrayerTimes,
-} from "@/services/PrayerTimeService";
-import { 
-  getCurrentLocation,
-  UserLocation,
-  requestLocationPermission,
-} from "@/services/LocationService";
-import { schedulePrayerNotifications } from "@/services/PrayerNotificationService";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import PrayerTimesWidget from '@/components/PrayerTimesWidget';
 
-import { getDailyVerse, getDailyHadith } from '@/services/DailyContentService';
+import { getDailyVerse, getDailyHadith, type DailyVerse, type DailyHadith } from '@/services/DailyContentService';
 import DailyVerseWidget from '@/components/DailyVerseWidget';
 import DailyHadithWidget from '@/components/DailyHadithWidget';
 import AchievementsHomeWidget from '@/components/iman/AchievementsHomeWidget';
 import { useAchievementCelebration } from '@/contexts/AchievementCelebrationContext';
 import { checkAndUnlockAchievements } from '@/utils/achievementService';
 
-interface CachedPrayerData {
-  location: UserLocation;
-  source: string;
-  confidence: number;
-}
-
-const PRAYER_CACHE_KEY = '@prayer_times_cache';
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -49,193 +26,13 @@ export default function HomeScreen() {
     refreshScores,
     updateIbadahGoals,
   } = useImanTracker();
-  const { settings, requestPermission, notificationPermissionGranted } = useNotifications();
   const { checkForUncelebratedAchievements } = useAchievementCelebration();
-  const [locationPermissionGranted, setLocationPermissionGranted] = useState(false);
 
-  const [prayers, setPrayers] = useState<PrayerTime[]>([]);
-  const [nextPrayer, setNextPrayer] = useState<PrayerTime | null>(null);
-  const [timeUntilNext, setTimeUntilNext] = useState<string>('');
   const [refreshing, setRefreshing] = useState(false);
   const [dailyVerse, setDailyVerse] = useState<DailyVerse | null>(null);
   const [dailyHadith, setDailyHadith] = useState<DailyHadith | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [prayerTimesLoading, setPrayerTimesLoading] = useState(true);
-  const [locationInfo, setLocationInfo] = useState<{
-    location: UserLocation | null;
-    locationName: string | null;
-    accuracy: number | null;
-    source: string;
-    confidence: number;
-  }>({
-    location: null,
-    locationName: null,
-    accuracy: null,
-    source: 'Calculating...',
-    confidence: 0,
-  });
+  const [contentLoading, setContentLoading] = useState(true);
 
-  // Check location permission on mount
-  useEffect(() => {
-    const checkLocationPermission = async () => {
-      const { hasLocationPermission } = await import('@/services/LocationService');
-      setLocationPermissionGranted(await hasLocationPermission());
-    };
-    checkLocationPermission();
-  }, []);
-
-  // Guard to prevent multiple simultaneous location requests
-  const locationRequestInProgress = useRef(false);
-
-  // Load prayer times
-  const loadPrayerTimes = async () => {
-    // Prevent concurrent requests
-    if (locationRequestInProgress.current) {
-      return;
-    }
-
-    try {
-      locationRequestInProgress.current = true;
-      setPrayerTimesLoading(true);
-      
-      // Get location with error handling
-      let location: UserLocation;
-      try {
-        location = await getCurrentLocation(true);
-      } catch (locationError: any) {
-        // If location fails, try to use cached location or show manual input
-        const { getCachedLocation } = await import('@/services/LocationService');
-        const cached = await getCachedLocation();
-        if (cached) {
-          location = cached;
-        } else {
-          // No cached location available - show error but don't crash
-          setLocationInfo({
-            location: null,
-            locationName: null,
-            accuracy: null,
-            source: 'Permission denied',
-            confidence: 0,
-          });
-          setPrayerTimesLoading(false);
-          locationRequestInProgress.current = false;
-          return;
-        }
-      }
-      
-      // Get prayer times
-      const prayerTimesData = await getTodayPrayerTimes(
-        location,
-        user?.id,
-        'NorthAmerica',
-        true
-      );
-      
-      console.log('✅ HomeScreen: Prayer times loaded:', prayerTimesData.prayers.length, 'prayers');
-      
-      // Set location info
-      setLocationInfo({
-        location,
-        locationName: location.city || null,
-        accuracy: location.accuracy || null,
-        source: 'GPS',
-        confidence: 95,
-      });
-      
-      // Sync with prayer goals from context
-      if (ibadahGoals && ibadahGoals.fardPrayers) {
-        const updatedPrayers = prayerTimesData.prayers.map((prayer) => {
-          const prayerKey = prayer.name.toLowerCase() as keyof typeof ibadahGoals.fardPrayers;
-          return {
-            ...prayer,
-            completed: ibadahGoals.fardPrayers[prayerKey] || false,
-          };
-        });
-        setPrayers(updatedPrayers);
-      } else {
-        setPrayers(prayerTimesData.prayers);
-      }
-
-      // Get next prayer
-      const next = getNextPrayer(prayerTimesData);
-      setNextPrayer(next);
-      
-      if (next) {
-        setTimeUntilNext(getTimeUntilNextPrayer(next));
-      }
-      
-      // Update location permission status
-      const { hasLocationPermission } = await import('@/services/LocationService');
-      setLocationPermissionGranted(await hasLocationPermission());
-
-      // Schedule notifications if permissions are granted
-      if (notificationPermissionGranted && locationPermissionGranted && settings.prayerReminders) {
-        schedulePrayerNotifications(prayerTimesData).catch(err => {
-          // Non-critical, log but don't block
-        });
-      }
-    } catch (error: any) {
-      // Log error but don't show alert on every failure (prevent spam)
-      if (error?.message?.includes('permission')) {
-        // Only show alert once for permission errors
-        if (!locationPermissionGranted) {
-          Alert.alert(
-            'Location Permission',
-            'Location permission is required for accurate prayer times. You can enable it in settings or enter your city manually.',
-            [
-              { text: 'Later', style: 'cancel' },
-              { 
-                text: 'Settings', 
-                onPress: async () => {
-                  const { requestLocationPermission } = await import('@/services/LocationService');
-                  await requestLocationPermission();
-                  const { hasLocationPermission } = await import('@/services/LocationService');
-                  setLocationPermissionGranted(await hasLocationPermission());
-                }
-              }
-            ]
-          );
-        }
-      }
-    } finally {
-      setPrayerTimesLoading(false);
-      locationRequestInProgress.current = false;
-    }
-  };
-
-  // Load prayer times on mount (with guard to prevent multiple calls)
-  const loadPrayerTimesRef = useRef(false);
-  useEffect(() => {
-    if (!loadPrayerTimesRef.current && user?.id) {
-      loadPrayerTimesRef.current = true;
-      loadPrayerTimes();
-    }
-  }, [user?.id]);
-
-  // Sync prayers with ibadahGoals from context
-  useEffect(() => {
-    if (ibadahGoals && ibadahGoals.fardPrayers && prayers.length > 0) {
-      const updatedPrayers = prayers.map((prayer) => {
-        const prayerKey = prayer.name.toLowerCase() as keyof typeof ibadahGoals.fardPrayers;
-        return {
-          ...prayer,
-          completed: ibadahGoals.fardPrayers[prayerKey] || false,
-        };
-      });
-      setPrayers(updatedPrayers);
-    }
-  }, [ibadahGoals]);
-
-  // Update time until next prayer every minute
-  useEffect(() => {
-    if (!nextPrayer) return;
-
-    const interval = setInterval(() => {
-      setTimeUntilNext(getTimeUntilNextPrayer(nextPrayer));
-    }, 60000); // Update every minute
-
-    return () => clearInterval(interval);
-  }, [nextPrayer]);
 
   // Load daily content
   useEffect(() => {
@@ -263,7 +60,6 @@ export default function HomeScreen() {
     await Promise.all([
       refreshScores(),
       loadDailyContent(),
-      loadPrayerTimes(),
     ]);
     setRefreshing(false);
   };
@@ -285,78 +81,10 @@ export default function HomeScreen() {
     try {
       // Check and unlock achievements
       await checkAndUnlockAchievements(user.id);
-      
-      // Check for newly unlocked achievements in celebration queue
-      const celebrationQueueKey = `achievement_celebration_queue_${user.id}`;
-      const queueData = await AsyncStorage.getItem(celebrationQueueKey);
-      
-      if (queueData) {
-        const queue = JSON.parse(queueData);
-        if (queue.length > 0) {
-          // Process latest achievement for celebration
-          const latest = queue[queue.length - 1];
-          if (latest.achievement) {
-            // Celebration will be triggered by AchievementCelebrationProvider
-            // Just clear the queue after a delay
-            setTimeout(async () => {
-              await AsyncStorage.removeItem(celebrationQueueKey);
-            }, 1000);
-          }
-        }
-      }
     } catch (error) {
       console.log('Error checking achievements:', error);
     }
   };
-
-  const togglePrayer = async (index: number) => {
-    if (!ibadahGoals) {
-      console.log('⚠️ Ibadah goals not loaded yet');
-      return;
-    }
-
-    const prayerKeys: (keyof typeof ibadahGoals.fardPrayers)[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
-    const prayerKey = prayerKeys[index];
-
-    console.log(`🕌 Toggling prayer: ${prayerKey}`);
-
-    // Update local state immediately for responsive UI
-    const updatedPrayers = [...prayers];
-    updatedPrayers[index].completed = !updatedPrayers[index].completed;
-    setPrayers(updatedPrayers);
-
-    // Update Iman Tracker context
-    const updatedGoals = {
-      ...ibadahGoals,
-      fardPrayers: {
-        ...ibadahGoals.fardPrayers,
-        [prayerKey]: !ibadahGoals.fardPrayers[prayerKey],
-      },
-    };
-
-    // Haptic feedback
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    // Save to context (this will trigger score recalculation)
-    await updateIbadahGoals(updatedGoals);
-
-    // Check for achievements after completing a prayer
-    if (updatedPrayers[index].completed && user?.id) {
-      try {
-        await checkAndUnlockAchievements(user.id);
-        // Check for celebrations after a short delay
-        setTimeout(() => {
-          checkForUncelebratedAchievements(user.id);
-        }, 500);
-      } catch (error) {
-        console.log('Error checking achievements after prayer:', error);
-      }
-    }
-
-    console.log(`✅ Prayer ${prayerKey} toggled successfully`);
-  };
-
-  const completedCount = prayers.filter(p => p.completed).length;
 
   const currentDate = new Date().toLocaleDateString('en-US', { 
     weekday: 'long', 
@@ -364,46 +92,6 @@ export default function HomeScreen() {
     month: 'long', 
     day: 'numeric' 
   });
-
-  const renderProgressCircle = () => {
-    const size = 120;
-    const strokeWidth = 10;
-    const radius = (size - strokeWidth) / 2;
-    const circumference = 2 * Math.PI * radius;
-    const strokeDashoffset = circumference * (1 - completedCount / prayers.length);
-
-    return (
-      <View style={styles.progressCircleContainer}>
-        <Svg width={size} height={size}>
-          <Circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke={colors.highlight}
-            strokeWidth={strokeWidth}
-            fill="none"
-          />
-          <Circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke={colors.card}
-            strokeWidth={strokeWidth}
-            fill="none"
-            strokeDasharray={circumference}
-            strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round"
-            rotation="-90"
-            origin={`${size / 2}, ${size / 2}`}
-          />
-        </Svg>
-        <View style={styles.progressContent}>
-          <Text style={styles.progressNumber}>{completedCount}/{prayers.length}</Text>
-          <Text style={styles.progressLabel}>Prayers</Text>
-        </View>
-      </View>
-    );
-  };
 
   const renderImanRings = () => {
     const centerX = 100;
@@ -544,17 +232,6 @@ export default function HomeScreen() {
     );
   };
 
-  // Get confidence color based on score
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 80) return colors.success;
-    if (confidence >= 60) return colors.warning;
-    return colors.error;
-  };
-
-  // Format location for display
-  const formatLocation = (location: UserLocation) => {
-    return `${location.city}, ${location.country}`;
-  };
 
   return (
     <View style={styles.container}>
@@ -589,146 +266,8 @@ export default function HomeScreen() {
           </View>
         </LinearGradient>
 
-        {/* Next Prayer Card */}
-        {nextPrayer && !prayerTimesLoading && (
-          <View style={styles.nextPrayerCard}>
-            <View style={styles.nextPrayerHeader}>
-              <View style={styles.nextPrayerIconContainer}>
-                <IconSymbol
-                  ios_icon_name="bell.fill"
-                  android_material_icon_name="notifications-active"
-                  size={20}
-                  color={colors.primary}
-                />
-              </View>
-              <Text style={styles.nextPrayerLabel}>Next Prayer</Text>
-              <TouchableOpacity
-                style={styles.settingsButton}
-                onPress={() => router.push('/(tabs)/profile/prayer-settings')}
-                activeOpacity={0.7}
-              >
-                <IconSymbol
-                  ios_icon_name="gear"
-                  android_material_icon_name="settings"
-                  size={18}
-                  color={colors.textSecondary}
-                />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.nextPrayerContent}>
-              <View style={styles.nextPrayerInfo}>
-                <Text style={styles.nextPrayerName}>{nextPrayer.name}</Text>
-                <Text style={styles.nextPrayerArabic}>{nextPrayer.arabicName}</Text>
-              </View>
-              <View style={styles.nextPrayerTimeContainer}>
-                <Text style={styles.nextPrayerTime}>{nextPrayer.time}</Text>
-                {timeUntilNext && timeUntilNext !== '0m' && (
-                  <Text style={styles.nextPrayerCountdown}>in {timeUntilNext}</Text>
-                )}
-              </View>
-            </View>
-            
-            {/* Enhanced Location Info with Confidence Score */}
-            {locationInfo.location && (
-              <View style={styles.locationInfo}>
-                <View style={styles.locationRow}>
-                  <IconSymbol
-                    ios_icon_name="location.fill"
-                    android_material_icon_name="location-on"
-                    size={12}
-                    color={colors.primary}
-                  />
-                  <Text style={styles.locationText}>
-                    {locationInfo.locationName || formatLocation(locationInfo.location)}
-                  </Text>
-                  {locationInfo.accuracy && locationInfo.accuracy < 100 && (
-                    <View style={styles.accuracyBadge}>
-                      <Text style={styles.accuracyText}>
-                        ±{Math.round(locationInfo.accuracy)}m
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                
-                <View style={styles.sourceRow}>
-                  <IconSymbol
-                    ios_icon_name="checkmark.seal.fill"
-                    android_material_icon_name="verified"
-                    size={12}
-                    color={getConfidenceColor(locationInfo.confidence)}
-                  />
-                  <Text style={[styles.sourceText, { color: getConfidenceColor(locationInfo.confidence) }]}>
-                    {locationInfo.source}
-                  </Text>
-                  <View style={[styles.confidenceBadge, { backgroundColor: getConfidenceColor(locationInfo.confidence) + '20' }]}>
-                    <Text style={[styles.confidenceText, { color: getConfidenceColor(locationInfo.confidence) }]}>
-                      {locationInfo.confidence.toFixed(0)}% confidence
-                    </Text>
-                  </View>
-                </View>
-                
-                {/* Notification Status */}
-                {notificationPermissionGranted && settings.prayerReminders && (
-                  <View style={styles.notificationStatus}>
-                    <IconSymbol
-                      ios_icon_name="bell.badge.fill"
-                      android_material_icon_name="notifications-active"
-                      size={12}
-                      color={colors.success}
-                    />
-                    <Text style={[styles.notificationStatusText, { color: colors.success }]}>
-                      Prayer notifications enabled
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
-            
-            {!locationPermissionGranted && (
-              <TouchableOpacity 
-                style={styles.locationWarning}
-                onPress={async () => {
-                  await requestLocationPermission();
-                  const { hasLocationPermission } = await import('@/services/LocationService');
-                  setLocationPermissionGranted(await hasLocationPermission());
-                  await loadPrayerTimes();
-                }}
-                activeOpacity={0.7}
-              >
-                <IconSymbol
-                  ios_icon_name="exclamationmark.triangle.fill"
-                  android_material_icon_name="warning"
-                  size={14}
-                  color={colors.warning}
-                />
-                <Text style={styles.locationWarningText}>
-                  Tap to enable location for accurate prayer times
-                </Text>
-              </TouchableOpacity>
-            )}
-            
-            {!notificationPermissionGranted && locationPermissionGranted && (
-              <TouchableOpacity 
-                style={styles.locationWarning}
-                onPress={async () => {
-                  await requestPermission();
-                  await loadPrayerTimes();
-                }}
-                activeOpacity={0.7}
-              >
-                <IconSymbol
-                  ios_icon_name="bell.slash.fill"
-                  android_material_icon_name="notifications-off"
-                  size={14}
-                  color={colors.warning}
-                />
-                <Text style={styles.locationWarningText}>
-                  Tap to enable notifications for prayer reminders
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
+        {/* Prayer Times Widget - Uses exact GPS location */}
+        <PrayerTimesWidget />
 
         {/* Daily Quran Verse Widget */}
         <DailyVerseWidget verse={dailyVerse} loading={contentLoading} />
@@ -754,103 +293,6 @@ export default function HomeScreen() {
         {/* Achievements Widget */}
         <AchievementsHomeWidget />
 
-        {/* Prayer Tracker Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionIconContainer}>
-              <IconSymbol
-                ios_icon_name="clock.fill"
-                android_material_icon_name="schedule"
-                size={18}
-                color={colors.primary}
-              />
-            </View>
-            <Text style={styles.sectionTitle}>Prayer Tracker</Text>
-          </View>
-          
-          {/* Progress Summary Card with Enhanced Gradient */}
-          <LinearGradient
-            colors={colors.gradientPrimary as unknown as readonly [string, string, ...string[]]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.summaryCard}
-          >
-            {renderProgressCircle()}
-            <Text style={styles.summaryText}>
-              {completedCount === prayers.length 
-                ? 'All prayers completed! 🎉' 
-                : `${completedCount} of ${prayers.length} prayers completed`}
-            </Text>
-          </LinearGradient>
-
-          {/* Prayer List */}
-          {prayerTimesLoading ? (
-            <View style={styles.loadingCard}>
-              <Text style={styles.loadingText}>Calculating prayer times with advanced algorithms...</Text>
-            </View>
-          ) : (
-            <View style={styles.prayerList}>
-              {prayers.map((prayer, index) => (
-                <TouchableOpacity
-                  key={`prayer-${prayer.name}-${index}`}
-                  style={[
-                    styles.prayerCard,
-                    prayer.completed && styles.prayerCardCompleted
-                  ]}
-                  onPress={() => togglePrayer(index)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.prayerLeft}>
-                    <View style={[
-                      styles.prayerIconContainer,
-                      prayer.completed && styles.prayerIconContainerCompleted
-                    ]}>
-                      <IconSymbol
-                        ios_icon_name="moon.fill"
-                        android_material_icon_name="brightness-3"
-                        size={14}
-                        color={prayer.completed ? colors.card : colors.primary}
-                      />
-                    </View>
-                    <View style={styles.prayerInfo}>
-                      <Text style={[
-                        styles.prayerName,
-                        prayer.completed && styles.prayerNameCompleted
-                      ]}>
-                        {prayer.name}
-                      </Text>
-                      <Text style={[
-                        styles.prayerArabic,
-                        prayer.completed && styles.prayerArabicCompleted
-                      ]}>
-                        {prayer.arabicName}
-                      </Text>
-                      <Text style={[
-                        styles.prayerTime,
-                        prayer.completed && styles.prayerTimeCompleted
-                      ]}>
-                        {prayer.time}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={[
-                    styles.checkbox,
-                    prayer.completed && styles.checkboxCompleted
-                  ]}>
-                    {prayer.completed && (
-                      <IconSymbol
-                        ios_icon_name="checkmark"
-                        android_material_icon_name="check"
-                        size={14}
-                        color={colors.card}
-                      />
-                    )}
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
 
         {/* Daily Hadith Widget */}
         <View style={styles.section}>
@@ -992,119 +434,6 @@ const styles = StyleSheet.create({
     ...typography.captionBold,
     color: colors.text,
   },
-  summaryCard: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    marginBottom: spacing.md,
-    alignItems: 'center',
-    ...shadows.emphasis,
-    overflow: 'hidden',
-  },
-  progressCircleContainer: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  progressContent: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.card,
-  },
-  progressLabel: {
-    ...typography.caption,
-    color: colors.card,
-    opacity: 0.95,
-    marginTop: spacing.xs,
-  },
-  summaryText: {
-    ...typography.body,
-    color: colors.card,
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  prayerList: {
-    gap: spacing.sm,
-  },
-  prayerCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    ...shadows.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  prayerCardCompleted: {
-    backgroundColor: colors.highlight,
-    borderColor: colors.primary,
-    borderWidth: 2,
-  },
-  prayerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  prayerIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.round,
-    backgroundColor: colors.highlight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  prayerIconContainerCompleted: {
-    backgroundColor: colors.primary,
-  },
-  prayerInfo: {
-    flex: 1,
-  },
-  prayerName: {
-    ...typography.body,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 2,
-  },
-  prayerNameCompleted: {
-    color: colors.primary,
-  },
-  prayerArabic: {
-    ...typography.small,
-    color: colors.textSecondary,
-    marginBottom: 2,
-  },
-  prayerArabicCompleted: {
-    color: colors.primary,
-  },
-  prayerTime: {
-    fontSize: 11,
-    color: colors.textSecondary,
-  },
-  prayerTimeCompleted: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: borderRadius.sm,
-    borderWidth: 2,
-    borderColor: colors.textSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxCompleted: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
   contentCard: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.xl,
@@ -1197,144 +526,5 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 100,
-  },
-  nextPrayerCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    marginBottom: spacing.xl,
-    ...shadows.medium,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
-  nextPrayerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-    gap: spacing.sm,
-    flex: 1,
-  },
-  settingsButton: {
-    marginLeft: 'auto',
-    padding: spacing.xs,
-  },
-  nextPrayerIconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.highlight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nextPrayerLabel: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  nextPrayerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  nextPrayerInfo: {
-    flex: 1,
-  },
-  nextPrayerName: {
-    ...typography.h3,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  nextPrayerArabic: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  nextPrayerTimeContainer: {
-    alignItems: 'flex-end',
-  },
-  nextPrayerTime: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.primary,
-    marginBottom: spacing.xs,
-  },
-  nextPrayerCountdown: {
-    ...typography.small,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  locationInfo: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: spacing.xs,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  locationText: {
-    ...typography.small,
-    color: colors.primary,
-    flex: 1,
-    fontWeight: '500',
-  },
-  accuracyBadge: {
-    backgroundColor: colors.primary + '20',
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-  },
-  accuracyText: {
-    fontSize: 10,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  sourceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  sourceText: {
-    ...typography.small,
-    fontWeight: '500',
-  },
-  confidenceBadge: {
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-    marginLeft: 'auto',
-  },
-  confidenceText: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  notificationStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  notificationStatusText: {
-    ...typography.small,
-    fontWeight: '500',
-  },
-  locationWarning: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: spacing.xs,
-  },
-  locationWarningText: {
-    ...typography.small,
-    color: colors.warning,
-    flex: 1,
   },
 });

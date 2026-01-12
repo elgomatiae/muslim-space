@@ -53,13 +53,31 @@ export default function ActivityScreen() {
         data = await getActivityLogByCategory(user.id, filter as ActivityCategory, 100);
       }
 
-      setActivities(data);
+      setActivities(data || []);
 
       // Load today's stats
       const stats = await getTodayActivityStats(user.id);
-      setTodayStats(stats);
-    } catch (error) {
-      console.error('Error loading activities:', error);
+      setTodayStats(stats || {
+        totalActivities: 0,
+        ibadahCount: 0,
+        ilmCount: 0,
+        amanahCount: 0,
+        totalPoints: 0,
+      });
+    } catch (error: any) {
+      // Only log non-table-missing errors in development
+      if (__DEV__ && error?.code !== 'PGRST205' && !error?.message?.includes('does not exist')) {
+        console.error('Error loading activities:', error);
+      }
+      // Ensure state is set to empty/default values on error
+      setActivities([]);
+      setTodayStats({
+        totalActivities: 0,
+        ibadahCount: 0,
+        ilmCount: 0,
+        amanahCount: 0,
+        totalPoints: 0,
+      });
     } finally {
       setLoading(false);
     }

@@ -2,7 +2,7 @@
  * DailyContentService - Simple service for fetching daily Quran verses and Hadiths
  */
 
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/app/integrations/supabase/client';
 
 // ============================================================================
 // TYPE DEFINITIONS

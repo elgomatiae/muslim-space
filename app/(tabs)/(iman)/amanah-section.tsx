@@ -37,43 +37,49 @@ export default function AmanahSection() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <LinearGradient
-          colors={['#F59E0B', '#D97706']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.iconContainer}
-        >
-          <IconSymbol
-            ios_icon_name="heart.fill"
-            android_material_icon_name="favorite"
-            size={24}
-            color="#FFFFFF"
-          />
-        </LinearGradient>
-        <View style={styles.headerTextContainer}>
-          <Text style={styles.title}>Amanah (Well-Being)</Text>
-          <Text style={styles.subtitle}>الأمانة - Trust of body and mind</Text>
+      <LinearGradient
+        colors={['#F59E0B15', '#F59E0B05', '#FFFFFF']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.sectionWrapper}
+      >
+        <View style={styles.header}>
+          <LinearGradient
+            colors={['#F59E0B', '#D97706']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.iconContainer}
+          >
+            <IconSymbol
+              ios_icon_name="heart.fill"
+              android_material_icon_name="favorite"
+              size={24}
+              color="#FFFFFF"
+            />
+          </LinearGradient>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.title}>Amanah (Well-Being)</Text>
+            <Text style={styles.subtitle}>الأمانة - Trust of body and mind</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push({
+                pathname: '/(tabs)/(iman)/goals-settings',
+                params: { section: 'amanah' }
+              });
+            }}
+            activeOpacity={0.7}
+          >
+            <IconSymbol
+              ios_icon_name="gearshape.fill"
+              android_material_icon_name="settings"
+              size={20}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={styles.settingsButton}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push({
-              pathname: '/(tabs)/(iman)/goals-settings',
-              params: { section: 'amanah' }
-            });
-          }}
-          activeOpacity={0.7}
-        >
-          <IconSymbol
-            ios_icon_name="gearshape.fill"
-            android_material_icon_name="settings"
-            size={20}
-            color={colors.primary}
-          />
-        </TouchableOpacity>
-      </View>
 
       {!hasAnyGoals && (
         <View style={styles.emptyState}>
@@ -525,13 +531,21 @@ export default function AmanahSection() {
           </View>
         </View>
       )}
+      </LinearGradient>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.xl,
+  },
+  sectionWrapper: {
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: '#F59E0B20',
+    ...shadows.medium,
   },
   header: {
     flexDirection: 'row',
@@ -595,7 +609,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#F59E0B15',
     ...shadows.small,
   },
   subsectionHeader: {

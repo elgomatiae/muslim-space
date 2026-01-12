@@ -31,43 +31,49 @@ export default function IlmSection() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <LinearGradient
-          colors={['#3B82F6', '#2563EB']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.iconContainer}
-        >
-          <IconSymbol
-            ios_icon_name="book.fill"
-            android_material_icon_name="menu-book"
-            size={24}
-            color="#FFFFFF"
-          />
-        </LinearGradient>
-        <View style={styles.headerTextContainer}>
-          <Text style={styles.title}>ʿIlm (Knowledge)</Text>
-          <Text style={styles.subtitle}>العلم - Seeking knowledge that strengthens faith</Text>
+      <LinearGradient
+        colors={['#3B82F615', '#3B82F605', '#FFFFFF']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.sectionWrapper}
+      >
+        <View style={styles.header}>
+          <LinearGradient
+            colors={['#3B82F6', '#2563EB']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.iconContainer}
+          >
+            <IconSymbol
+              ios_icon_name="book.fill"
+              android_material_icon_name="menu-book"
+              size={24}
+              color="#FFFFFF"
+            />
+          </LinearGradient>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.title}>ʿIlm (Knowledge)</Text>
+            <Text style={styles.subtitle}>العلم - Seeking knowledge that strengthens faith</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push({
+                pathname: '/(tabs)/(iman)/goals-settings',
+                params: { section: 'ilm' }
+              });
+            }}
+            activeOpacity={0.7}
+          >
+            <IconSymbol
+              ios_icon_name="gearshape.fill"
+              android_material_icon_name="settings"
+              size={20}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={styles.settingsButton}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push({
-              pathname: '/(tabs)/(iman)/goals-settings',
-              params: { section: 'ilm' }
-            });
-          }}
-          activeOpacity={0.7}
-        >
-          <IconSymbol
-            ios_icon_name="gearshape.fill"
-            android_material_icon_name="settings"
-            size={20}
-            color={colors.primary}
-          />
-        </TouchableOpacity>
-      </View>
 
       {!hasAnyGoals && (
         <View style={styles.emptyState}>
@@ -347,13 +353,21 @@ export default function IlmSection() {
           </View>
         </View>
       )}
+      </LinearGradient>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.xl,
+  },
+  sectionWrapper: {
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: '#3B82F620',
+    ...shadows.medium,
   },
   header: {
     flexDirection: 'row',
@@ -417,7 +431,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#3B82F615',
     ...shadows.small,
   },
   subsectionHeader: {

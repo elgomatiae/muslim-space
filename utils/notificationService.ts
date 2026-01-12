@@ -389,29 +389,15 @@ export async function updateNotificationSettings(
     // Save locally
     await AsyncStorage.setItem('notificationSettings', JSON.stringify(settings));
 
-    // If prayer notifications were toggled, update prayer notification scheduling
+    // If prayer notifications were toggled, cancel or reschedule notifications
     if (settings.prayerNotifications !== undefined) {
-      const { schedulePrayerNotifications, getCachedPrayerTimesData } = await import('../services/PrayerTimeService');
-      const { getCurrentLocation } = await import('../services/LocationService');
-      
-      if (settings.prayerNotifications) {
-        // Enable prayer notifications - get current prayer times and schedule
-        const cachedTimes = await getCachedPrayerTimesData();
-        if (cachedTimes) {
-          const { schedulePrayerNotifications: scheduleNotifs } = await import('../services/PrayerNotificationService');
-          await scheduleNotifs(cachedTimes);
-        } else {
-          // If no cached times, calculate fresh ones
-          const location = await getCurrentLocation();
-          const { getTodayPrayerTimes } = await import('../services/PrayerTimeService');
-          const prayerTimes = await getTodayPrayerTimes(location, userId);
-          const { schedulePrayerNotifications: scheduleNotifs } = await import('../services/PrayerNotificationService');
-          await scheduleNotifs(prayerTimes);
-        }
+      if (!settings.prayerNotifications) {
+        // User disabled prayer notifications - cancel all prayer notifications
+        await cancelPrayerNotifications();
+        console.log('📵 Prayer notifications disabled - cancelled all prayer notifications');
       } else {
-        // Disable prayer notifications - cancel all scheduled
-        const { cancelAllPrayerNotifications } = await import('../services/PrayerNotificationService');
-        await cancelAllPrayerNotifications();
+        // User enabled prayer notifications - they will be rescheduled when PrayerTimesWidget loads
+        console.log('✅ Prayer notifications enabled - will be scheduled when prayer times load');
       }
     }
   } catch (error) {
@@ -470,4 +456,172 @@ export async function sendAchievementNotification(
   description: string
 ): Promise<void> {
   await sendAchievementUnlocked(title, description);
+}
+
+// Prayer notification IDs storage key
+const PRAYER_NOTIFICATION_IDS_KEY = '@prayer_notification_ids';
+
+/**
+ * Schedule prayer time notifications at exact times based on user's location
+ * Schedules notifications for today and tomorrow to ensure coverage
+ */
+export async function schedulePrayerNotifications(
+  prayerTimes: {
+    fajr: { time: string; date: Date; name: string; arabicName: string };
+    dhuhr: { time: string; date: Date; name: string; arabicName: string };
+    asr: { time: string; date: Date; name: string; arabicName: string };
+    maghrib: { time: string; date: Date; name: string; arabicName: string };
+    isha: { time: string; date: Date; name: string; arabicName: string };
+  },
+  userId?: string,
+  tomorrowPrayerTimes?: {
+    fajr: { time: string; date: Date; name: string; arabicName: string };
+    dhuhr: { time: string; date: Date; name: string; arabicName: string };
+    asr: { time: string; date: Date; name: string; arabicName: string };
+    maghrib: { time: string; date: Date; name: string; arabicName: string };
+    isha: { time: string; date: Date; name: string; arabicName: string };
+  }
+): Promise<void> {
+  try {
+    // Check if prayer notifications are enabled
+    const settings = await getNotificationSettings(userId);
+    if (!settings.prayerNotifications) {
+      console.log('📵 Prayer notifications are disabled');
+      return;
+    }
+
+    // Check notification permission
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') {
+      console.log('📵 Notification permission not granted');
+      return;
+    }
+
+    // Cancel existing prayer notifications
+    await cancelPrayerNotifications();
+
+    const now = new Date();
+    const notificationIds: string[] = [];
+
+    // Schedule notifications for today's prayers
+    const prayers = [
+      { key: 'fajr', prayer: prayerTimes.fajr },
+      { key: 'dhuhr', prayer: prayerTimes.dhuhr },
+      { key: 'asr', prayer: prayerTimes.asr },
+      { key: 'maghrib', prayer: prayerTimes.maghrib },
+      { key: 'isha', prayer: prayerTimes.isha },
+    ];
+
+    for (const { key, prayer } of prayers) {
+      // Only schedule if prayer time hasn't passed today
+      if (prayer.date > now) {
+        const notificationId = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `🕌 ${prayer.name} Prayer Time`,
+            body: `It's time for ${prayer.name} (${prayer.arabicName}) prayer`,
+            sound: 'default',
+            priority: Notifications.AndroidNotificationPriority.HIGH,
+            categoryIdentifier: 'prayer',
+            channelId: 'prayer',
+            data: {
+              type: 'prayer',
+              prayerName: prayer.name,
+              prayerTime: prayer.time,
+            },
+          },
+          trigger: {
+            type: 'date',
+            date: prayer.date,
+          },
+          identifier: `prayer_${key}_${prayer.date.toISOString()}`,
+        });
+
+        notificationIds.push(notificationId);
+        console.log(`✅ Scheduled ${prayer.name} notification for ${prayer.time} (ID: ${notificationId})`);
+      } else {
+        console.log(`⏭️ Skipped ${prayer.name} - time has passed`);
+      }
+    }
+
+    // Schedule tomorrow's prayers if provided (for late-day app opens)
+    if (tomorrowPrayerTimes) {
+      const tomorrowPrayers = [
+        { key: 'fajr', prayer: tomorrowPrayerTimes.fajr },
+        { key: 'dhuhr', prayer: tomorrowPrayerTimes.dhuhr },
+        { key: 'asr', prayer: tomorrowPrayerTimes.asr },
+        { key: 'maghrib', prayer: tomorrowPrayerTimes.maghrib },
+        { key: 'isha', prayer: tomorrowPrayerTimes.isha },
+      ];
+
+      for (const { key, prayer } of tomorrowPrayers) {
+        // Schedule all tomorrow's prayers
+        const notificationId = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `🕌 ${prayer.name} Prayer Time`,
+            body: `It's time for ${prayer.name} (${prayer.arabicName}) prayer`,
+            sound: 'default',
+            priority: Notifications.AndroidNotificationPriority.HIGH,
+            categoryIdentifier: 'prayer',
+            channelId: 'prayer',
+            data: {
+              type: 'prayer',
+              prayerName: prayer.name,
+              prayerTime: prayer.time,
+            },
+          },
+          trigger: {
+            type: 'date',
+            date: prayer.date,
+          },
+          identifier: `prayer_${key}_tomorrow_${prayer.date.toISOString()}`,
+        });
+
+        notificationIds.push(notificationId);
+        console.log(`✅ Scheduled tomorrow's ${prayer.name} notification for ${prayer.time}`);
+      }
+    }
+
+    // Save notification IDs for later cancellation
+    await AsyncStorage.setItem(PRAYER_NOTIFICATION_IDS_KEY, JSON.stringify(notificationIds));
+    console.log(`✅ Scheduled ${notificationIds.length} prayer notifications`);
+  } catch (error) {
+    console.error('❌ Error scheduling prayer notifications:', error);
+  }
+}
+
+/**
+ * Cancel all existing prayer notifications
+ */
+export async function cancelPrayerNotifications(): Promise<void> {
+  try {
+    // Get stored notification IDs
+    const storedIds = await AsyncStorage.getItem(PRAYER_NOTIFICATION_IDS_KEY);
+    if (storedIds) {
+      const notificationIds: string[] = JSON.parse(storedIds);
+      for (const id of notificationIds) {
+        try {
+          await Notifications.cancelScheduledNotificationAsync(id);
+        } catch (err) {
+          // Ignore errors for individual cancellations
+        }
+      }
+    }
+
+    // Also cancel any notifications with prayer identifier pattern
+    const allNotifications = await Notifications.getAllScheduledNotificationsAsync();
+    for (const notification of allNotifications) {
+      if (notification.identifier?.startsWith('prayer_')) {
+        try {
+          await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+        } catch (err) {
+          // Ignore errors
+        }
+      }
+    }
+
+    await AsyncStorage.removeItem(PRAYER_NOTIFICATION_IDS_KEY);
+    console.log('✅ Cancelled existing prayer notifications');
+  } catch (error) {
+    console.error('Error cancelling prayer notifications:', error);
+  }
 }
