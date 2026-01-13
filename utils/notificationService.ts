@@ -243,13 +243,24 @@ export async function updateNotificationPreferences(
       });
 
     if (error) {
-      console.log('Error updating notification preferences:', error);
+      // Handle table not found error gracefully
+      if (error.code === 'PGRST205') {
+        console.log('⚠️ notification_preferences table not found - saving locally only. Please run migration 012_create_notification_preferences_table.sql');
+      } else {
+        console.log('Error updating notification preferences:', error);
+      }
     }
 
-    // Also save locally
+    // Always save locally as fallback
     await AsyncStorage.setItem('notificationPreferences', JSON.stringify(preferences));
-  } catch (error) {
+  } catch (error: any) {
     console.log('Error in updateNotificationPreferences:', error);
+    // Save locally as fallback even on error
+    try {
+      await AsyncStorage.setItem('notificationPreferences', JSON.stringify(preferences));
+    } catch (storageError) {
+      console.log('Error saving to AsyncStorage:', storageError);
+    }
   }
 }
 
@@ -262,7 +273,43 @@ export async function loadNotificationPreferences(userId: string): Promise<any> 
       .eq('user_id', userId)
       .single();
 
-    if (error || !data) {
+    if (error) {
+      // Handle table not found error gracefully
+      if (error.code === 'PGRST205') {
+        console.log('⚠️ notification_preferences table not found - using local storage. Please run migration 012_create_notification_preferences_table.sql');
+        // Try to load from local storage
+        try {
+          const localPrefs = await AsyncStorage.getItem('notificationPreferences');
+          if (localPrefs) {
+            return JSON.parse(localPrefs);
+          }
+        } catch (storageError) {
+          // Ignore storage errors
+        }
+      }
+      
+      // Return defaults if no data
+      return {
+        prayer_notifications: true,
+        daily_content_notifications: true,
+        iman_score_notifications: true,
+        iman_tracker_notifications: true,
+        goal_reminder_notifications: true,
+        achievement_notifications: true,
+      };
+    }
+
+    if (!data) {
+      // Try local storage as fallback
+      try {
+        const localPrefs = await AsyncStorage.getItem('notificationPreferences');
+        if (localPrefs) {
+          return JSON.parse(localPrefs);
+        }
+      } catch (storageError) {
+        // Ignore storage errors
+      }
+      
       // Return defaults
       return {
         prayer_notifications: true,
@@ -274,12 +321,24 @@ export async function loadNotificationPreferences(userId: string): Promise<any> 
       };
     }
 
-    // Save locally
+    // Save locally for offline access
     await AsyncStorage.setItem('notificationPreferences', JSON.stringify(data));
 
     return data;
-  } catch (error) {
+  } catch (error: any) {
     console.log('Error loading notification preferences:', error);
+    
+    // Try local storage as fallback
+    try {
+      const localPrefs = await AsyncStorage.getItem('notificationPreferences');
+      if (localPrefs) {
+        return JSON.parse(localPrefs);
+      }
+    } catch (storageError) {
+      // Ignore storage errors
+    }
+    
+    // Return defaults
     return {
       prayer_notifications: true,
       daily_content_notifications: true,

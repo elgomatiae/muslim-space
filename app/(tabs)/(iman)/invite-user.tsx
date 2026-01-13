@@ -74,7 +74,8 @@ export default function InviteUserScreen() {
           errorMessage += 'No profiles found in database. Make sure users have signed up and have profiles.';
         }
         
-        Alert.alert('User Not Found', errorMessage);
+        const { getErrorMessage } = require('@/utils/errorHandler');
+        Alert.alert('User Not Found', getErrorMessage(error) || errorMessage);
         setLoading(false);
         return;
       }
@@ -118,7 +119,8 @@ export default function InviteUserScreen() {
       if (error.message?.includes('already exists')) {
         Alert.alert('Error', 'An invite has already been sent to this user');
       } else {
-        Alert.alert('Error', error.message || 'Failed to send invite. Please try again.');
+        const { getErrorMessage } = require('@/utils/errorHandler');
+        Alert.alert('Error', getErrorMessage(error) || 'Failed to send invite. Please try again.');
       }
     } finally {
       setLoading(false);

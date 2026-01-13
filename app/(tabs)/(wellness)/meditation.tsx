@@ -353,6 +353,16 @@ export default function MeditationScreen() {
         }
       }
 
+      // Track meditation for achievements
+      if (user) {
+        try {
+          const { trackMeditationSession } = await import('@/utils/imanActivityIntegration');
+          await trackMeditationSession(user.id);
+        } catch (error) {
+          console.log('Error tracking meditation:', error);
+        }
+      }
+
       // Update Amanah goals - meditation counter
       if (amanahGoals) {
         const updatedGoals = {
@@ -397,7 +407,8 @@ export default function MeditationScreen() {
       );
     } catch (error) {
       console.error('Error completing practice:', error);
-      Alert.alert('Error', 'Failed to complete meditation session');
+      const { getErrorMessage } = require('@/utils/errorHandler');
+      Alert.alert('Error', getErrorMessage(error) || 'Failed to complete meditation session. Please try again.');
     }
   };
 

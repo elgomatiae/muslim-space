@@ -285,7 +285,8 @@ export default function CommunitiesScreen() {
       console.log('✅ Community created successfully and reloaded');
     } catch (error: any) {
       console.error('❌ Failed to create community:', error);
-      Alert.alert('Error', error.message || 'Failed to create community. Please try again.');
+      const { getErrorMessage } = require('@/utils/errorHandler');
+      Alert.alert('Error', getErrorMessage(error) || 'Failed to create community. Please try again.');
     } finally {
       setCreating(false);
     }

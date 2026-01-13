@@ -76,17 +76,9 @@ export default function SignupScreen() {
       if (error) {
         console.log('Signup error:', error);
         
-        // Show user-friendly error messages
-        let errorMessage = error.message;
-        
-        // Handle specific error cases
-        if (error.message.includes('User already registered')) {
-          errorMessage = 'An account with this email already exists. Please sign in instead.';
-        } else if (error.message.includes('Password should be at least')) {
-          errorMessage = 'Password must be at least 6 characters long';
-        } else if (error.message.includes('Invalid email')) {
-          errorMessage = 'Please enter a valid email address';
-        }
+        // Use error handler for user-friendly messages
+        const { getErrorMessage } = require('@/utils/errorHandler');
+        const errorMessage = getErrorMessage(error);
         
         setErrorMessage(errorMessage);
         Alert.alert('Signup Failed', errorMessage);

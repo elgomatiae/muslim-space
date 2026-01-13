@@ -116,7 +116,8 @@ export default function InvitesInboxScreen() {
       console.log('✅ Invite accepted successfully');
     } catch (error: any) {
       console.error('❌ Error accepting invite:', error);
-      Alert.alert('Error', error.message || 'Failed to accept invite');
+      const { getErrorMessage } = require('@/utils/errorHandler');
+      Alert.alert('Error', getErrorMessage(error) || 'Failed to accept invite. Please try again.');
     } finally {
       setProcessingInviteId(null);
     }
@@ -141,7 +142,8 @@ export default function InvitesInboxScreen() {
       console.log('✅ Invite declined successfully');
     } catch (error: any) {
       console.error('❌ Error declining invite:', error);
-      Alert.alert('Error', error.message || 'Failed to decline invite');
+      const { getErrorMessage } = require('@/utils/errorHandler');
+      Alert.alert('Error', getErrorMessage(error) || 'Failed to decline invite. Please try again.');
     } finally {
       setProcessingInviteId(null);
     }

@@ -157,6 +157,17 @@ export default function ActivityTrackerScreen() {
       setTodayExerciseMinutes(newTotal);
       await updateGoalsProgress(newTotal);
       await refreshData();
+      
+      // Track workout for achievements
+      if (user) {
+        try {
+          const { trackWorkoutCompletion } = await import('@/utils/imanActivityIntegration');
+          await trackWorkoutCompletion(user.id);
+        } catch (error) {
+          console.log('Error tracking workout:', error);
+        }
+      }
+      
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
       // Show completion modal if goal reached
@@ -196,6 +207,17 @@ export default function ActivityTrackerScreen() {
       setTodayExerciseMinutes(newTotal);
       await updateGoalsProgress(newTotal);
       await refreshData();
+      
+      // Track workout for achievements
+      if (user) {
+        try {
+          const { trackWorkoutCompletion } = await import('@/utils/imanActivityIntegration');
+          await trackWorkoutCompletion(user.id);
+        } catch (error) {
+          console.log('Error tracking workout:', error);
+        }
+      }
+      
       Alert.alert('Success', `Logged ${totalDuration} minutes of exercise!`);
       
       // Show completion modal if goal reached

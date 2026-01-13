@@ -83,81 +83,36 @@ export async function calculateUserStats(userId: string): Promise<UserStats> {
 
     // ===== PRAYER CALCULATION =====
     // Count total fard prayers completed (lifetime)
-    // We need to calculate this from iman_tracker_goals history
-    // For now, we'll use a cumulative approach based on current completion
+    // Get cumulative total from user_stats (incremented by trackPrayerCompletion)
     let totalPrayers = 0;
     
-    if (imanGoalsResult.data) {
-      const goals = imanGoalsResult.data;
-      
-      // Count completed fard prayers today
-      const fardToday = [
-        goals.fard_fajr,
-        goals.fard_dhuhr,
-        goals.fard_asr,
-        goals.fard_maghrib,
-        goals.fard_isha
-      ].filter(Boolean).length;
-      
-      // Get historical prayer count from user_stats (if exists)
-      const { data: userStats } = await supabase
-        .from('user_stats')
-        .select('total_prayers')
-        .eq('user_id', userId)
-        .single();
-      
-      // Use existing count + today's prayers
-      totalPrayers = (userStats?.total_prayers || 0) + fardToday;
-      
-      console.log(`🕌 Prayers: ${totalPrayers} total (${fardToday} today)`);
-    }
+    const { data: userStats } = await supabase
+      .from('user_stats')
+      .select('total_prayers')
+      .eq('user_id', userId)
+      .single();
+    
+    totalPrayers = userStats?.total_prayers || 0;
+    
+    console.log(`🕌 Prayers: ${totalPrayers} total`);
 
     // ===== DHIKR CALCULATION =====
     // Count total dhikr completed (lifetime)
+    // Get cumulative total from user_stats (incremented by trackDhikrCompletion)
     let totalDhikr = 0;
     
-    if (imanGoalsResult.data) {
-      const goals = imanGoalsResult.data;
-      
-      // Get current dhikr counts
-      const dhikrDaily = goals.dhikr_daily_completed || 0;
-      const dhikrWeekly = goals.dhikr_weekly_completed || 0;
-      
-      // Get historical dhikr count from user_stats (if exists)
-      const { data: userStats } = await supabase
-        .from('user_stats')
-        .select('total_dhikr')
-        .eq('user_id', userId)
-        .single();
-      
-      // Use existing count + current period counts
-      totalDhikr = (userStats?.total_dhikr || 0) + dhikrDaily + dhikrWeekly;
-      
-      console.log(`📿 Dhikr: ${totalDhikr} total (${dhikrDaily} daily, ${dhikrWeekly} weekly)`);
-    }
+    totalDhikr = userStats?.total_dhikr || 0;
+    
+    console.log(`📿 Dhikr: ${totalDhikr} total`);
 
     // ===== QURAN CALCULATION =====
     // Count total Quran pages read (lifetime)
+    // Get cumulative total from user_stats (incremented by trackQuranReading)
     let totalQuranPages = 0;
     
-    if (imanGoalsResult.data) {
-      const goals = imanGoalsResult.data;
-      
-      // Get current Quran pages
-      const pagesDaily = goals.quran_daily_pages_completed || 0;
-      
-      // Get historical Quran count from user_stats (if exists)
-      const { data: userStats } = await supabase
-        .from('user_stats')
-        .select('total_quran_pages')
-        .eq('user_id', userId)
-        .single();
-      
-      // Use existing count + current period counts
-      totalQuranPages = (userStats?.total_quran_pages || 0) + pagesDaily;
-      
-      console.log(`📖 Quran: ${totalQuranPages} total pages (${pagesDaily} today)`);
-    }
+    totalQuranPages = userStats?.total_quran_pages || 0;
+    
+    console.log(`📖 Quran: ${totalQuranPages} total pages`);
 
     // ===== OTHER STATS =====
     const currentStreak = streakResult.data?.current_streak || 0;

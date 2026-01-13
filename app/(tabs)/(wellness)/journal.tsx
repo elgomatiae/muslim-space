@@ -202,7 +202,8 @@ export default function JournalScreen() {
       await loadEntries();
     } catch (error: any) {
       console.error('Error saving entry:', error);
-      const errorMessage = error.message || 'Failed to save entry. Please check your connection and try again.';
+      const { getErrorMessage } = require('@/utils/errorHandler');
+      const errorMessage = getErrorMessage(error) || 'Failed to save entry. Please check your connection and try again.';
       Alert.alert('Error', errorMessage);
     } finally {
       setSaving(false);

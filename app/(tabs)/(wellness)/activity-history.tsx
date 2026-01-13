@@ -8,7 +8,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/app/integrations/supabase/client";
 import * as Haptics from 'expo-haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -20,6 +20,8 @@ interface DailyStats {
   sleep_hours: number;
   workout_sessions: number;
   meditation_sessions: number;
+  journal_entries: number;
+  mental_health_activities: number;
 }
 
 interface WeeklyStats {
@@ -29,6 +31,8 @@ interface WeeklyStats {
   avg_sleep: number;
   total_workouts: number;
   total_meditation: number;
+  total_journal: number;
+  total_mental_health: number;
   days_active: number;
 }
 
@@ -68,83 +72,165 @@ export default function ActivityHistoryScreen() {
     // Get last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+    const startDate = thirtyDaysAgo.toISOString();
 
-    // Load exercise data
-    const { data: exerciseData } = await supabase
-      .from('physical_activities')
-      .select('date, duration_minutes')
+    // Load amanah activities from activity_log table
+    const { data: activityData, error } = await supabase
+      .from('activity_log')
+      .select('*')
       .eq('user_id', user.id)
-      .gte('date', startDate)
-      .order('date', { ascending: false });
+      .eq('activity_category', 'amanah')
+      .gte('created_at', startDate)
+      .order('created_at', { ascending: false });
 
-    // Load water data
-    const { data: waterData } = await supabase
-      .from('water_intake')
-      .select('date, amount_ml')
-      .eq('user_id', user.id)
-      .gte('date', startDate)
-      .order('date', { ascending: false });
-
-    // Load sleep data
-    const { data: sleepData } = await supabase
-      .from('sleep_tracking')
-      .select('date, sleep_hours')
-      .eq('user_id', user.id)
-      .gte('date', startDate)
-      .order('date', { ascending: false });
+    if (error) {
+      console.error('Error loading activity history:', error);
+      // Fallback to empty array if table doesn't exist
+      if (error.code === 'PGRST205') {
+        console.warn('⚠️ activity_log table not found. Please run migration 011_create_activity_log_table.sql');
+        // Try fallback to old tables if activity_log doesn't exist
+        await loadDailyHistoryFallback();
+        return;
+      }
+      // For other errors, set empty array
+      setDailyStats([]);
+      return;
+    }
 
     // Aggregate by date
     const statsMap = new Map<string, DailyStats>();
 
-    // Process exercise
-    exerciseData?.forEach(entry => {
-      if (!statsMap.has(entry.date)) {
-        statsMap.set(entry.date, {
-          date: entry.date,
+    activityData?.forEach(entry => {
+      const date = new Date(entry.created_at).toISOString().split('T')[0];
+      
+      if (!statsMap.has(date)) {
+        statsMap.set(date, {
+          date: date,
           exercise_minutes: 0,
           water_glasses: 0,
           sleep_hours: 0,
           workout_sessions: 0,
           meditation_sessions: 0,
+          journal_entries: 0,
+          mental_health_activities: 0,
         });
       }
-      const stats = statsMap.get(entry.date)!;
-      stats.exercise_minutes += entry.duration_minutes;
-      stats.workout_sessions += 1;
+      
+      const stats = statsMap.get(date)!;
+      
+      // Process different activity types
+      switch (entry.activity_type) {
+        case 'exercise_completed':
+          stats.exercise_minutes += entry.activity_value || 0;
+          break;
+        case 'water_logged':
+          stats.water_glasses += entry.activity_value || 0;
+          break;
+        case 'sleep_logged':
+          stats.sleep_hours += entry.activity_value || 0;
+          break;
+        case 'workout_completed':
+          stats.workout_sessions += entry.activity_value || 1;
+          break;
+        case 'meditation_session':
+          stats.meditation_sessions += entry.activity_value || 1;
+          break;
+        case 'journal_entry':
+          stats.journal_entries += entry.activity_value || 1;
+          break;
+        default:
+          // Check if it's a mental health activity (could be journal_entry or other)
+          if (entry.activity_title?.toLowerCase().includes('mental health')) {
+            stats.mental_health_activities += entry.activity_value || 1;
+          }
+          break;
+      }
     });
 
-    // Process water
-    waterData?.forEach(entry => {
-      if (!statsMap.has(entry.date)) {
-        statsMap.set(entry.date, {
-          date: entry.date,
-          exercise_minutes: 0,
-          water_glasses: 0,
-          sleep_hours: 0,
-          workout_sessions: 0,
-          meditation_sessions: 0,
-        });
-      }
-      const stats = statsMap.get(entry.date)!;
-      stats.water_glasses += Math.floor(entry.amount_ml / 250);
-    });
+    const stats = Array.from(statsMap.values()).sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
 
-    // Process sleep
-    sleepData?.forEach(entry => {
-      if (!statsMap.has(entry.date)) {
-        statsMap.set(entry.date, {
-          date: entry.date,
-          exercise_minutes: 0,
-          water_glasses: 0,
-          sleep_hours: 0,
-          workout_sessions: 0,
-          meditation_sessions: 0,
-        });
-      }
-      const stats = statsMap.get(entry.date)!;
-      stats.sleep_hours = parseFloat(entry.sleep_hours);
-    });
+    setDailyStats(stats);
+  };
+
+  // Fallback to old tables if activity_log doesn't exist
+  const loadDailyHistoryFallback = async () => {
+    if (!user) return;
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+
+    // Try to load from old tables as fallback
+    const [exerciseResult, waterResult, sleepResult] = await Promise.all([
+      supabase.from('physical_activities').select('date, duration_minutes').eq('user_id', user.id).gte('date', startDate),
+      supabase.from('water_intake').select('date, amount_ml').eq('user_id', user.id).gte('date', startDate),
+      supabase.from('sleep_tracking').select('date, sleep_hours').eq('user_id', user.id).gte('date', startDate),
+    ]);
+
+    const statsMap = new Map<string, DailyStats>();
+
+    // Process exercise (if table exists)
+    if (!exerciseResult.error && exerciseResult.data) {
+      exerciseResult.data.forEach(entry => {
+        if (!statsMap.has(entry.date)) {
+          statsMap.set(entry.date, {
+            date: entry.date,
+            exercise_minutes: 0,
+            water_glasses: 0,
+            sleep_hours: 0,
+            workout_sessions: 0,
+            meditation_sessions: 0,
+            journal_entries: 0,
+            mental_health_activities: 0,
+          });
+        }
+        const stats = statsMap.get(entry.date)!;
+        stats.exercise_minutes += entry.duration_minutes || 0;
+        stats.workout_sessions += 1;
+      });
+    }
+
+    // Process water (if table exists)
+    if (!waterResult.error && waterResult.data) {
+      waterResult.data.forEach(entry => {
+        if (!statsMap.has(entry.date)) {
+          statsMap.set(entry.date, {
+            date: entry.date,
+            exercise_minutes: 0,
+            water_glasses: 0,
+            sleep_hours: 0,
+            workout_sessions: 0,
+            meditation_sessions: 0,
+            journal_entries: 0,
+            mental_health_activities: 0,
+          });
+        }
+        const stats = statsMap.get(entry.date)!;
+        stats.water_glasses += Math.floor((entry.amount_ml || 0) / 250);
+      });
+    }
+
+    // Process sleep (if table exists)
+    if (!sleepResult.error && sleepResult.data) {
+      sleepResult.data.forEach(entry => {
+        if (!statsMap.has(entry.date)) {
+          statsMap.set(entry.date, {
+            date: entry.date,
+            exercise_minutes: 0,
+            water_glasses: 0,
+            sleep_hours: 0,
+            workout_sessions: 0,
+            meditation_sessions: 0,
+            journal_entries: 0,
+            mental_health_activities: 0,
+          });
+        }
+        const stats = statsMap.get(entry.date)!;
+        stats.sleep_hours = parseFloat(entry.sleep_hours || '0');
+      });
+    }
 
     const stats = Array.from(statsMap.values()).sort((a, b) => 
       new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -159,29 +245,35 @@ export default function ActivityHistoryScreen() {
     // Get last 12 weeks
     const twelveWeeksAgo = new Date();
     twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 84);
-    const startDate = twelveWeeksAgo.toISOString().split('T')[0];
+    const startDate = twelveWeeksAgo.toISOString();
 
-    // Load all data
-    const { data: exerciseData } = await supabase
-      .from('physical_activities')
-      .select('date, duration_minutes')
+    // Load amanah activities from activity_log table
+    const { data: activityData, error } = await supabase
+      .from('activity_log')
+      .select('*')
       .eq('user_id', user.id)
-      .gte('date', startDate);
+      .eq('activity_category', 'amanah')
+      .gte('created_at', startDate)
+      .order('created_at', { ascending: false });
 
-    const { data: waterData } = await supabase
-      .from('water_intake')
-      .select('date, amount_ml')
-      .eq('user_id', user.id)
-      .gte('date', startDate);
-
-    const { data: sleepData } = await supabase
-      .from('sleep_tracking')
-      .select('date, sleep_hours')
-      .eq('user_id', user.id)
-      .gte('date', startDate);
+    if (error) {
+      console.error('Error loading weekly activity history:', error);
+      // Fallback to empty array if table doesn't exist
+      if (error.code === 'PGRST205') {
+        console.warn('⚠️ activity_log table not found. Please run migration 011_create_activity_log_table.sql');
+        // Try fallback to old tables if activity_log doesn't exist
+        await loadWeeklyHistoryFallback();
+        return;
+      }
+      // For other errors, set empty array
+      setWeeklyStats([]);
+      return;
+    }
 
     // Group by week
     const weekMap = new Map<string, WeeklyStats>();
+    const daysByWeek = new Map<string, Set<string>>();
+    const sleepByWeek = new Map<string, number[]>();
 
     const getWeekStart = (dateStr: string) => {
       const date = new Date(dateStr);
@@ -191,9 +283,11 @@ export default function ActivityHistoryScreen() {
       return weekStart.toISOString().split('T')[0];
     };
 
-    // Process exercise
-    exerciseData?.forEach(entry => {
-      const weekStart = getWeekStart(entry.date);
+    // Process activities
+    activityData?.forEach(entry => {
+      const date = new Date(entry.created_at).toISOString().split('T')[0];
+      const weekStart = getWeekStart(date);
+      
       if (!weekMap.has(weekStart)) {
         weekMap.set(weekStart, {
           week_start: weekStart,
@@ -202,57 +296,180 @@ export default function ActivityHistoryScreen() {
           avg_sleep: 0,
           total_workouts: 0,
           total_meditation: 0,
+          total_journal: 0,
+          total_mental_health: 0,
           days_active: 0,
         });
       }
-      const stats = weekMap.get(weekStart)!;
-      stats.total_exercise += entry.duration_minutes;
-      stats.total_workouts += 1;
-    });
-
-    // Process water
-    waterData?.forEach(entry => {
-      const weekStart = getWeekStart(entry.date);
-      if (!weekMap.has(weekStart)) {
-        weekMap.set(weekStart, {
-          week_start: weekStart,
-          total_exercise: 0,
-          total_water: 0,
-          avg_sleep: 0,
-          total_workouts: 0,
-          total_meditation: 0,
-          days_active: 0,
-        });
+      
+      if (!daysByWeek.has(weekStart)) {
+        daysByWeek.set(weekStart, new Set());
       }
+      daysByWeek.get(weekStart)!.add(date);
+      
       const stats = weekMap.get(weekStart)!;
-      stats.total_water += Math.floor(entry.amount_ml / 250);
-    });
-
-    // Process sleep
-    const sleepByWeek = new Map<string, number[]>();
-    sleepData?.forEach(entry => {
-      const weekStart = getWeekStart(entry.date);
-      if (!sleepByWeek.has(weekStart)) {
-        sleepByWeek.set(weekStart, []);
+      
+      // Process different activity types
+      switch (entry.activity_type) {
+        case 'exercise_completed':
+          stats.total_exercise += entry.activity_value || 0;
+          break;
+        case 'water_logged':
+          stats.total_water += entry.activity_value || 0;
+          break;
+        case 'sleep_logged':
+          if (!sleepByWeek.has(weekStart)) {
+            sleepByWeek.set(weekStart, []);
+          }
+          sleepByWeek.get(weekStart)!.push(entry.activity_value || 0);
+          break;
+        case 'workout_completed':
+          stats.total_workouts += entry.activity_value || 1;
+          break;
+        case 'meditation_session':
+          stats.total_meditation += entry.activity_value || 1;
+          break;
+        case 'journal_entry':
+          stats.total_journal += entry.activity_value || 1;
+          break;
+        default:
+          if (entry.activity_title?.toLowerCase().includes('mental health')) {
+            stats.total_mental_health += entry.activity_value || 1;
+          }
+          break;
       }
-      sleepByWeek.get(weekStart)!.push(parseFloat(entry.sleep_hours));
     });
 
+    // Calculate average sleep and days active
     sleepByWeek.forEach((hours, weekStart) => {
-      if (!weekMap.has(weekStart)) {
-        weekMap.set(weekStart, {
-          week_start: weekStart,
-          total_exercise: 0,
-          total_water: 0,
-          avg_sleep: 0,
-          total_workouts: 0,
-          total_meditation: 0,
-          days_active: 0,
-        });
+      if (weekMap.has(weekStart)) {
+        const stats = weekMap.get(weekStart)!;
+        stats.avg_sleep = hours.reduce((a, b) => a + b, 0) / hours.length;
       }
-      const stats = weekMap.get(weekStart)!;
-      stats.avg_sleep = hours.reduce((a, b) => a + b, 0) / hours.length;
-      stats.days_active = hours.length;
+    });
+
+    daysByWeek.forEach((days, weekStart) => {
+      if (weekMap.has(weekStart)) {
+        const stats = weekMap.get(weekStart)!;
+        stats.days_active = days.size;
+      }
+    });
+
+    const stats = Array.from(weekMap.values()).sort((a, b) => 
+      new Date(b.week_start).getTime() - new Date(a.week_start).getTime()
+    );
+
+    setWeeklyStats(stats);
+  };
+
+  // Fallback to old tables if activity_log doesn't exist
+  const loadWeeklyHistoryFallback = async () => {
+    if (!user) return;
+
+    const twelveWeeksAgo = new Date();
+    twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 84);
+    const startDate = twelveWeeksAgo.toISOString().split('T')[0];
+
+    // Try to load from old tables as fallback
+    const [exerciseResult, waterResult, sleepResult] = await Promise.all([
+      supabase.from('physical_activities').select('date, duration_minutes').eq('user_id', user.id).gte('date', startDate),
+      supabase.from('water_intake').select('date, amount_ml').eq('user_id', user.id).gte('date', startDate),
+      supabase.from('sleep_tracking').select('date, sleep_hours').eq('user_id', user.id).gte('date', startDate),
+    ]);
+
+    const weekMap = new Map<string, WeeklyStats>();
+    const daysByWeek = new Map<string, Set<string>>();
+    const sleepByWeek = new Map<string, number[]>();
+
+    const getWeekStart = (dateStr: string) => {
+      const date = new Date(dateStr);
+      const day = date.getDay();
+      const diff = date.getDate() - day;
+      const weekStart = new Date(date.setDate(diff));
+      return weekStart.toISOString().split('T')[0];
+    };
+
+    // Process exercise (if table exists)
+    if (!exerciseResult.error && exerciseResult.data) {
+      exerciseResult.data.forEach(entry => {
+        const weekStart = getWeekStart(entry.date);
+        if (!weekMap.has(weekStart)) {
+          weekMap.set(weekStart, {
+            week_start: weekStart,
+            total_exercise: 0,
+            total_water: 0,
+            avg_sleep: 0,
+            total_workouts: 0,
+            total_meditation: 0,
+            total_journal: 0,
+            total_mental_health: 0,
+            days_active: 0,
+          });
+        }
+        if (!daysByWeek.has(weekStart)) {
+          daysByWeek.set(weekStart, new Set());
+        }
+        daysByWeek.get(weekStart)!.add(entry.date);
+        const stats = weekMap.get(weekStart)!;
+        stats.total_exercise += entry.duration_minutes || 0;
+        stats.total_workouts += 1;
+      });
+    }
+
+    // Process water (if table exists)
+    if (!waterResult.error && waterResult.data) {
+      waterResult.data.forEach(entry => {
+        const weekStart = getWeekStart(entry.date);
+        if (!weekMap.has(weekStart)) {
+          weekMap.set(weekStart, {
+            week_start: weekStart,
+            total_exercise: 0,
+            total_water: 0,
+            avg_sleep: 0,
+            total_workouts: 0,
+            total_meditation: 0,
+            total_journal: 0,
+            total_mental_health: 0,
+            days_active: 0,
+          });
+        }
+        if (!daysByWeek.has(weekStart)) {
+          daysByWeek.set(weekStart, new Set());
+        }
+        daysByWeek.get(weekStart)!.add(entry.date);
+        const stats = weekMap.get(weekStart)!;
+        stats.total_water += Math.floor((entry.amount_ml || 0) / 250);
+      });
+    }
+
+    // Process sleep (if table exists)
+    if (!sleepResult.error && sleepResult.data) {
+      sleepResult.data.forEach(entry => {
+        const weekStart = getWeekStart(entry.date);
+        if (!sleepByWeek.has(weekStart)) {
+          sleepByWeek.set(weekStart, []);
+        }
+        if (!daysByWeek.has(weekStart)) {
+          daysByWeek.set(weekStart, new Set());
+        }
+        daysByWeek.get(weekStart)!.add(entry.date);
+        sleepByWeek.get(weekStart)!.push(parseFloat(entry.sleep_hours || '0'));
+      });
+    }
+
+    // Calculate average sleep and days active
+    sleepByWeek.forEach((hours, weekStart) => {
+      if (weekMap.has(weekStart)) {
+        const stats = weekMap.get(weekStart)!;
+        stats.avg_sleep = hours.reduce((a, b) => a + b, 0) / hours.length;
+      }
+    });
+
+    daysByWeek.forEach((days, weekStart) => {
+      if (weekMap.has(weekStart)) {
+        const stats = weekMap.get(weekStart)!;
+        stats.days_active = days.size;
+      }
     });
 
     const stats = Array.from(weekMap.values()).sort((a, b) => 
@@ -290,9 +507,9 @@ export default function ActivityHistoryScreen() {
             size={48}
             color={colors.textSecondary}
           />
-          <Text style={styles.emptyStateText}>No activity history yet</Text>
+          <Text style={styles.emptyStateText}>No Amanah activity history yet</Text>
           <Text style={styles.emptyStateSubtext}>
-            Start tracking your wellness activities to see your progress here
+            Complete wellness activities in the Iman Tracker to see your Amanah history here
           </Text>
         </View>
       );
@@ -364,6 +581,32 @@ export default function ActivityHistoryScreen() {
               <Text style={styles.statLabel}>workouts</Text>
             </View>
           )}
+
+          {stat.meditation_sessions > 0 && (
+            <View style={styles.statItem}>
+              <IconSymbol
+                ios_icon_name="leaf.fill"
+                android_material_icon_name="spa"
+                size={20}
+                color={colors.secondary}
+              />
+              <Text style={styles.statValue}>{stat.meditation_sessions}</Text>
+              <Text style={styles.statLabel}>meditation</Text>
+            </View>
+          )}
+
+          {stat.journal_entries > 0 && (
+            <View style={styles.statItem}>
+              <IconSymbol
+                ios_icon_name="book.fill"
+                android_material_icon_name="menu-book"
+                size={20}
+                color={colors.primary}
+              />
+              <Text style={styles.statValue}>{stat.journal_entries}</Text>
+              <Text style={styles.statLabel}>journal</Text>
+            </View>
+          )}
         </View>
       </View>
     ));
@@ -379,9 +622,9 @@ export default function ActivityHistoryScreen() {
             size={48}
             color={colors.textSecondary}
           />
-          <Text style={styles.emptyStateText}>No weekly data yet</Text>
+          <Text style={styles.emptyStateText}>No weekly Amanah data yet</Text>
           <Text style={styles.emptyStateSubtext}>
-            Complete a full week of activities to see weekly summaries
+            Complete a full week of Amanah activities to see weekly summaries
           </Text>
         </View>
       );
@@ -465,6 +708,32 @@ export default function ActivityHistoryScreen() {
               <Text style={styles.statLabel}>workouts</Text>
             </View>
           )}
+
+          {stat.total_meditation > 0 && (
+            <View style={styles.statItem}>
+              <IconSymbol
+                ios_icon_name="leaf.fill"
+                android_material_icon_name="spa"
+                size={20}
+                color={colors.secondary}
+              />
+              <Text style={styles.statValue}>{stat.total_meditation}</Text>
+              <Text style={styles.statLabel}>meditation</Text>
+            </View>
+          )}
+
+          {stat.total_journal > 0 && (
+            <View style={styles.statItem}>
+              <IconSymbol
+                ios_icon_name="book.fill"
+                android_material_icon_name="menu-book"
+                size={20}
+                color={colors.primary}
+              />
+              <Text style={styles.statValue}>{stat.total_journal}</Text>
+              <Text style={styles.statLabel}>journal</Text>
+            </View>
+          )}
         </View>
       </View>
     ));
@@ -482,7 +751,7 @@ export default function ActivityHistoryScreen() {
             color={colors.text}
           />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Activity History</Text>
+        <Text style={styles.headerTitle}>Amanah History</Text>
         <View style={styles.placeholder} />
       </View>
 

@@ -113,7 +113,8 @@ export default function PrayerTimesWidget() {
       console.log('✅ Prayer times loaded for:', times.city);
     } catch (error: any) {
       console.error('Error loading prayer times:', error);
-      Alert.alert('Error', error.message || 'Failed to load prayer times. Please check your location settings.');
+      const { getErrorMessage } = require('@/utils/errorHandler');
+      Alert.alert('Error', getErrorMessage(error) || 'Failed to load prayer times. Please check your location settings.');
     } finally {
       setLoading(false);
     }

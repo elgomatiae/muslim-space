@@ -1,5 +1,7 @@
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { 
   loadIbadahGoals, 
   loadIlmGoals, 
@@ -45,6 +47,48 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
   const [error, setError] = useState<string | null>(null);
   const [previousUserId, setPreviousUserId] = useState<string | null>(null);
 
+  // Track app state to check for resets when app comes to foreground
+  const appState = useRef(AppState.currentState);
+
+  // Check for resets when app comes to foreground (user might have passed midnight)
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === 'active'
+      ) {
+        // App has come to the foreground - check if it's a new day
+        console.log('📱 App came to foreground, checking for daily resets...');
+        checkAndHandleResets(user.id)
+          .then(() => {
+            // Reload goals if reset happened
+            loadAllGoals();
+          })
+          .catch(err => {
+            console.error('Error checking resets on app foreground:', err);
+          });
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [user?.id, loadAllGoals]);
+
+  // Check for resets when screen is focused (user navigates to app)
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) {
+        checkAndHandleResets(user.id).catch(err => {
+          console.error('Error checking resets on focus:', err);
+        });
+      }
+    }, [user?.id])
+  );
+
   // Load all goals when user changes or on mount
   useEffect(() => {
     if (!user?.id) {
@@ -69,7 +113,7 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
     setPreviousUserId(user.id);
     loadAllGoals();
     
-    // Check for daily/weekly resets
+    // Check for daily/weekly resets on initial load
     checkAndHandleResets(user.id).catch(err => {
       console.error('Error checking resets:', err);
     });
@@ -96,13 +140,14 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       setIlmGoals(ilm);
       setAmanahGoals(amanah);
       
+      // Refresh scores (this will also record to history)
       await refreshScores();
     } catch (err) {
       setError('Failed to load goals. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id]); // refreshScores is stable, no need to include
+  }, [user?.id, refreshScores]);
 
   const updateIbadahGoals = useCallback(async (goals: Partial<IbadahGoals>) => {
     if (!user?.id) {
@@ -237,6 +282,22 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       
       setImanScore(overall);
       setSectionScores(sections);
+
+      // Record scores to database for trends tracking
+      // This ensures scores are tracked whenever they change
+      try {
+        const { recordScoreHistory, shouldRecordScore } = await import('@/utils/scoreHistoryTracker');
+        // Throttle to avoid excessive writes (record at most every 5 minutes)
+        const shouldRecord = await shouldRecordScore(user.id, 5);
+        if (shouldRecord) {
+          await recordScoreHistory(user.id, overall, sections);
+        }
+      } catch (err) {
+        // Silent failure - score tracking is non-critical
+        if (__DEV__) {
+          console.log('Error recording score history:', err);
+        }
+      }
     } catch (err) {
       // Silent failure for background operation
       // Error already logged in score calculator

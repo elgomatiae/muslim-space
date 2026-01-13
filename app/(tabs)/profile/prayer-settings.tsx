@@ -48,7 +48,8 @@ export default function PrayerSettingsScreen() {
         const times = await getTodayPrayerTimes();
         setPrayerTimes(times);
       } catch (error: any) {
-        setLocationInfo('Unable to get location: ' + (error.message || 'Unknown error'));
+        const { getErrorMessage } = require('@/utils/errorHandler');
+        setLocationInfo('Unable to get location. Please check your location settings.');
       }
     } catch (error) {
       console.error('Error loading prayer settings:', error);

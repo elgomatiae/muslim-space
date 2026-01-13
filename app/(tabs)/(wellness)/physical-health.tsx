@@ -272,6 +272,16 @@ export default function PhysicalHealthScreen() {
       await loadTodayStats();
       await updateGoalsProgress();
       await refreshScores();
+      
+      // Track workout for achievements
+      if (user) {
+        try {
+          const { trackWorkoutCompletion } = await import('@/utils/imanActivityIntegration');
+          await trackWorkoutCompletion(user.id);
+        } catch (error) {
+          console.log('Error tracking workout:', error);
+        }
+      }
     }
   };
 
@@ -307,6 +317,17 @@ export default function PhysicalHealthScreen() {
       await loadTodayStats();
       await updateGoalsProgress();
       await refreshScores();
+      
+      // Track workout for achievements
+      if (user) {
+        try {
+          const { trackWorkoutCompletion } = await import('@/utils/imanActivityIntegration');
+          await trackWorkoutCompletion(user.id);
+        } catch (error) {
+          console.log('Error tracking workout:', error);
+        }
+      }
+      
       Alert.alert('Success', `Logged ${totalDuration} minutes of exercise!`);
     } else {
       Alert.alert('Error', 'Failed to log workout. Please try again.');
@@ -426,7 +447,8 @@ export default function PhysicalHealthScreen() {
       await refreshScores();
       Alert.alert('Success', 'Your physical wellness goals have been updated!');
     } else {
-      Alert.alert('Error', 'Failed to save goals. Please try again.');
+      const { getErrorMessage } = require('@/utils/errorHandler');
+      Alert.alert('Error', getErrorMessage(error) || 'Failed to save goals. Please try again.');
     }
   };
 

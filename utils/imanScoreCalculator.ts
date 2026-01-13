@@ -907,32 +907,97 @@ export async function resetWeeklyGoals(userId?: string | null): Promise<void> {
  * NOTE: This only resets completion counters for tracking, NOT scores.
  * Scores now decay gradually over time instead of resetting to 0.
  */
+/**
+ * Get the user's local midnight date string
+ * This ensures resets happen at the user's local midnight, not UTC
+ */
+function getLocalMidnightDateString(): string {
+  const now = new Date();
+  // Get local date components (uses device timezone automatically)
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const date = now.getDate();
+  
+  // Create a date at local midnight (00:00:00 in user's timezone)
+  const localMidnight = new Date(year, month, date, 0, 0, 0, 0);
+  
+  // Return date string for comparison (format: "Mon Jan 01 2024")
+  return localMidnight.toDateString();
+}
+
+/**
+ * Check if it's past the user's local midnight
+ * Compares current time to stored last reset date
+ */
+function isNewDay(lastDateString: string | null, currentDateString: string): boolean {
+  if (!lastDateString) {
+    return true; // First time, treat as new day
+  }
+  return lastDateString !== currentDateString;
+}
+
+/**
+ * Check if it's Sunday at midnight (00:00:00) in the user's local timezone
+ * Returns true if current time is Sunday and it's at or just past midnight
+ */
+function isSundayMidnight(now: Date): boolean {
+  const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  
+  // It's Sunday (0) and it's midnight (00:00) or just past (within first hour)
+  // We allow up to 1 hour after midnight to account for app opening slightly after midnight
+  return dayOfWeek === 0 && hours === 0;
+}
+
+/**
+ * Check if we've already reset this week
+ * Compares the last reset date to see if it was this Sunday
+ */
+function hasResetThisWeek(lastWeeklyResetDate: string | null, currentSundayDate: string): boolean {
+  if (!lastWeeklyResetDate) {
+    return false; // Never reset, so we need to reset
+  }
+  // If last reset was today (this Sunday), we've already reset
+  return lastWeeklyResetDate === currentSundayDate;
+}
+
 export async function checkAndHandleResets(userId?: string | null): Promise<void> {
   try {
+    // Get current date string at user's local midnight
+    // This ensures resets happen at the user's local midnight, not UTC
+    const today = getLocalMidnightDateString();
     const now = new Date();
+    
     const lastDateKey = userId ? `lastImanDate_${userId}` : 'lastImanDate';
     const lastDate = await AsyncStorage.getItem(lastDateKey);
-    const today = now.toDateString();
     
-    // Only reset daily completion counters if it's a new day
+    // Only reset daily completion counters if it's a new day (past user's local midnight)
     // This is for tracking purposes only - scores decay gradually, not reset to 0
-    if (lastDate !== today) {
-      console.log(`📅 New day detected for user ${userId || 'unknown'}, resetting daily completion counters...`);
+    if (isNewDay(lastDate, today)) {
+      console.log(`📅 New day detected for user ${userId || 'unknown'} (local time: ${now.toLocaleString()})`);
+      console.log(`   Resetting daily completion counters at user's local midnight...`);
       console.log(`   Note: Scores will decay gradually, not reset to 0`);
       await resetDailyGoals(userId);
       await AsyncStorage.setItem(lastDateKey, today);
     }
     
+    // Weekly reset logic: Reset at Sunday 12:00 AM (midnight) in user's local timezone
     const lastWeeklyResetKey = userId ? `lastWeeklyResetDate_${userId}` : 'lastWeeklyResetDate';
     const lastWeeklyReset = await AsyncStorage.getItem(lastWeeklyResetKey);
-    const isSunday = now.getDay() === 0;
     
-    // Weekly reset for completion counters only
-    if (isSunday && lastWeeklyReset !== today) {
-      console.log(`📅 Sunday detected for user ${userId || 'unknown'}, resetting weekly completion counters...`);
-      console.log(`   Note: Scores will decay gradually, not reset to 0`);
-      await resetWeeklyGoals(userId);
-      await AsyncStorage.setItem(lastWeeklyResetKey, today);
+    // Check if it's Sunday at midnight (00:00:00) in user's local timezone
+    if (isSundayMidnight(now)) {
+      // Check if we've already reset this week (this Sunday)
+      if (!hasResetThisWeek(lastWeeklyReset, today)) {
+        console.log(`📅 Sunday midnight detected for user ${userId || 'unknown'} (local time: ${now.toLocaleString()})`);
+        console.log(`   Resetting ALL weekly completion counters at Sunday 12:00 AM...`);
+        console.log(`   Note: Scores will decay gradually, not reset to 0`);
+        await resetWeeklyGoals(userId);
+        await AsyncStorage.setItem(lastWeeklyResetKey, today);
+      } else {
+        console.log(`ℹ️ Weekly reset already completed this Sunday for user ${userId || 'unknown'}`);
+      }
     }
   } catch (error) {
     console.error('❌ Error checking and handling resets:', error);
@@ -1071,35 +1136,46 @@ export async function saveIbadahGoals(goals: IbadahGoals, userId?: string | null
   await updateSectionScores(userId);
   
   // Track activity changes for achievements
-  try {
-    // Import activity tracking functions
-    const { trackPrayerCompletion, trackDhikrCompletion, trackQuranReading } = await import('./imanActivityIntegration');
-    
-    // Track prayer completions
-    let newPrayersCompleted = 0;
-    if (!oldGoals.fardPrayers.fajr && goals.fardPrayers.fajr) newPrayersCompleted++;
-    if (!oldGoals.fardPrayers.dhuhr && goals.fardPrayers.dhuhr) newPrayersCompleted++;
-    if (!oldGoals.fardPrayers.asr && goals.fardPrayers.asr) newPrayersCompleted++;
-    if (!oldGoals.fardPrayers.maghrib && goals.fardPrayers.maghrib) newPrayersCompleted++;
-    if (!oldGoals.fardPrayers.isha && goals.fardPrayers.isha) newPrayersCompleted++;
-    
-    // Track dhikr completions
-    const dhikrDailyIncrease = Math.max(0, goals.dhikrDailyCompleted - oldGoals.dhikrDailyCompleted);
-    const dhikrWeeklyIncrease = Math.max(0, goals.dhikrWeeklyCompleted - oldGoals.dhikrWeeklyCompleted);
-    const totalDhikrIncrease = dhikrDailyIncrease + dhikrWeeklyIncrease;
-    
-    // Track Quran reading
-    const quranPagesIncrease = Math.max(0, goals.quranDailyPagesCompleted - oldGoals.quranDailyPagesCompleted);
-    
-    // Only track if there are actual increases
-    if (newPrayersCompleted > 0 || totalDhikrIncrease > 0 || quranPagesIncrease > 0) {
-      console.log(`📊 Activity changes detected:`);
-      if (newPrayersCompleted > 0) console.log(`   🕌 Prayers: +${newPrayersCompleted}`);
-      if (totalDhikrIncrease > 0) console.log(`   📿 Dhikr: +${totalDhikrIncrease}`);
-      if (quranPagesIncrease > 0) console.log(`   📖 Quran: +${quranPagesIncrease} pages`);
+  if (userId) {
+    try {
+      // Import activity tracking functions
+      const { trackPrayerCompletion, trackDhikrCompletion, trackQuranReading } = await import('./imanActivityIntegration');
+      
+      // Track prayer completions
+      if (!oldGoals.fardPrayers.fajr && goals.fardPrayers.fajr) {
+        await trackPrayerCompletion(userId, 'fajr');
+      }
+      if (!oldGoals.fardPrayers.dhuhr && goals.fardPrayers.dhuhr) {
+        await trackPrayerCompletion(userId, 'dhuhr');
+      }
+      if (!oldGoals.fardPrayers.asr && goals.fardPrayers.asr) {
+        await trackPrayerCompletion(userId, 'asr');
+      }
+      if (!oldGoals.fardPrayers.maghrib && goals.fardPrayers.maghrib) {
+        await trackPrayerCompletion(userId, 'maghrib');
+      }
+      if (!oldGoals.fardPrayers.isha && goals.fardPrayers.isha) {
+        await trackPrayerCompletion(userId, 'isha');
+      }
+      
+      // Track dhikr completions
+      const dhikrDailyIncrease = Math.max(0, goals.dhikrDailyCompleted - oldGoals.dhikrDailyCompleted);
+      const dhikrWeeklyIncrease = Math.max(0, goals.dhikrWeeklyCompleted - oldGoals.dhikrWeeklyCompleted);
+      const totalDhikrIncrease = dhikrDailyIncrease + dhikrWeeklyIncrease;
+      
+      if (totalDhikrIncrease > 0) {
+        await trackDhikrCompletion(userId, totalDhikrIncrease);
+      }
+      
+      // Track Quran reading
+      const quranPagesIncrease = Math.max(0, goals.quranDailyPagesCompleted - oldGoals.quranDailyPagesCompleted);
+      
+      if (quranPagesIncrease > 0) {
+        await trackQuranReading(userId, quranPagesIncrease);
+      }
+    } catch (error) {
+      console.log('ℹ️ Activity tracking skipped:', error);
     }
-  } catch (error) {
-    console.log('ℹ️ Activity tracking skipped:', error);
   }
 }
 
@@ -1107,12 +1183,37 @@ export async function saveIlmGoals(goals: IlmGoals, userId?: string | null): Pro
   const storageKey = userId ? `ilmGoals_${userId}` : 'ilmGoals';
   await AsyncStorage.setItem(storageKey, JSON.stringify(goals));
   await updateSectionScores(userId);
+  
+  // Trigger achievement check for Ilm activities (lectures, quizzes)
+  if (userId) {
+    try {
+      const { trackLectureCompletion, trackQuizCompletion } = await import('./imanActivityIntegration');
+      // Achievement check will happen when lectures/quizzes are completed
+      // This ensures stats are up to date
+      const { checkAndUnlockAchievements } = await import('./achievementService');
+      await checkAndUnlockAchievements(userId);
+    } catch (error) {
+      console.log('ℹ️ Achievement check skipped:', error);
+    }
+  }
 }
 
 export async function saveAmanahGoals(goals: AmanahGoals, userId?: string | null): Promise<void> {
   const storageKey = userId ? `amanahGoals_${userId}` : 'amanahGoals';
   await AsyncStorage.setItem(storageKey, JSON.stringify(goals));
   await updateSectionScores(userId);
+  
+  // Trigger achievement check for Amanah activities (workouts, meditation, sleep)
+  if (userId) {
+    try {
+      // Achievement check will happen when workouts/meditation are completed
+      // This ensures stats are up to date
+      const { checkAndUnlockAchievements } = await import('./achievementService');
+      await checkAndUnlockAchievements(userId);
+    } catch (error) {
+      console.log('ℹ️ Achievement check skipped:', error);
+    }
+  }
 }
 
 // ============================================================================

@@ -18,19 +18,18 @@ export default function ProfileLayout() {
         }}
       />
       <Stack.Screen 
-        name="prayer-settings"
-        options={{
-          presentation: 'modal',
-          headerShown: true,
-          title: 'Prayer Settings',
-        }}
-      />
-      <Stack.Screen 
         name="health-check"
         options={{
           presentation: 'modal',
           headerShown: true,
           title: 'Health Check',
+        }}
+      />
+      <Stack.Screen 
+        name="about"
+        options={{
+          presentation: 'modal',
+          headerShown: false,
         }}
       />
     </Stack>

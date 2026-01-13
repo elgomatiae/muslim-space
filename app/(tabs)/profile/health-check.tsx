@@ -40,14 +40,15 @@ export default function HealthCheckScreen() {
           name: 'Supabase Connection',
           status: 'warning',
           message: 'Connected but profiles table not found',
-          details: error.message,
+          details: 'Database table configuration issue',
         });
       } else if (error) {
+        const { getErrorMessage } = require('@/utils/errorHandler');
         checks.push({
           name: 'Supabase Connection',
           status: 'fail',
           message: 'Connection failed',
-          details: error.message,
+          details: getErrorMessage(error),
         });
       } else {
         checks.push({
@@ -129,7 +130,7 @@ export default function HealthCheckScreen() {
             name: `Table: ${table}`,
             status: 'fail',
             message: 'Access error',
-            details: error.message,
+            details: 'Unable to retrieve data',
           });
         } else {
           checks.push({

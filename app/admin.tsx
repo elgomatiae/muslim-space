@@ -281,7 +281,8 @@ export default function AdminScreen() {
       );
     } catch (error: any) {
       console.error('Error adding video:', error);
-      Alert.alert('Error', error.message || 'Failed to add video. Please try again.');
+      const { getErrorMessage } = require('@/utils/errorHandler');
+      Alert.alert('Error', getErrorMessage(error) || 'Failed to add video. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -353,9 +354,10 @@ export default function AdminScreen() {
       );
     } catch (error: any) {
       console.error('Error importing playlist:', error);
+      const { getErrorMessage } = require('@/utils/errorHandler');
       Alert.alert(
         'Error', 
-        error.message || 'Failed to import playlist. Please check your playlist URL and try again.'
+        getErrorMessage(error) || 'Failed to import playlist. Please check your playlist URL and try again.'
       );
     } finally {
       setLoading(false);

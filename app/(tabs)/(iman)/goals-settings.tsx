@@ -605,7 +605,8 @@ export default function GoalsSettingsScreen() {
       ]);
     } catch (error) {
       console.log('Error saving goals:', error);
-      Alert.alert('Error', 'Failed to save goals. Please try again.');
+      const { getErrorMessage } = require('@/utils/errorHandler');
+      Alert.alert('Error', getErrorMessage(error) || 'Failed to save goals. Please try again.');
     }
   };
 

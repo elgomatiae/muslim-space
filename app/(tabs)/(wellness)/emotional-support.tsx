@@ -102,7 +102,18 @@ export default function EmotionalSupportScreen() {
         .order('order_index', { ascending: true });
 
       if (error) {
-        console.error('Error loading resources:', error);
+        // If table doesn't exist, continue with empty array (graceful degradation)
+        if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+          // Silently handle - table not found is expected if migration hasn't been run
+          setResources([]);
+        } else {
+          // Only log non-PGRST205 errors
+          const { getErrorForLogging } = require('@/utils/errorHandler');
+          if (__DEV__) {
+            console.log('Error loading resources:', getErrorForLogging(error));
+          }
+          setResources([]);
+        }
       } else {
         // Enhance resources with Islamic content
         const enhancedResources = (data || []).map(resource => ({
@@ -113,8 +124,19 @@ export default function EmotionalSupportScreen() {
         }));
         setResources(enhancedResources);
       }
-    } catch (error) {
-      console.error('Error loading resources:', error);
+    } catch (error: any) {
+      // Continue with empty array if table doesn't exist
+      if (error?.code === 'PGRST205' || error?.message?.includes('Could not find the table')) {
+        // Silently handle - table not found is expected if migration hasn't been run
+        setResources([]);
+      } else {
+        // Only log non-PGRST205 errors
+        const { getErrorForLogging } = require('@/utils/errorHandler');
+        if (__DEV__) {
+          console.log('Error loading resources:', getErrorForLogging(error));
+        }
+        setResources([]);
+      }
     } finally {
       setLoading(false);
     }

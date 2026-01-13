@@ -29,7 +29,7 @@ const CHART_PADDING = 40;
 
 export default function TrendsScreen() {
   const { user } = useAuth();
-  const { sectionScores, overallScore } = useImanTracker();
+  const { sectionScores, imanScore } = useImanTracker();
   const [period, setPeriod] = useState<PeriodType>('week');
   const [scoreHistory, setScoreHistory] = useState<ScoreData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,50 +40,18 @@ export default function TrendsScreen() {
   }, [user, period]);
 
   useEffect(() => {
-    // Record current score
-    if (user) {
+    // Record current score when it changes
+    if (user && imanScore > 0) {
       recordCurrentScore();
     }
-  }, [user, sectionScores, overallScore]);
+  }, [user, sectionScores, imanScore]);
 
   const recordCurrentScore = async () => {
     if (!user) return;
 
     try {
-      // Check if we already recorded today
-      const today = new Date().toISOString().split('T')[0];
-      const { data: existingToday } = await supabase
-        .from('iman_score_history')
-        .select('id')
-        .eq('user_id', user.id)
-        .gte('recorded_at', `${today}T00:00:00`)
-        .lt('recorded_at', `${today}T23:59:59`)
-        .single();
-
-      if (existingToday) {
-        // Update today's record
-        await supabase
-          .from('iman_score_history')
-          .update({
-            overall_score: overallScore,
-            ibadah_score: Math.round(sectionScores.ibadah),
-            ilm_score: Math.round(sectionScores.ilm),
-            amanah_score: Math.round(sectionScores.amanah),
-          })
-          .eq('id', existingToday.id);
-      } else {
-        // Insert new record
-        await supabase
-          .from('iman_score_history')
-          .insert({
-            user_id: user.id,
-            overall_score: overallScore,
-            ibadah_score: Math.round(sectionScores.ibadah),
-            ilm_score: Math.round(sectionScores.ilm),
-            amanah_score: Math.round(sectionScores.amanah),
-            recorded_at: new Date().toISOString(),
-          });
-      }
+      const { recordScoreHistory } = await import('@/utils/scoreHistoryTracker');
+      await recordScoreHistory(user.id, imanScore, sectionScores);
     } catch (error) {
       console.log('Error recording score:', error);
     }
@@ -115,8 +83,14 @@ export default function TrendsScreen() {
         .order('recorded_at', { ascending: true });
 
       if (error) {
-        console.log('Error loading score history:', error);
-        setScoreHistory([]);
+        // Handle table not found gracefully
+        if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+          console.log('ℹ️ iman_score_history table not found - run migration to enable trends feature');
+          setScoreHistory([]);
+        } else {
+          console.log('Error loading score history:', error);
+          setScoreHistory([]);
+        }
         return;
       }
 

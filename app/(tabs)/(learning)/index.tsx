@@ -1,7 +1,7 @@
 
-import React from "react";
-import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity, Dimensions } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import React, { useRef } from "react";
+import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity, Dimensions, Animated } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
@@ -10,6 +10,11 @@ import * as Haptics from 'expo-haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = (SCREEN_WIDTH - spacing.xl * 2 - spacing.md) / 2;
+
+// Header animation constants (matching Iman Tracker)
+const HEADER_MAX_HEIGHT = 150;
+const HEADER_MIN_HEIGHT = 70;
+const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
 
 interface LearningSection {
   title: string;
@@ -68,6 +73,28 @@ const LearningCard: React.FC<LearningCardProps> = ({ title, description, icon, a
 export default function LearningScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  // Header height animation
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
+    extrapolate: 'clamp',
+  });
+
+  // Header content opacity
+  const headerContentOpacity = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE / 2, HEADER_SCROLL_DISTANCE],
+    outputRange: [1, 0.5, 0],
+    extrapolate: 'clamp',
+  });
+
+  // Header title scale for collapsed state
+  const headerTitleScale = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [1, 0.8],
+    extrapolate: 'clamp',
+  });
 
   const sections: LearningSection[] = [
     {
@@ -114,35 +141,62 @@ export default function LearningScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Modern Header with Gradient Background */}
-      <LinearGradient
-        colors={colors.gradientOcean}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.headerGradient, { paddingTop: insets.top + spacing.lg }]}
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Collapsing Header (matching Iman Tracker style) */}
+      <Animated.View 
+        style={[
+          styles.headerSection,
+          { height: headerHeight }
+        ]}
       >
-        <View style={styles.headerContent}>
-          <View style={styles.headerIconContainer}>
-            <IconSymbol
-              ios_icon_name="book.fill"
-              android_material_icon_name="menu-book"
-              size={36}
-              color={colors.card}
-            />
-          </View>
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.header}>Learning Center</Text>
-            <Text style={styles.subtitle}>Expand your Islamic knowledge</Text>
-          </View>
-        </View>
-      </LinearGradient>
+        <LinearGradient
+          colors={colors.gradientOcean as any}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <Animated.View 
+            style={[
+              styles.headerContent,
+              { opacity: headerContentOpacity }
+            ]}
+          >
+            <Animated.View 
+              style={[
+                styles.headerTop,
+                { transform: [{ scale: headerTitleScale }] }
+              ]}
+            >
+              <View style={styles.headerIconContainer}>
+                <IconSymbol
+                  ios_icon_name="book.fill"
+                  android_material_icon_name="menu-book"
+                  size={48}
+                  color="#FFFFFF"
+                />
+              </View>
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.header}>Learning Center</Text>
+                <Text style={styles.subtitle}>Expand your Islamic knowledge</Text>
+              </View>
+            </Animated.View>
+          </Animated.View>
+        </LinearGradient>
+      </Animated.View>
 
       {/* Learning Sections Grid */}
-      <ScrollView
+      <Animated.ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: spacing.lg },
+        ]}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
       >
         <View style={styles.cardsGrid}>
           {sections.map((section, index) => (
@@ -183,8 +237,8 @@ export default function LearningScreen() {
 
         {/* Bottom Padding for Tab Bar */}
         <View style={styles.bottomPadding} />
-      </ScrollView>
-    </View>
+      </Animated.ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -193,12 +247,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  headerSection: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    ...shadows.large,
+  },
   headerGradient: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xl,
-    ...shadows.emphasis,
+    flex: 1,
+    padding: spacing.lg,
+    justifyContent: 'center',
   },
   headerContent: {
+    gap: spacing.md,
+  },
+  headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
@@ -215,15 +279,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    ...typography.h2,
-    color: colors.card,
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#FFFFFF',
     marginBottom: spacing.xs,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   subtitle: {
-    ...typography.body,
     fontSize: 14,
-    color: colors.card,
-    opacity: 0.9,
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.9)',
   },
   scrollView: {
     flex: 1,

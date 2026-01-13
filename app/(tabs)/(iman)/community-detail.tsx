@@ -110,7 +110,8 @@ export default function CommunityDetailScreen() {
               console.log('✅ Successfully left community');
             } catch (error) {
               console.error('❌ Failed to leave community:', error);
-              Alert.alert('Error', 'Failed to leave community. Please try again.');
+              const { getErrorMessage } = require('@/utils/errorHandler');
+              Alert.alert('Error', getErrorMessage(error) || 'Failed to leave community. Please try again.');
             }
           },
         },
@@ -138,7 +139,8 @@ export default function CommunityDetailScreen() {
               console.log('✅ Member removed successfully');
             } catch (error) {
               console.error('❌ Failed to remove member:', error);
-              Alert.alert('Error', 'Failed to remove member. Please try again.');
+              const { getErrorMessage } = require('@/utils/errorHandler');
+              Alert.alert('Error', getErrorMessage(error) || 'Failed to remove member. Please try again.');
             }
           },
         },

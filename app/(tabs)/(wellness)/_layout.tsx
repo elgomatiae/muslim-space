@@ -14,7 +14,6 @@ export default function WellnessLayout() {
       <Stack.Screen name="mental-health" />
       <Stack.Screen name="journal" />
       <Stack.Screen name="journal-prompts" />
-      <Stack.Screen name="prophet-stories" />
       <Stack.Screen name="mental-duas" />
       <Stack.Screen name="emotional-support" />
       <Stack.Screen name="meditation" />

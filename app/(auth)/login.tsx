@@ -51,21 +51,9 @@ export default function LoginScreen() {
       if (error) {
         console.log('Login error:', error);
         
-        // Show user-friendly error messages
-        let errorMessage = error.message;
-        
-        // Handle specific error cases
-        if (error.message.includes('Email not confirmed')) {
-          errorMessage = 'Please verify your email address before logging in. Check your inbox for the verification link.';
-        } else if (error.message.includes('Invalid login credentials') || 
-                   error.message.includes('Invalid email or password') ||
-                   error.status === 400) {
-          errorMessage = 'Username or password not found. Please check your credentials and try again.';
-        } else if (error.message.includes('Email link is invalid or has expired')) {
-          errorMessage = 'Your verification link has expired. Please request a new one.';
-        } else if (error.message.includes('User not found')) {
-          errorMessage = 'Username or password not found. Please check your credentials and try again.';
-        }
+        // Use error handler for user-friendly messages
+        const { getErrorMessage } = require('@/utils/errorHandler');
+        const errorMessage = getErrorMessage(error);
         
         setErrorMessage(errorMessage);
         Alert.alert('Login Failed', errorMessage);
@@ -84,9 +72,10 @@ export default function LoginScreen() {
       }
     } catch (error: any) {
       console.error('Login error:', error);
-      const errorMsg = 'An unexpected error occurred. Please try again.';
+      const { getErrorMessage } = require('@/utils/errorHandler');
+      const errorMsg = getErrorMessage(error);
       setErrorMessage(errorMsg);
-      Alert.alert('Error', errorMsg);
+      Alert.alert('Login Failed', errorMsg);
       setLoading(false);
     }
   };
@@ -109,7 +98,8 @@ export default function LoginScreen() {
       });
 
       if (error) {
-        Alert.alert('Error', error.message);
+        const { getErrorMessage } = require('@/utils/errorHandler');
+        Alert.alert('Error', getErrorMessage(error));
       } else {
         Alert.alert(
           'Check Your Email',
@@ -118,7 +108,8 @@ export default function LoginScreen() {
       }
     } catch (error: any) {
       console.error('Password reset error:', error);
-      Alert.alert('Error', 'Failed to send password reset email');
+      const { getErrorMessage } = require('@/utils/errorHandler');
+      Alert.alert('Error', getErrorMessage(error) || 'Failed to send password reset email. Please try again.');
     } finally {
       setLoading(false);
     }

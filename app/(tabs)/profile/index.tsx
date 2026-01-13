@@ -270,27 +270,17 @@ export default function ProfileScreen() {
     console.log('=== NOTIFICATION NAVIGATION END ===');
   };
 
-  const handlePrayerSettings = () => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-    try {
-      router.push('/(tabs)/profile/prayer-settings');
-    } catch (error) {
-      console.error('Navigation error:', error);
-      Alert.alert('Navigation Error', 'Failed to open prayer settings. Please try again.');
-    }
-  };
 
   const handleAbout = () => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    Alert.alert(
-      'About Muslim Lifestyle',
-      'Version 1.0.0\n\nA comprehensive app for tracking your Islamic lifestyle, prayers, Quran reading, and spiritual growth.\n\nMay Allah accept your efforts.',
-      [{ text: 'OK' }]
-    );
+    try {
+      router.push('/(tabs)/profile/about');
+    } catch (error) {
+      console.error('Navigation error:', error);
+      Alert.alert('Navigation Error', 'Failed to open about screen. Please try again.');
+    }
   };
 
   const handleLogout = () => {
@@ -374,13 +364,6 @@ export default function ProfileScreen() {
       androidIcon: 'notifications', 
       color: colors.accent,
       action: handleNotifications
-    },
-    { 
-      title: 'Prayer Settings', 
-      iosIcon: 'gear', 
-      androidIcon: 'settings', 
-      color: colors.info,
-      action: handlePrayerSettings
     },
     { 
       title: 'About', 

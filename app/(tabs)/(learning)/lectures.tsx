@@ -222,6 +222,16 @@ export default function LecturesScreen() {
         await updateIlmGoals(updatedGoals);
       }
 
+      // Track lecture completion for achievements
+      if (user) {
+        try {
+          const { trackLectureCompletion } = await import('@/utils/imanActivityIntegration');
+          await trackLectureCompletion(user.id);
+        } catch (error) {
+          console.log('Error tracking lecture:', error);
+        }
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error('Error tracking lecture:', error);

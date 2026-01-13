@@ -70,7 +70,52 @@ function parseDuration(durationStr: string | null | undefined): number {
 }
 
 /**
- * Fetch all lectures from Supabase
+ * Check if a video is actually a recitation (not a lecture)
+ */
+function isRecitation(title: string, speaker: string): boolean {
+  const titleLower = (title || '').toLowerCase();
+  const speakerLower = (speaker || '').toLowerCase();
+  
+  // Keywords that indicate it's a recitation
+  const recitationKeywords = [
+    'recitation', 'تلاوة', 'quran recitation', 'beautiful quran', 'quran by',
+    'surah', 'surat', 'سورة', 'qari', 'quran', 'tilawat', 'taraweeh recitation',
+    'emotional recitation', 'heart touching recitation', 'beautiful recitation',
+    'quran recitation by', 'recited by', 'recitation by', 'quran tilawat'
+  ];
+  
+  // Reciter names (common reciters, not scholars)
+  const reciterNames = [
+    'mishary', 'maher', 'yasser', 'yaser', 'dosari', 'dossary', 'shatri',
+    'shuraim', 'sudais', 'minshawi', 'hussary', 'husary', 'ajmi', 'qatami',
+    'ghamdi', 'alafasy', 'seferagic', 'abkar', 'idris', 'mansour', 'salimi',
+    'noori', 'alajerh', 'hameedi', 'hameedy', 'rahman', 'baleela', 'baleelah',
+    'zahrani', 'utaybi', 'al-muaiqly', 'muaiqly', 'al-minshawi', 'minshawi',
+    'al-hussary', 'hussary', 'al-ajmi', 'ajmi', 'al-qatami', 'qatami',
+    'al-ghamdi', 'ghamdi', 'al-afasy', 'afasy', 'seferagic', 'abkar',
+    'qari', 'reciter'
+  ];
+  
+  // Check title for recitation keywords
+  if (recitationKeywords.some(keyword => titleLower.includes(keyword))) {
+    return true;
+  }
+  
+  // Check speaker for reciter names
+  if (reciterNames.some(name => speakerLower.includes(name))) {
+    return true;
+  }
+  
+  // Check if title contains Arabic recitation indicators
+  if (titleLower.includes('تلاوة') || titleLower.includes('سورة') && !titleLower.includes('lecture')) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Fetch all lectures from Supabase (filters out recitations)
  */
 export async function fetchAllLectures(): Promise<LectureDisplay[]> {
   try {
@@ -99,10 +144,18 @@ export async function fetchAllLectures(): Promise<LectureDisplay[]> {
       return [];
     }
 
-    console.log(`✅ [LectureService] Fetched ${data.length} lectures`);
+    console.log(`✅ [LectureService] Fetched ${data.length} items from lectures table`);
+
+    // Filter out recitations that were mistakenly imported into lectures table
+    const actualLectures = data.filter((item: any) => {
+      const isRec = isRecitation(item.title || '', item.speaker || '');
+      return !isRec; // Keep only non-recitations
+    });
+
+    console.log(`✅ [LectureService] Filtered to ${actualLectures.length} actual lectures (removed ${data.length - actualLectures.length} recitations)`);
 
     // Map to display format
-    const lectures: LectureDisplay[] = data.map((lecture: any) => ({
+    const lectures: LectureDisplay[] = actualLectures.map((lecture: any) => ({
       id: lecture.id || '',
       title: lecture.title || '',
       url: lecture.video_url || '',
@@ -127,7 +180,7 @@ export async function fetchAllLectures(): Promise<LectureDisplay[]> {
 }
 
 /**
- * Fetch lectures by category
+ * Fetch lectures by category (filters out recitations)
  */
 export async function fetchLecturesByCategory(categoryId: string): Promise<LectureDisplay[]> {
   try {
@@ -144,7 +197,12 @@ export async function fetchLecturesByCategory(categoryId: string): Promise<Lectu
       return [];
     }
 
-    return (data || []).map((lecture: any) => ({
+    // Filter out recitations
+    const actualLectures = (data || []).filter((item: any) => {
+      return !isRecitation(item.title || '', item.speaker || '');
+    });
+
+    return actualLectures.map((lecture: any) => ({
       id: lecture.id || '',
       title: lecture.title || '',
       url: lecture.video_url || '',
@@ -193,7 +251,7 @@ export async function getLectureCategories(): Promise<string[]> {
 }
 
 /**
- * Search lectures
+ * Search lectures (filters out recitations)
  */
 export async function searchLectures(query: string): Promise<LectureDisplay[]> {
   try {
@@ -204,14 +262,19 @@ export async function searchLectures(query: string): Promise<LectureDisplay[]> {
       .select('*')
       .or(`title.ilike.%${query}%,speaker.ilike.%${query}%`)
       .order('order_index', { ascending: true })
-      .limit(50);
+      .limit(100); // Increased limit to account for filtering
 
     if (error) {
       console.error('❌ [LectureService] Error searching lectures:', error);
       return [];
     }
 
-    return (data || []).map((lecture: any) => ({
+    // Filter out recitations
+    const actualLectures = (data || []).filter((item: any) => {
+      return !isRecitation(item.title || '', item.speaker || '');
+    });
+
+    return actualLectures.map((lecture: any) => ({
       id: lecture.id || '',
       title: lecture.title || '',
       url: lecture.video_url || '',

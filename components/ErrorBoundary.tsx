@@ -94,7 +94,10 @@ export class ErrorBoundary extends Component<Props, State> {
             <ScrollView style={styles.errorDetails}>
               <Text style={styles.errorTitle}>Error Details (Dev Only):</Text>
               <Text style={styles.errorText}>
-                {this.state.error.toString()}
+                {(() => {
+                  const { getErrorForLogging } = require('@/utils/errorHandler');
+                  return getErrorForLogging(this.state.error);
+                })()}
               </Text>
               {this.state.errorInfo && (
                 <Text style={styles.errorStack}>

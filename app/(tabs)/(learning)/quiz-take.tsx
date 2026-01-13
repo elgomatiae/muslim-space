@@ -189,6 +189,16 @@ export default function QuizTakeScreen() {
         }
       }
 
+      // Track quiz completion for achievements
+      if (user) {
+        try {
+          const { trackQuizCompletion } = await import('@/utils/imanActivityIntegration');
+          await trackQuizCompletion(user.id);
+        } catch (error) {
+          console.log('Error tracking quiz:', error);
+        }
+      }
+
       // Navigate to results
       router.push({
         pathname: '/(tabs)/(learning)/quiz-result',

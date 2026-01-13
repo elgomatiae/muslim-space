@@ -128,8 +128,9 @@ export default function RecitationsScreen() {
       const categorized: { [key: string]: RecitationDisplay[] } = {};
       const uncategorized: RecitationDisplay[] = [];
       
+      // Ensure ALL recitations are processed
       allRecitations.forEach(recitation => {
-        if (recitation.category && recitation.category.trim() !== '') {
+        if (recitation.category && recitation.category.trim() !== '' && recitation.category !== 'Uncategorized') {
           if (!categorized[recitation.category]) {
             categorized[recitation.category] = [];
           }
@@ -139,18 +140,41 @@ export default function RecitationsScreen() {
         }
       });
       
-      // Shuffle within categories
+      // Sort recitations within each category by order_index, then by title
       Object.keys(categorized).forEach(category => {
-        categorized[category] = shuffleArray(categorized[category]);
+        categorized[category].sort((a, b) => {
+          if (a.order_index !== b.order_index) {
+            return a.order_index - b.order_index;
+          }
+          return a.title.localeCompare(b.title);
+        });
       });
       
-      const uniqueCategories = Object.keys(categorized).sort();
+      // Sort categories by name for consistent display
+      const uniqueCategories = Object.keys(categorized).sort((a, b) => {
+        // Prioritize main categories
+        const priority = ['Quran & Tafsir', 'Motivational', 'Emotional'];
+        const aPriority = priority.indexOf(a);
+        const bPriority = priority.indexOf(b);
+        if (aPriority !== -1 && bPriority !== -1) return aPriority - bPriority;
+        if (aPriority !== -1) return -1;
+        if (bPriority !== -1) return 1;
+        return a.localeCompare(b);
+      });
+      
+      // Sort uncategorized by order_index
+      uncategorized.sort((a, b) => {
+        if (a.order_index !== b.order_index) {
+          return a.order_index - b.order_index;
+        }
+        return a.title.localeCompare(b.title);
+      });
       
       setCategories(uniqueCategories);
       setRecitationsByCategory(categorized);
-      setUncategorizedRecitations(shuffleArray(uncategorized));
+      setUncategorizedRecitations(uncategorized);
       
-      console.log(`✅ Loaded: ${allRecitations.length} recitations, ${uniqueCategories.length} categories`);
+      console.log(`✅ Loaded: ${allRecitations.length} recitations, ${uniqueCategories.length} categories, ${uncategorized.length} uncategorized`);
     } catch (error) {
       console.error('❌ Error loading recitations:', error);
       Alert.alert('Error', 'Failed to load recitations. Please check your connection.');
@@ -220,6 +244,16 @@ export default function RecitationsScreen() {
           ),
         };
         await updateIlmGoals(updatedGoals);
+      }
+
+      // Track recitation completion for achievements (treat as lecture for achievement purposes)
+      if (user) {
+        try {
+          const { trackLectureCompletion } = await import('@/utils/imanActivityIntegration');
+          await trackLectureCompletion(user.id);
+        } catch (error) {
+          console.log('Error tracking recitation:', error);
+        }
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
