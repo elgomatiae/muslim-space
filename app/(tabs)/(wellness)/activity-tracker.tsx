@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
 import Svg, { Circle, Defs, RadialGradient as SvgRadialGradient, Stop } from 'react-native-svg';
@@ -86,6 +86,25 @@ export default function ActivityTrackerScreen() {
     ).start();
   }, [pulseAnim, glowAnim, rotateAnim]);
 
+  // Sync with Iman Tracker when amanahGoals.dailyExerciseCompleted changes
+  useEffect(() => {
+    if (amanahGoals && amanahGoals.dailyExerciseCompleted !== undefined) {
+      // Use the higher value between database and Iman Tracker
+      const imanTrackerMinutes = amanahGoals.dailyExerciseCompleted || 0;
+      if (imanTrackerMinutes > todayExerciseMinutes) {
+        console.log('🔄 Updating activity tracker from Iman Tracker:', imanTrackerMinutes, 'minutes');
+        setTodayExerciseMinutes(imanTrackerMinutes);
+      }
+    }
+  }, [amanahGoals?.dailyExerciseCompleted]);
+
+  // Refresh data when screen is focused (user navigates back to this screen)
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [user?.id])
+  );
+
   const loadData = async () => {
     if (!user) return;
     
@@ -101,15 +120,39 @@ export default function ActivityTrackerScreen() {
         setWorkoutTypes(goalsData.workout_types || [goalsData.workout_type || 'general']);
       }
       
-      // Load today's exercise
+      // Load today's exercise from physical_activities table
       const today = new Date().toISOString().split('T')[0];
-      const { data: activityData } = await supabase
-        .from('physical_activities')
-        .select('duration_minutes')
-        .eq('user_id', user.id)
-        .eq('date', today);
+      let totalMinutes = 0;
       
-      const totalMinutes = activityData?.reduce((sum, entry) => sum + entry.duration_minutes, 0) || 0;
+      try {
+        const { data: activityData, error: activityError } = await supabase
+          .from('physical_activities')
+          .select('duration_minutes')
+          .eq('user_id', user.id)
+          .eq('date', today);
+        
+        if (activityError) {
+          // If table doesn't exist, silently continue (will use Iman Tracker value)
+          if (activityError.code !== 'PGRST205' && !activityError.message?.includes('Could not find the table')) {
+            console.error('Error loading physical activities:', activityError);
+          }
+        } else {
+          totalMinutes = activityData?.reduce((sum, entry) => sum + entry.duration_minutes, 0) || 0;
+        }
+      } catch (err) {
+        // Table might not exist - silently continue
+        if (__DEV__) {
+          console.log('Physical activities table not available:', err);
+        }
+      }
+      
+      // Also sync with Iman Tracker's dailyExerciseCompleted (use the higher value)
+      // This ensures activity tracker shows the correct value even if updated from Iman Tracker
+      if (amanahGoals && amanahGoals.dailyExerciseCompleted > totalMinutes) {
+        totalMinutes = amanahGoals.dailyExerciseCompleted;
+        console.log('📊 Syncing activity tracker with Iman Tracker:', totalMinutes, 'minutes');
+      }
+      
       setTodayExerciseMinutes(totalMinutes);
     } catch (error) {
       console.error('Error loading activity data:', error);
@@ -137,34 +180,95 @@ export default function ActivityTrackerScreen() {
   };
 
   const addQuickWorkout = async (minutes: number) => {
-    if (!user || minutes <= 0) return;
+    if (!user || minutes <= 0) {
+      Alert.alert('Error', 'Please enter a valid number of minutes.');
+      return;
+    }
     
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
-    const { error } = await supabase
-      .from('physical_activities')
-      .insert({
-        user_id: user.id,
-        activity_type: workoutTypes[0] || 'general',
-        duration_minutes: minutes,
-        workout_type: workoutTypes[0] || 'general',
-        workout_types: workoutTypes,
-        is_multi_workout: false,
-      });
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      const { error } = await supabase
+        .from('physical_activities')
+        .insert({
+          user_id: user.id,
+          activity_type: workoutTypes[0] || 'general',
+          duration_minutes: minutes,
+          workout_type: workoutTypes[0] || 'general',
+          workout_types: workoutTypes,
+          is_multi_workout: false,
+          date: today, // Ensure date is set for proper tracking
+        });
 
-    if (!error) {
+      if (error) {
+        console.error('Error saving workout:', error);
+        // If table doesn't exist, still update Iman Tracker (graceful fallback)
+        if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+          console.log('⚠️ physical_activities table not found - updating Iman Tracker only');
+          // Still update Iman Tracker even if table doesn't exist
+          const newTotal = todayExerciseMinutes + minutes;
+          setTodayExerciseMinutes(newTotal);
+          await updateGoalsProgress(newTotal);
+          await refreshData();
+          
+          // Log to activity_log for achievements
+          if (user) {
+            try {
+              const { logActivity } = await import('@/utils/activityLogger');
+              await logActivity({
+                userId: user.id,
+                activityType: 'workout_completed',
+                activityCategory: 'amanah',
+                activityTitle: 'Workout Completed',
+                activityDescription: `Completed ${minutes} minute(s) workout`,
+                activityValue: 1,
+                pointsEarned: 15,
+              });
+              
+              const { checkAndUnlockAchievements } = await import('@/utils/achievementService');
+              await checkAndUnlockAchievements(user.id);
+            } catch (err) {
+              console.log('Error logging workout activity:', err);
+            }
+          }
+          
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          Alert.alert(
+            'Workout Logged',
+            `Logged ${minutes} minutes! Note: Please run migration 015_create_physical_activities_table.sql to enable full tracking.`
+          );
+          return;
+        }
+        Alert.alert('Error', 'Failed to save workout. Please try again.');
+        return;
+      }
+
       const newTotal = todayExerciseMinutes + minutes;
       setTodayExerciseMinutes(newTotal);
       await updateGoalsProgress(newTotal);
       await refreshData();
       
-      // Track workout for achievements
+      // Directly log workout to activity_log for achievements
       if (user) {
         try {
-          const { trackWorkoutCompletion } = await import('@/utils/imanActivityIntegration');
-          await trackWorkoutCompletion(user.id);
+          const { logActivity } = await import('@/utils/activityLogger');
+          await logActivity({
+            userId: user.id,
+            activityType: 'workout_completed',
+            activityCategory: 'amanah',
+            activityTitle: 'Workout Completed',
+            activityDescription: `Completed ${minutes} minute(s) workout`,
+            activityValue: 1, // 1 session
+            pointsEarned: 15,
+          });
+          
+          // Also trigger achievement check
+          const { checkAndUnlockAchievements } = await import('@/utils/achievementService');
+          await checkAndUnlockAchievements(user.id);
         } catch (error) {
-          console.log('Error tracking workout:', error);
+          console.log('Error logging workout activity:', error);
         }
       }
       
@@ -174,6 +278,9 @@ export default function ActivityTrackerScreen() {
       if (amanahGoals && newTotal >= amanahGoals.dailyExerciseGoal && todayExerciseMinutes < amanahGoals.dailyExerciseGoal) {
         setShowCompletionModal(true);
       }
+    } catch (error) {
+      console.error('Exception in addQuickWorkout:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     }
   };
 
@@ -189,32 +296,90 @@ export default function ActivityTrackerScreen() {
     
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     
-    const { error } = await supabase
-      .from('physical_activities')
-      .insert({
-        user_id: user.id,
-        activity_type: workoutTypes[0] || 'general',
-        duration_minutes: totalDuration,
-        workout_type: workoutTypes[0] || 'general',
-        workout_types: workoutTypes,
-        is_multi_workout: true,
-        workout_durations: workoutDurations,
-      });
+    const today = new Date().toISOString().split('T')[0];
+    
+    try {
+      const { error } = await supabase
+        .from('physical_activities')
+        .insert({
+          user_id: user.id,
+          activity_type: workoutTypes[0] || 'general',
+          duration_minutes: totalDuration,
+          workout_type: workoutTypes[0] || 'general',
+          workout_types: workoutTypes,
+          is_multi_workout: true,
+          workout_durations: workoutDurations,
+          date: today, // Ensure date is set for proper tracking
+        });
 
-    if (!error) {
+      if (error) {
+        console.error('Error saving workout:', error);
+        // If table doesn't exist, still update Iman Tracker (graceful fallback)
+        if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+          console.log('⚠️ physical_activities table not found - updating Iman Tracker only');
+          // Still update Iman Tracker even if table doesn't exist
+          const newTotal = todayExerciseMinutes + totalDuration;
+          setTodayExerciseMinutes(newTotal);
+          await updateGoalsProgress(newTotal);
+          await refreshData();
+          
+          // Log to activity_log for achievements
+          if (user) {
+            try {
+              const { logActivity } = await import('@/utils/activityLogger');
+              await logActivity({
+                userId: user.id,
+                activityType: 'workout_completed',
+                activityCategory: 'amanah',
+                activityTitle: 'Workout Completed',
+                activityDescription: `Completed ${totalDuration} minute(s) workout`,
+                activityValue: 1,
+                pointsEarned: 15,
+              });
+              
+              const { checkAndUnlockAchievements } = await import('@/utils/achievementService');
+              await checkAndUnlockAchievements(user.id);
+            } catch (err) {
+              console.log('Error logging workout activity:', err);
+            }
+          }
+          
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          Alert.alert(
+            'Workout Logged',
+            `Logged ${totalDuration} minutes! Note: Please run migration 015_create_physical_activities_table.sql to enable full tracking.`
+          );
+          setShowWorkoutModal(false);
+          return;
+        }
+        Alert.alert('Error', 'Failed to log workout. Please try again.');
+        return;
+      }
       setShowWorkoutModal(false);
       const newTotal = todayExerciseMinutes + totalDuration;
       setTodayExerciseMinutes(newTotal);
       await updateGoalsProgress(newTotal);
       await refreshData();
       
-      // Track workout for achievements
+      // Directly log workout to activity_log for achievements
       if (user) {
         try {
-          const { trackWorkoutCompletion } = await import('@/utils/imanActivityIntegration');
-          await trackWorkoutCompletion(user.id);
+          const { logActivity } = await import('@/utils/activityLogger');
+          await logActivity({
+            userId: user.id,
+            activityType: 'workout_completed',
+            activityCategory: 'amanah',
+            activityTitle: 'Workout Completed',
+            activityDescription: `Completed ${totalDuration} minute(s) workout`,
+            activityValue: 1, // 1 session
+            pointsEarned: 15,
+          });
+          
+          // Also trigger achievement check
+          const { checkAndUnlockAchievements } = await import('@/utils/achievementService');
+          await checkAndUnlockAchievements(user.id);
         } catch (error) {
-          console.log('Error tracking workout:', error);
+          console.log('Error logging workout activity:', error);
         }
       }
       
@@ -224,8 +389,9 @@ export default function ActivityTrackerScreen() {
       if (amanahGoals && newTotal >= amanahGoals.dailyExerciseGoal && todayExerciseMinutes < amanahGoals.dailyExerciseGoal) {
         setShowCompletionModal(true);
       }
-    } else {
-      Alert.alert('Error', 'Failed to log workout. Please try again.');
+    } catch (error) {
+      console.error('Exception in saveMultiWorkoutSession:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     }
   };
 
@@ -234,9 +400,38 @@ export default function ActivityTrackerScreen() {
 
     console.log('💪 Updating Iman Tracker with exercise progress:', newTotal, 'minutes');
     
+    // Count workouts this week from physical_activities to get accurate count
+    let weeklyWorkoutCount = 0;
+    try {
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Start of week (Sunday)
+      weekStart.setHours(0, 0, 0, 0);
+      
+      const { count, error } = await supabase
+        .from('physical_activities')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .gte('created_at', weekStart.toISOString());
+      
+      if (error) {
+        // If table doesn't exist, use 0 (will be updated when table is created)
+        if (error.code !== 'PGRST205' && !error.message?.includes('Could not find the table')) {
+          console.error('Error counting weekly workouts:', error);
+        }
+      } else {
+        weeklyWorkoutCount = count || 0;
+      }
+    } catch (err) {
+      // Table might not exist - silently continue with 0
+      if (__DEV__) {
+        console.log('Physical activities table not available for weekly count:', err);
+      }
+    }
+    
     await updateAmanahGoals({
       ...amanahGoals,
       dailyExerciseCompleted: newTotal,
+      weeklyWorkoutCompleted: weeklyWorkoutCount, // Use actual count from database
     });
   };
 

@@ -353,15 +353,28 @@ export default function MeditationScreen() {
         }
       }
 
-      // Track meditation for achievements
+      // Directly log meditation to activity_log for achievements
       if (user) {
         try {
-          const { trackMeditationSession } = await import('@/utils/imanActivityIntegration');
-          await trackMeditationSession(user.id);
+          const { logActivity } = await import('@/utils/activityLogger');
+          await logActivity({
+            userId: user.id,
+            activityType: 'meditation_session',
+            activityCategory: 'amanah',
+            activityTitle: 'Meditation Session Completed',
+            activityDescription: `Completed ${selectedPractice.duration} minute(s) ${selectedPractice.type} meditation`,
+            activityValue: 1, // 1 session
+            pointsEarned: 8,
+          });
+          
+          // Also trigger achievement check
+          const { checkAndUnlockAchievements } = await import('@/utils/achievementService');
+          await checkAndUnlockAchievements(user.id);
         } catch (error) {
-          console.log('Error tracking meditation:', error);
+          console.log('Error logging meditation activity:', error);
         }
       }
+      
 
       // Update Amanah goals - meditation counter
       if (amanahGoals) {

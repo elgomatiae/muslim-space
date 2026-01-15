@@ -171,8 +171,10 @@ export default function ActivityHistoryScreen() {
 
     const statsMap = new Map<string, DailyStats>();
 
-    // Process exercise (if table exists)
-    if (!exerciseResult.error && exerciseResult.data) {
+    // Process exercise (if table exists and no PGRST205 error)
+    if (!exerciseResult.error && exerciseResult.data && 
+        exerciseResult.error?.code !== 'PGRST205' && 
+        !exerciseResult.error?.message?.includes('Could not find the table')) {
       exerciseResult.data.forEach(entry => {
         if (!statsMap.has(entry.date)) {
           statsMap.set(entry.date, {
@@ -389,8 +391,10 @@ export default function ActivityHistoryScreen() {
       return weekStart.toISOString().split('T')[0];
     };
 
-    // Process exercise (if table exists)
-    if (!exerciseResult.error && exerciseResult.data) {
+    // Process exercise (if table exists and no PGRST205 error)
+    if (!exerciseResult.error && exerciseResult.data && 
+        exerciseResult.error?.code !== 'PGRST205' && 
+        !exerciseResult.error?.message?.includes('Could not find the table')) {
       exerciseResult.data.forEach(entry => {
         const weekStart = getWeekStart(entry.date);
         if (!weekMap.has(weekStart)) {

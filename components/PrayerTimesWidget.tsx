@@ -157,10 +157,10 @@ export default function PrayerTimesWidget() {
             try {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               
-              // Mark prayer as completed
+              // Mark prayer as completed (this updates prayer_times and user_stats)
               await markPrayerCompleted(user.id, prayer.name);
 
-              // Log activity immediately
+              // Log activity immediately to activity_log
               await logActivity({
                 userId: user.id,
                 activityType: 'prayer_completed',
@@ -170,7 +170,7 @@ export default function PrayerTimesWidget() {
                 pointsEarned: 10,
               });
 
-              // Update Iman Tracker
+              // Update Iman Tracker (this triggers logIbadahActivity which checks achievements)
               if (ibadahGoals && ibadahGoals.fardPrayers) {
                 const prayerKey = prayer.name.toLowerCase() as keyof typeof ibadahGoals.fardPrayers;
                 const updatedGoals = {
@@ -181,6 +181,14 @@ export default function PrayerTimesWidget() {
                   },
                 };
                 await updateIbadahGoals(updatedGoals);
+              }
+
+              // Also check achievements directly after prayer completion
+              try {
+                const { checkAndUnlockAchievements } = await import('@/utils/achievementService');
+                await checkAndUnlockAchievements(user.id);
+              } catch (err) {
+                console.log('Error checking achievements:', err);
               }
 
               // Update local state

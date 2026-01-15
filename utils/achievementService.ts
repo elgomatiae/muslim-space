@@ -1,7 +1,7 @@
 
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { sendAchievementUnlocked } from './notificationService';
+// Note: Notifications are sent by AchievementCelebrationContext to prevent duplicates
 
 interface AchievementProgress {
   achievement_id: string;
@@ -60,13 +60,41 @@ export async function calculateUserStats(userId: string): Promise<UserStats> {
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId),
       
-      // Count workouts
+      // Count workouts - try activity_log first, then fallback to physical_activities
       supabase
-        .from('physical_activities')
+        .from('activity_log')
         .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId),
+        .eq('user_id', userId)
+        .eq('activity_type', 'workout_completed'),
       
-      // Count meditation sessions
+      // Fallback: Count workouts from physical_activities (with error handling)
+      (async () => {
+        try {
+          const { count, error } = await supabase
+            .from('physical_activities')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId);
+          if (error) {
+            // If table doesn't exist, return null to indicate fallback unavailable
+            if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+              return { data: null, error: null, count: null };
+            }
+            return { data: null, error, count: null };
+          }
+          return { data: null, error: null, count };
+        } catch (err) {
+          return { data: null, error: err, count: null };
+        }
+      })(),
+      
+      // Count meditation sessions - try activity_log first, then fallback
+      supabase
+        .from('activity_log')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('activity_type', 'meditation_session'),
+      
+      // Fallback: Count meditation sessions from meditation_sessions
       supabase
         .from('meditation_sessions')
         .select('*', { count: 'exact', head: true })
@@ -78,39 +106,164 @@ export async function calculateUserStats(userId: string): Promise<UserStats> {
     const streakResult = results[1].status === 'fulfilled' ? results[1].value : { data: null, error: null };
     const lecturesResult = results[2].status === 'fulfilled' ? results[2].value : { data: null, count: 0, error: null };
     const quizzesResult = results[3].status === 'fulfilled' ? results[3].value : { data: null, count: 0, error: null };
-    const workoutsResult = results[4].status === 'fulfilled' ? results[4].value : { data: null, count: 0, error: null };
-    const meditationResult = results[5].status === 'fulfilled' ? results[5].value : { data: null, count: 0, error: null };
+    const workoutsActivityResult = results[4].status === 'fulfilled' ? results[4].value : { data: null, count: null, error: null };
+    const workoutsFallbackResult = results[5].status === 'fulfilled' 
+      ? results[5].value 
+      : { data: null, count: null, error: null };
+    const meditationActivityResult = results[6].status === 'fulfilled' ? results[6].value : { data: null, count: null, error: null };
+    const meditationFallbackResult = results[7].status === 'fulfilled' ? results[7].value : { data: null, count: 0, error: null };
 
     // ===== PRAYER CALCULATION =====
     // Count total fard prayers completed (lifetime)
-    // Get cumulative total from user_stats (incremented by trackPrayerCompletion)
+    // Check both activity_log AND user_stats, use the higher value
     let totalPrayers = 0;
+    let activityLogCount = 0;
+    let userStatsCount = 0;
     
-    const { data: userStats } = await supabase
-      .from('user_stats')
-      .select('total_prayers')
-      .eq('user_id', userId)
-      .single();
+    // Try activity_log first
+    try {
+      const { count: prayerCount, error: activityError } = await supabase
+        .from('activity_log')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('activity_type', 'prayer_completed');
+      
+      if (!activityError && prayerCount !== null) {
+        activityLogCount = prayerCount;
+        console.log(`📊 Prayers from activity_log: ${activityLogCount}`);
+      }
+    } catch (error) {
+      // activity_log table might not exist
+      console.log('⚠️ activity_log not available, using user_stats');
+    }
     
-    totalPrayers = userStats?.total_prayers || 0;
+    // Always check user_stats as well (this is updated by incrementPrayerCount)
+    try {
+      const { data: userStats, error: statsError } = await supabase
+        .from('user_stats')
+        .select('total_prayers')
+        .eq('user_id', userId)
+        .single();
+      
+      if (!statsError && userStats) {
+        userStatsCount = userStats.total_prayers || 0;
+        console.log(`📊 Prayers from user_stats: ${userStatsCount}`);
+      } else if (statsError && (statsError.code === 'PGRST204' || statsError.code === 'PGRST205')) {
+        console.log('⚠️ user_stats table or column not found - using activity_log only');
+      }
+    } catch (error) {
+      console.log('⚠️ user_stats not available');
+    }
     
-    console.log(`🕌 Prayers: ${totalPrayers} total`);
+    // Use the higher value to ensure we don't miss any prayers
+    totalPrayers = Math.max(activityLogCount, userStatsCount);
+    
+    console.log(`🕌 Prayers: ${totalPrayers} total (activity_log: ${activityLogCount}, user_stats: ${userStatsCount})`);
 
     // ===== DHIKR CALCULATION =====
     // Count total dhikr completed (lifetime)
-    // Get cumulative total from user_stats (incremented by trackDhikrCompletion)
+    // First try activity_log, then fallback to user_stats
     let totalDhikr = 0;
     
-    totalDhikr = userStats?.total_dhikr || 0;
+    try {
+      const { data: dhikrActivities } = await supabase
+        .from('activity_log')
+        .select('activity_value')
+        .eq('user_id', userId)
+        .eq('activity_type', 'dhikr_session');
+      
+      if (dhikrActivities && dhikrActivities.length > 0) {
+        totalDhikr = dhikrActivities.reduce((sum, act) => sum + (act.activity_value || 0), 0);
+      } else {
+        // Fallback to user_stats
+        try {
+          const { data: userStats, error: statsError } = await supabase
+            .from('user_stats')
+            .select('total_dhikr')
+            .eq('user_id', userId)
+            .single();
+          if (!statsError && userStats) {
+            totalDhikr = userStats.total_dhikr || 0;
+          } else if (statsError && (statsError.code === 'PGRST204' || statsError.code === 'PGRST205')) {
+            console.log('⚠️ user_stats table or column not found - dhikr count will be 0');
+            totalDhikr = 0;
+          }
+        } catch (err) {
+          totalDhikr = 0;
+        }
+      }
+    } catch (error) {
+      // Fallback to user_stats if activity_log doesn't exist
+      try {
+        const { data: userStats, error: statsError } = await supabase
+          .from('user_stats')
+          .select('total_dhikr')
+          .eq('user_id', userId)
+          .single();
+        if (!statsError && userStats) {
+          totalDhikr = userStats.total_dhikr || 0;
+        } else if (statsError && (statsError.code === 'PGRST204' || statsError.code === 'PGRST205')) {
+          console.log('⚠️ user_stats table or column not found - dhikr count will be 0');
+          totalDhikr = 0;
+        }
+      } catch (err) {
+        totalDhikr = 0;
+      }
+    }
     
     console.log(`📿 Dhikr: ${totalDhikr} total`);
 
     // ===== QURAN CALCULATION =====
     // Count total Quran pages read (lifetime)
-    // Get cumulative total from user_stats (incremented by trackQuranReading)
+    // First try activity_log, then fallback to user_stats
     let totalQuranPages = 0;
     
-    totalQuranPages = userStats?.total_quran_pages || 0;
+    try {
+      const { data: quranActivities } = await supabase
+        .from('activity_log')
+        .select('activity_value')
+        .eq('user_id', userId)
+        .eq('activity_type', 'quran_reading');
+      
+      if (quranActivities && quranActivities.length > 0) {
+        // Sum up all quran reading activities (pages)
+        totalQuranPages = quranActivities.reduce((sum, act) => sum + (act.activity_value || 0), 0);
+      } else {
+        // Fallback to user_stats
+        try {
+          const { data: userStats, error: statsError } = await supabase
+            .from('user_stats')
+            .select('total_quran_pages')
+            .eq('user_id', userId)
+            .single();
+          if (!statsError && userStats) {
+            totalQuranPages = userStats.total_quran_pages || 0;
+          } else if (statsError && (statsError.code === 'PGRST204' || statsError.code === 'PGRST205')) {
+            console.log('⚠️ user_stats table or column not found - quran pages count will be 0');
+            totalQuranPages = 0;
+          }
+        } catch (err) {
+          totalQuranPages = 0;
+        }
+      }
+    } catch (error) {
+      // Fallback to user_stats if activity_log doesn't exist
+      try {
+        const { data: userStats, error: statsError } = await supabase
+          .from('user_stats')
+          .select('total_quran_pages')
+          .eq('user_id', userId)
+          .single();
+        if (!statsError && userStats) {
+          totalQuranPages = userStats.total_quran_pages || 0;
+        } else if (statsError && (statsError.code === 'PGRST204' || statsError.code === 'PGRST205')) {
+          console.log('⚠️ user_stats table or column not found - quran pages count will be 0');
+          totalQuranPages = 0;
+        }
+      } catch (err) {
+        totalQuranPages = 0;
+      }
+    }
     
     console.log(`📖 Quran: ${totalQuranPages} total pages`);
 
@@ -119,8 +272,16 @@ export async function calculateUserStats(userId: string): Promise<UserStats> {
     const daysActive = streakResult.data?.total_days_active || 0;
     const lecturesWatched = lecturesResult.count || 0;
     const quizzesCompleted = quizzesResult.count || 0;
-    const workoutsCompleted = workoutsResult.count || 0;
-    const meditationSessions = meditationResult.count || 0;
+    
+    // Use activity_log if available, otherwise fallback to physical_activities
+    const workoutsCompleted = (workoutsActivityResult.count !== null && workoutsActivityResult.count !== undefined) 
+      ? workoutsActivityResult.count 
+      : (workoutsFallbackResult.count || 0);
+    
+    // Use activity_log if available, otherwise fallback to meditation_sessions
+    const meditationSessions = (meditationActivityResult.count !== null && meditationActivityResult.count !== undefined)
+      ? meditationActivityResult.count
+      : (meditationFallbackResult.count || 0);
 
     console.log(`🔥 Streak: ${currentStreak} days`);
     console.log(`📅 Days Active: ${daysActive} days`);
@@ -177,6 +338,11 @@ async function updateUserStatsTable(userId: string, stats: UserStats): Promise<v
         total_quran_pages: stats.total_quran_pages,
         current_streak: stats.current_streak,
         longest_streak: stats.current_streak, // Update if current is higher
+        days_active: stats.days_active,
+        lectures_watched: stats.lectures_watched,
+        quizzes_completed: stats.quizzes_completed,
+        workouts_completed: stats.workouts_completed,
+        meditation_sessions: stats.meditation_sessions,
         last_active_date: new Date().toISOString().split('T')[0],
         updated_at: new Date().toISOString(),
       }, {
@@ -184,12 +350,29 @@ async function updateUserStatsTable(userId: string, stats: UserStats): Promise<v
       });
 
     if (error) {
-      console.log('⚠️ Error updating user_stats:', error);
-    } else {
+      // If table or columns don't exist, that's okay - activity_log will be used
+      // Silently handle PGRST errors - don't log as errors
+      if (error.code === 'PGRST205' || error.code === 'PGRST204' || error.message?.includes('Could not find')) {
+        // Silently handle - this is expected if migration hasn't been run
+        return; // Exit gracefully - don't log
+      }
+      // Only log non-PGRST errors
+      if (__DEV__) {
+        console.log('⚠️ Error updating user_stats:', error);
+      }
+    } else if (__DEV__) {
       console.log('✅ user_stats table updated successfully');
     }
-  } catch (error) {
-    console.log('⚠️ Error in updateUserStatsTable:', error);
+  } catch (error: any) {
+    // Catch any unhandled errors
+    if (error?.code === 'PGRST204' || error?.code === 'PGRST205' || error?.message?.includes('Could not find')) {
+      // Silently handle - this is expected if migration hasn't been run
+      return; // Exit gracefully - don't log
+    }
+    // Only log unexpected errors
+    if (__DEV__) {
+      console.log('⚠️ Error in updateUserStatsTable:', error);
+    }
   }
 }
 
@@ -199,31 +382,118 @@ async function updateUserStatsTable(userId: string, stats: UserStats): Promise<v
  */
 export async function incrementPrayerCount(userId: string, count: number = 1): Promise<void> {
   try {
-    console.log(`🕌 Incrementing prayer count by ${count} for user ${userId}`);
+    if (__DEV__) {
+      console.log(`\n🕌 ========== INCREMENTING PRAYER COUNT ==========`);
+      console.log(`User ID: ${userId}`);
+      console.log(`Increment by: ${count}`);
+      console.log(`Timestamp: ${new Date().toISOString()}`);
+    }
     
-    // Get current stats
-    const { data: currentStats } = await supabase
-      .from('user_stats')
-      .select('total_prayers')
-      .eq('user_id', userId)
-      .single();
+    // Get current stats - wrap in try-catch to handle missing table/column gracefully
+    let currentTotal = 0;
+    try {
+      const { data: currentStats, error: fetchError } = await supabase
+        .from('user_stats')
+        .select('total_prayers')
+        .eq('user_id', userId)
+        .single();
 
-    const newTotal = (currentStats?.total_prayers || 0) + count;
+      if (fetchError) {
+        // PGRST116 is "not found" which is okay for first-time users
+        // PGRST204 is "column not found", PGRST205 is "table not found"
+        if (fetchError.code === 'PGRST204' || fetchError.code === 'PGRST205' || fetchError.code === 'PGRST116') {
+          if (__DEV__) {
+            console.log('⚠️ user_stats table or column not found - achievements will use activity_log');
+          }
+          return; // Exit early - can't update if table/column doesn't exist
+        }
+        if (__DEV__) {
+          console.log('⚠️ Error fetching current stats:', fetchError);
+        }
+        return; // Exit on other errors too
+      }
 
-    // Update stats
-    await supabase
-      .from('user_stats')
-      .upsert({
-        user_id: userId,
-        total_prayers: newTotal,
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'user_id'
-      });
+      currentTotal = currentStats?.total_prayers || 0;
+    } catch (fetchErr: any) {
+      // Catch any errors during the SELECT query
+      if (fetchErr?.code === 'PGRST204' || fetchErr?.code === 'PGRST205' || fetchErr?.message?.includes('Could not find')) {
+        if (__DEV__) {
+          console.log('⚠️ user_stats table or column not found - achievements will use activity_log');
+        }
+        return; // Exit early
+      }
+      if (__DEV__) {
+        console.log('⚠️ Error fetching current stats:', fetchErr);
+      }
+      return; // Exit on other errors
+    }
 
-    console.log(`✅ Prayer count updated: ${newTotal}`);
-  } catch (error) {
-    console.log('❌ Error incrementing prayer count:', error);
+    const newTotal = currentTotal + count;
+
+    if (__DEV__) {
+      console.log(`📊 Current total: ${currentTotal}`);
+      console.log(`📊 New total: ${newTotal}`);
+    }
+
+    // Update stats - wrap in try-catch to handle missing table/column gracefully
+    try {
+      const { error: updateError } = await supabase
+        .from('user_stats')
+        .upsert({
+          user_id: userId,
+          total_prayers: newTotal,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id'
+        });
+
+      if (updateError) {
+        // If user_stats table or column doesn't exist, that's okay - activity_log will be used
+        if (updateError.code === 'PGRST205' || updateError.code === 'PGRST204' || updateError.message?.includes('Could not find')) {
+          if (__DEV__) {
+            console.log('⚠️ user_stats table or column not found - achievements will use activity_log');
+            console.log('   Please run migration 016_create_user_stats_table.sql to enable user_stats tracking');
+          }
+          return; // Exit gracefully - don't log as error
+        }
+        // Only log non-PGRST errors
+        if (__DEV__) {
+          console.log('⚠️ Error updating user_stats:', updateError);
+        }
+      } else if (__DEV__) {
+        console.log(`✅ Prayer count updated in user_stats: ${newTotal}`);
+      }
+    } catch (updateErr: any) {
+      // Catch any errors during the UPDATE query
+      if (updateErr?.code === 'PGRST204' || updateErr?.code === 'PGRST205' || updateErr?.message?.includes('Could not find')) {
+        if (__DEV__) {
+          console.log('⚠️ user_stats table or column not found - achievements will use activity_log');
+          console.log('   Please run migration 016_create_user_stats_table.sql to enable user_stats tracking');
+        }
+        return; // Exit gracefully - don't log as error
+      }
+      // Only log non-PGRST errors
+      if (__DEV__) {
+        console.log('⚠️ Error updating user_stats:', updateErr);
+      }
+    }
+    
+    if (__DEV__) {
+      console.log('==========================================\n');
+    }
+  } catch (error: any) {
+    // Catch any unhandled errors
+    if (error?.code === 'PGRST204' || error?.code === 'PGRST205' || error?.message?.includes('Could not find')) {
+      // Silently handle missing table/column - this is expected if migration hasn't been run
+      if (__DEV__) {
+        console.log('⚠️ user_stats table or column not found - achievements will use activity_log');
+      }
+      return; // Exit gracefully
+    }
+    // Only log unexpected errors
+    if (__DEV__) {
+      console.log('❌ Error incrementing prayer count:', error);
+    }
   }
 }
 
@@ -235,29 +505,80 @@ export async function incrementDhikrCount(userId: string, count: number): Promis
   try {
     console.log(`📿 Incrementing dhikr count by ${count} for user ${userId}`);
     
-    // Get current stats
-    const { data: currentStats } = await supabase
-      .from('user_stats')
-      .select('total_dhikr')
-      .eq('user_id', userId)
-      .single();
+    // Get current stats - wrap in try-catch to handle missing table/column gracefully
+    let currentTotal = 0;
+    try {
+      const { data: currentStats, error: fetchError } = await supabase
+        .from('user_stats')
+        .select('total_dhikr')
+        .eq('user_id', userId)
+        .single();
 
-    const newTotal = (currentStats?.total_dhikr || 0) + count;
+      if (fetchError) {
+        if (fetchError.code === 'PGRST204' || fetchError.code === 'PGRST205' || fetchError.code === 'PGRST116') {
+          console.log('⚠️ user_stats table or column not found - achievements will use activity_log');
+          return; // Exit early
+        }
+        console.log('⚠️ Error fetching current stats:', fetchError);
+        return; // Exit on other errors
+      }
 
-    // Update stats
-    await supabase
-      .from('user_stats')
-      .upsert({
-        user_id: userId,
-        total_dhikr: newTotal,
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'user_id'
-      });
+      currentTotal = currentStats?.total_dhikr || 0;
+    } catch (fetchErr: any) {
+      if (fetchErr?.code === 'PGRST204' || fetchErr?.code === 'PGRST205' || fetchErr?.message?.includes('Could not find')) {
+        console.log('⚠️ user_stats table or column not found - achievements will use activity_log');
+        return; // Exit early
+      }
+      console.log('⚠️ Error fetching current stats:', fetchErr);
+      return; // Exit on other errors
+    }
 
-    console.log(`✅ Dhikr count updated: ${newTotal}`);
-  } catch (error) {
-    console.log('❌ Error incrementing dhikr count:', error);
+    const newTotal = currentTotal + count;
+
+    // Update stats - wrap in try-catch to handle missing table/column gracefully
+    try {
+      const { error: updateError } = await supabase
+        .from('user_stats')
+        .upsert({
+          user_id: userId,
+          total_dhikr: newTotal,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id'
+        });
+
+      if (updateError) {
+        if (updateError.code === 'PGRST205' || updateError.code === 'PGRST204' || updateError.message?.includes('Could not find')) {
+          console.log('⚠️ user_stats table or column not found - achievements will use activity_log');
+          console.log('   Please run migration 016_create_user_stats_table.sql to enable user_stats tracking');
+          return; // Exit gracefully
+        }
+        // Only log non-PGRST errors
+        if (__DEV__) {
+          console.log('⚠️ Error updating user_stats:', updateError);
+        }
+      } else if (__DEV__) {
+        console.log(`✅ Dhikr count updated: ${newTotal}`);
+      }
+    } catch (updateErr: any) {
+      if (updateErr?.code === 'PGRST204' || updateErr?.code === 'PGRST205' || updateErr?.message?.includes('Could not find')) {
+        // Silently handle - this is expected if migration hasn't been run
+        return; // Exit gracefully - don't log as error
+      }
+      // Only log unexpected errors
+      if (__DEV__) {
+        console.log('⚠️ Error updating user_stats:', updateErr);
+      }
+    }
+  } catch (error: any) {
+    // Catch any unhandled errors
+    if (error?.code === 'PGRST204' || error?.code === 'PGRST205' || error?.message?.includes('Could not find')) {
+      // Silently handle - this is expected if migration hasn't been run
+      return; // Exit gracefully
+    }
+    if (__DEV__) {
+      console.log('⚠️ Error incrementing dhikr count:', error);
+    }
   }
 }
 
@@ -267,31 +588,92 @@ export async function incrementDhikrCount(userId: string, count: number): Promis
  */
 export async function incrementQuranPagesCount(userId: string, pages: number): Promise<void> {
   try {
-    console.log(`📖 Incrementing Quran pages by ${pages} for user ${userId}`);
+    if (__DEV__) {
+      console.log(`📖 Incrementing Quran pages by ${pages} for user ${userId}`);
+    }
     
-    // Get current stats
-    const { data: currentStats } = await supabase
-      .from('user_stats')
-      .select('total_quran_pages')
-      .eq('user_id', userId)
-      .single();
+    // Get current stats - wrap in try-catch to handle missing table/column gracefully
+    let currentTotal = 0;
+    try {
+      const { data: currentStats, error: fetchError } = await supabase
+        .from('user_stats')
+        .select('total_quran_pages')
+        .eq('user_id', userId)
+        .single();
 
-    const newTotal = (currentStats?.total_quran_pages || 0) + pages;
+      if (fetchError) {
+        if (fetchError.code === 'PGRST204' || fetchError.code === 'PGRST205' || fetchError.code === 'PGRST116') {
+          if (__DEV__) {
+            console.log('⚠️ user_stats table or column not found - achievements will use activity_log');
+          }
+          return; // Exit early
+        }
+        if (__DEV__) {
+          console.log('⚠️ Error fetching current stats:', fetchError);
+        }
+        return; // Exit on other errors
+      }
 
-    // Update stats
-    await supabase
-      .from('user_stats')
-      .upsert({
-        user_id: userId,
-        total_quran_pages: newTotal,
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'user_id'
-      });
+      currentTotal = currentStats?.total_quran_pages || 0;
+    } catch (fetchErr: any) {
+      if (fetchErr?.code === 'PGRST204' || fetchErr?.code === 'PGRST205' || fetchErr?.message?.includes('Could not find')) {
+        if (__DEV__) {
+          console.log('⚠️ user_stats table or column not found - achievements will use activity_log');
+        }
+        return; // Exit early
+      }
+      if (__DEV__) {
+        console.log('⚠️ Error fetching current stats:', fetchErr);
+      }
+      return; // Exit on other errors
+    }
 
-    console.log(`✅ Quran pages count updated: ${newTotal}`);
-  } catch (error) {
-    console.log('❌ Error incrementing Quran pages count:', error);
+    const newTotal = currentTotal + pages;
+
+    // Update stats - wrap in try-catch to handle missing table/column gracefully
+    try {
+      const { error: updateError } = await supabase
+        .from('user_stats')
+        .upsert({
+          user_id: userId,
+          total_quran_pages: newTotal,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id'
+        });
+
+      if (updateError) {
+        if (updateError.code === 'PGRST205' || updateError.code === 'PGRST204' || updateError.message?.includes('Could not find')) {
+          console.log('⚠️ user_stats table or column not found - achievements will use activity_log');
+          console.log('   Please run migration 016_create_user_stats_table.sql to enable user_stats tracking');
+          return; // Exit gracefully
+        }
+        // Only log non-PGRST errors
+        if (__DEV__) {
+          console.log('⚠️ Error updating user_stats:', updateError);
+        }
+      } else if (__DEV__) {
+        console.log(`✅ Quran pages count updated: ${newTotal}`);
+      }
+    } catch (updateErr: any) {
+      if (updateErr?.code === 'PGRST204' || updateErr?.code === 'PGRST205' || updateErr?.message?.includes('Could not find')) {
+        // Silently handle - this is expected if migration hasn't been run
+        return; // Exit gracefully - don't log as error
+      }
+      // Only log unexpected errors
+      if (__DEV__) {
+        console.log('⚠️ Error updating user_stats:', updateErr);
+      }
+    }
+  } catch (error: any) {
+    // Catch any unhandled errors
+    if (error?.code === 'PGRST204' || error?.code === 'PGRST205' || error?.message?.includes('Could not find')) {
+      // Silently handle - this is expected if migration hasn't been run
+      return; // Exit gracefully
+    }
+    if (__DEV__) {
+      console.log('⚠️ Error incrementing Quran pages count:', error);
+    }
   }
 }
 
@@ -330,7 +712,9 @@ export async function checkAndUnlockAchievements(userId: string): Promise<string
     const unlockedAchievements: string[] = [];
 
     // Get user stats (SINGLE SOURCE OF TRUTH)
+    console.log('📊 Calculating user stats for achievements...');
     const stats = await calculateUserStats(userId);
+    console.log('📊 User stats calculated:', JSON.stringify(stats, null, 2));
 
     // Load all data in parallel
     const [achievementsResult, userAchievementsResult] = await Promise.all([
@@ -358,6 +742,7 @@ export async function checkAndUnlockAchievements(userId: string): Promise<string
     console.log(`📋 Total achievements: ${achievements.length}`);
     console.log(`✅ Already unlocked: ${unlockedIds.size}`);
     console.log(`🔍 Checking: ${achievements.length - unlockedIds.size} locked achievements`);
+    console.log(`Timestamp: ${new Date().toISOString()}`);
 
     // Batch progress updates
     const progressUpdates: any[] = [];
@@ -414,7 +799,9 @@ export async function checkAndUnlockAchievements(userId: string): Promise<string
 
       // Check if achievement should be unlocked
       if (currentValue >= achievement.requirement_value) {
-        console.log(`🎉 UNLOCKING: ${achievement.title} (${currentValue}/${achievement.requirement_value})`);
+        console.log(`🎉🎉🎉 UNLOCKING ACHIEVEMENT: ${achievement.title} 🎉🎉🎉`);
+        console.log(`   Current: ${currentValue}, Required: ${achievement.requirement_value}`);
+        console.log(`   Type: ${achievement.requirement_type}, Category: ${achievement.category}`);
         achievementsToUnlock.push({
           user_id: userId,
           achievement_id: achievement.id,
@@ -423,7 +810,9 @@ export async function checkAndUnlockAchievements(userId: string): Promise<string
         unlockedAchievements.push(achievement.id);
       } else {
         const progress = Math.round((currentValue / achievement.requirement_value) * 100);
-        console.log(`📊 ${achievement.title}: ${currentValue}/${achievement.requirement_value} (${progress}%)`);
+        if (currentValue > 0 || progress > 0) {
+          console.log(`📊 ${achievement.title}: ${currentValue}/${achievement.requirement_value} (${progress}%)`);
+        }
       }
     }
 
@@ -480,16 +869,11 @@ export async function checkAndUnlockAchievements(userId: string): Promise<string
           }
         }
         
-        // Send notifications for newly unlocked achievements
+        // Store achievements in celebration queue (notification will be sent by AchievementCelebrationContext)
+        // This prevents double notifications - only celebrateAchievement sends the notification
         for (const unlock of achievementsToUnlock) {
           const achievement = achievements.find(a => a.id === unlock.achievement_id);
           if (achievement) {
-            // Send notification (don't await to avoid blocking)
-            sendAchievementUnlocked(
-              achievement.title,
-              achievement.unlock_message || achievement.description
-            ).catch(err => console.log('Error sending notification:', err));
-
             // Store locally for celebration (store in a queue for React components to pick up)
             const celebrationQueueKey = `achievement_celebration_queue_${userId}`;
             try {

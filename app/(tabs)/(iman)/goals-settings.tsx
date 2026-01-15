@@ -48,7 +48,7 @@ const FARD_PRAYERS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 export default function GoalsSettingsScreen() {
   const params = useLocalSearchParams();
   const { user } = useAuth();
-  const { ibadahGoals, ilmGoals, amanahGoals, updateIbadahGoals, updateIlmGoals, updateAmanahGoals } = useImanTracker();
+  const { ibadahGoals, ilmGoals, amanahGoals, updateIbadahGoals, updateIlmGoals, updateAmanahGoals, refreshScores } = useImanTracker();
   
   const [activeSection, setActiveSection] = useState<SectionType>((params.section as SectionType) || 'ibadah');
   const [localIbadahGoals, setLocalIbadahGoals] = useState<IbadahGoals | null>(null);
@@ -516,7 +516,50 @@ export default function GoalsSettingsScreen() {
   const toggleGoal = (goalField: string, currentValue: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
-    const newValue = currentValue > 0 ? 0 : getDefaultValue(goalField);
+    const isCurrentlyEnabled = currentValue > 0;
+    const newValue = isCurrentlyEnabled ? 0 : getDefaultValue(goalField);
+    
+    // Find the goal config to get the completed field
+    const allConfigs = [...ibadahGoalConfigs, ...ilmGoalConfigs, ...amanahGoalConfigs];
+    const config = allConfigs.find(c => c.goalField === goalField);
+    
+    // If enabling a goal (was 0, now > 0), reset the completed field to 0
+    if (!isCurrentlyEnabled && config?.completedField) {
+      switch (activeSection) {
+        case 'ibadah':
+          if (localIbadahGoals) {
+            setLocalIbadahGoals({
+              ...localIbadahGoals,
+              [goalField]: newValue,
+              [config.completedField]: 0, // Reset completed to 0 when enabling
+            });
+            return; // Early return, already updated
+          }
+          break;
+        case 'ilm':
+          if (localIlmGoals) {
+            setLocalIlmGoals({
+              ...localIlmGoals,
+              [goalField]: newValue,
+              [config.completedField]: 0, // Reset completed to 0 when enabling
+            });
+            return; // Early return, already updated
+          }
+          break;
+        case 'amanah':
+          if (localAmanahGoals) {
+            setLocalAmanahGoals({
+              ...localAmanahGoals,
+              [goalField]: newValue,
+              [config.completedField]: 0, // Reset completed to 0 when enabling
+            });
+            return; // Early return, already updated
+          }
+          break;
+      }
+    }
+    
+    // If disabling, just update the goal value
     updateGoalValue(goalField, newValue);
   };
 
@@ -555,8 +598,13 @@ export default function GoalsSettingsScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
-      if (localIbadahGoals) await updateIbadahGoals(localIbadahGoals);
-      if (localIlmGoals) await updateIlmGoals(localIlmGoals);
+      // Save all goals first
+      if (localIbadahGoals) {
+        await updateIbadahGoals(localIbadahGoals);
+      }
+      if (localIlmGoals) {
+        await updateIlmGoals(localIlmGoals);
+      }
       if (localAmanahGoals) {
         await updateAmanahGoals(localAmanahGoals);
         
@@ -600,7 +648,36 @@ export default function GoalsSettingsScreen() {
         }
       }
       
-      Alert.alert('Success', 'Your goals have been saved!', [
+      // Force a final score recalculation with all saved goals
+      // This ensures newly enabled goals are included in the calculation
+      // Use the latest local state which includes all changes
+      try {
+        const { calculateAllSectionScores } = await import('@/utils/imanScoreCalculator');
+        const WEIGHTS = { ibadah: 0.60, ilm: 0.25, amanah: 0.15 };
+        
+        const finalIbadah = localIbadahGoals || ibadahGoals;
+        const finalIlm = localIlmGoals || ilmGoals;
+        const finalAmanah = localAmanahGoals || amanahGoals;
+        
+        const sections = await calculateAllSectionScores(finalIbadah, finalIlm, finalAmanah, user?.id);
+        const overall = Math.round(
+          (sections.ibadah * WEIGHTS.ibadah) +
+          (sections.ilm * WEIGHTS.ilm) +
+          (sections.amanah * WEIGHTS.amanah)
+        );
+        
+        // Update scores via context (this will trigger UI update)
+        // We need to use the context's refreshScores to update the state
+        await refreshScores();
+        
+        console.log(`✅ Final recalculation after save: Ibadah=${sections.ibadah}%, Ilm=${sections.ilm}%, Amanah=${sections.amanah}%, Overall=${overall}%`);
+      } catch (scoreError) {
+        console.log('Error recalculating scores after save:', scoreError);
+        // Fallback to refreshScores
+        await refreshScores();
+      }
+      
+      Alert.alert('Success', 'Your goals have been saved! The Iman Tracker has been recalibrated.', [
         { text: 'OK', onPress: () => router.back() }
       ]);
     } catch (error) {

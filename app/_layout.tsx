@@ -1,6 +1,6 @@
 
 import "react-native-reanimated";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useFonts } from "expo-font";
 import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -23,7 +23,9 @@ import { AchievementCelebrationProvider } from "@/contexts/AchievementCelebratio
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {
+  // Ignore errors if splash screen is already prevented
+});
 
 export const unstable_settings = {
   initialRouteName: "index", // Start at index which checks auth and redirects
@@ -35,10 +37,17 @@ export default function RootLayout() {
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
+  const splashScreenHidden = useRef(false);
 
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
+    if (loaded && !splashScreenHidden.current) {
+      splashScreenHidden.current = true;
+      SplashScreen.hideAsync().catch((error) => {
+        // Ignore errors if splash screen is already hidden or not registered
+        if (__DEV__) {
+          console.log('Splash screen hide error (ignored):', error.message);
+        }
+      });
     }
   }, [loaded]);
 

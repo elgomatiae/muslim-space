@@ -50,6 +50,78 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
   // Track app state to check for resets when app comes to foreground
   const appState = useRef(AppState.currentState);
 
+  // ✅ define refreshScores FIRST
+  const refreshScores = useCallback(async () => {
+    if (!user?.id) return;
+
+    try {
+      const [overall, sections] = await Promise.all([
+        getOverallImanScore(user.id),
+        getCurrentSectionScores(user.id),
+      ]);
+
+      setImanScore(overall);
+      setSectionScores(sections);
+
+      // Record scores to database for trends tracking
+      try {
+        const { recordScoreHistory, shouldRecordScore } = await import('@/utils/scoreHistoryTracker');
+        // Throttle to avoid excessive writes (record at most every 5 minutes)
+        const shouldRecord = await shouldRecordScore(user.id, 5);
+        if (shouldRecord) {
+          await recordScoreHistory(user.id, overall, sections);
+        }
+      } catch (err) {
+        // Silent failure - score tracking is non-critical
+        if (__DEV__) {
+          console.log('Error recording score history:', err);
+        }
+      }
+
+      // Check for Iman score drop notifications
+      try {
+        const { checkImanScoreAndNotify } = await import('@/utils/notificationService');
+        await checkImanScoreAndNotify(overall, user.id);
+      } catch (err) {
+        // Silent failure - notifications are non-critical
+      }
+    } catch (err) {
+      // Silent failure for background operation
+      if (__DEV__) {
+        console.log('Error refreshing scores:', err);
+      }
+    }
+  }, [user?.id]);
+
+  // ✅ then define loadAllGoals SECOND
+  const loadAllGoals = useCallback(async () => {
+    if (!user?.id) {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const [ibadah, ilm, amanah] = await Promise.all([
+        loadIbadahGoals(user.id),
+        loadIlmGoals(user.id),
+        loadAmanahGoals(user.id),
+      ]);
+
+      setIbadahGoals(ibadah);
+      setIlmGoals(ilm);
+      setAmanahGoals(amanah);
+
+      await refreshScores();
+    } catch (err) {
+      setError('Failed to load goals. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.id, refreshScores]);
+
   // Check for resets when app comes to foreground (user might have passed midnight)
   useEffect(() => {
     if (!user?.id) return;
@@ -117,37 +189,7 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
     checkAndHandleResets(user.id).catch(err => {
       console.error('Error checking resets:', err);
     });
-  }, [user?.id]);
-
-  const loadAllGoals = useCallback(async () => {
-    if (!user?.id) {
-      console.log('ℹ️ No user logged in, skipping goal load');
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      const [ibadah, ilm, amanah] = await Promise.all([
-        loadIbadahGoals(user.id),
-        loadIlmGoals(user.id),
-        loadAmanahGoals(user.id)
-      ]);
-      
-      setIbadahGoals(ibadah);
-      setIlmGoals(ilm);
-      setAmanahGoals(amanah);
-      
-      // Refresh scores (this will also record to history)
-      await refreshScores();
-    } catch (err) {
-      setError('Failed to load goals. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user?.id, refreshScores]);
+  }, [user?.id, loadAllGoals]);
 
   const updateIbadahGoals = useCallback(async (goals: Partial<IbadahGoals>) => {
     if (!user?.id) {
@@ -167,6 +209,30 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       // Save to storage with user-specific key
       await saveIbadahGoals(updated, user.id);
       
+      // Calculate scores immediately with updated goals (don't wait for storage reload)
+      try {
+        const { calculateAllSectionScores } = await import('@/utils/imanScoreCalculator');
+        const WEIGHTS = { ibadah: 0.60, ilm: 0.25, amanah: 0.15 };
+        
+        const sections = await calculateAllSectionScores(updated, ilmGoals, amanahGoals, user.id);
+        const overall = Math.round(
+          (sections.ibadah * WEIGHTS.ibadah) +
+          (sections.ilm * WEIGHTS.ilm) +
+          (sections.amanah * WEIGHTS.amanah)
+        );
+        
+        setImanScore(overall);
+        setSectionScores(sections);
+        
+        console.log(`✅ Scores updated immediately: Ibadah=${sections.ibadah}%, Ilm=${sections.ilm}%, Amanah=${sections.amanah}%, Overall=${overall}%`);
+      } catch (scoreErr) {
+        console.error('Error calculating scores immediately:', scoreErr);
+        // Fallback to refreshScores
+        refreshScores().catch(err => {
+          console.error('Error refreshing scores after Ibadah update:', err);
+        });
+      }
+      
       // Log activities in background (non-blocking)
       logIbadahActivity(user.id, oldGoals, updated).catch(err => {
         if (__DEV__) {
@@ -174,9 +240,12 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
         }
       });
       
-      // Refresh scores in background
-      refreshScores().catch(err => {
-        console.error('Error refreshing scores after Ibadah update:', err);
+      // Check achievements after updating goals (non-blocking)
+      const { checkAndUnlockAchievements } = await import('@/utils/achievementService');
+      checkAndUnlockAchievements(user.id).catch(err => {
+        if (__DEV__) {
+          console.log('Error checking achievements after Ibadah update:', err);
+        }
       });
       
       console.log('✅ Ibadah goals updated successfully');
@@ -187,7 +256,7 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       // Reload goals to ensure consistency
       loadAllGoals();
     }
-  }, [ibadahGoals, user?.id, loadAllGoals]);
+  }, [ibadahGoals, ilmGoals, amanahGoals, user?.id, loadAllGoals, refreshScores]);
 
   const updateIlmGoals = useCallback(async (goals: Partial<IlmGoals>) => {
     if (!user?.id) {
@@ -207,6 +276,30 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       // Save to storage with user-specific key
       await saveIlmGoals(updated, user.id);
       
+      // Calculate scores immediately with updated goals (don't wait for storage reload)
+      try {
+        const { calculateAllSectionScores } = await import('@/utils/imanScoreCalculator');
+        const WEIGHTS = { ibadah: 0.60, ilm: 0.25, amanah: 0.15 };
+        
+        const sections = await calculateAllSectionScores(ibadahGoals, updated, amanahGoals, user.id);
+        const overall = Math.round(
+          (sections.ibadah * WEIGHTS.ibadah) +
+          (sections.ilm * WEIGHTS.ilm) +
+          (sections.amanah * WEIGHTS.amanah)
+        );
+        
+        setImanScore(overall);
+        setSectionScores(sections);
+        
+        console.log(`✅ Scores updated immediately: Ibadah=${sections.ibadah}%, Ilm=${sections.ilm}%, Amanah=${sections.amanah}%, Overall=${overall}%`);
+      } catch (scoreErr) {
+        console.error('Error calculating scores immediately:', scoreErr);
+        // Fallback to refreshScores
+        refreshScores().catch(err => {
+          console.error('Error refreshing scores after Ilm update:', err);
+        });
+      }
+      
       // Log activities in background (non-blocking)
       logIlmActivity(user.id, oldGoals, updated).catch(err => {
         if (__DEV__) {
@@ -214,9 +307,12 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
         }
       });
       
-      // Refresh scores in background
-      refreshScores().catch(err => {
-        console.error('Error refreshing scores after Ilm update:', err);
+      // Check achievements after updating goals (non-blocking)
+      const { checkAndUnlockAchievements } = await import('@/utils/achievementService');
+      checkAndUnlockAchievements(user.id).catch(err => {
+        if (__DEV__) {
+          console.log('Error checking achievements after Ilm update:', err);
+        }
       });
       
       console.log('✅ Ilm goals updated successfully');
@@ -227,7 +323,7 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       // Reload goals to ensure consistency
       loadAllGoals();
     }
-  }, [ilmGoals, user?.id, loadAllGoals]);
+  }, [ilmGoals, ibadahGoals, amanahGoals, user?.id, loadAllGoals, refreshScores]);
 
   const updateAmanahGoals = useCallback(async (goals: Partial<AmanahGoals>) => {
     if (!user?.id) {
@@ -247,6 +343,30 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       // Save to storage with user-specific key
       await saveAmanahGoals(updated, user.id);
       
+      // Calculate scores immediately with updated goals (don't wait for storage reload)
+      try {
+        const { calculateAllSectionScores } = await import('@/utils/imanScoreCalculator');
+        const WEIGHTS = { ibadah: 0.60, ilm: 0.25, amanah: 0.15 };
+        
+        const sections = await calculateAllSectionScores(ibadahGoals, ilmGoals, updated, user.id);
+        const overall = Math.round(
+          (sections.ibadah * WEIGHTS.ibadah) +
+          (sections.ilm * WEIGHTS.ilm) +
+          (sections.amanah * WEIGHTS.amanah)
+        );
+        
+        setImanScore(overall);
+        setSectionScores(sections);
+        
+        console.log(`✅ Scores updated immediately: Ibadah=${sections.ibadah}%, Ilm=${sections.ilm}%, Amanah=${sections.amanah}%, Overall=${overall}%`);
+      } catch (scoreErr) {
+        console.error('Error calculating scores immediately:', scoreErr);
+        // Fallback to refreshScores
+        refreshScores().catch(err => {
+          console.error('Error refreshing scores after Amanah update:', err);
+        });
+      }
+      
       // Log activities in background (non-blocking)
       logAmanahActivity(user.id, oldGoals, updated).catch(err => {
         if (__DEV__) {
@@ -254,9 +374,12 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
         }
       });
       
-      // Refresh scores in background
-      refreshScores().catch(err => {
-        console.error('Error refreshing scores after Amanah update:', err);
+      // Check achievements after updating goals (non-blocking)
+      const { checkAndUnlockAchievements } = await import('@/utils/achievementService');
+      checkAndUnlockAchievements(user.id).catch(err => {
+        if (__DEV__) {
+          console.log('Error checking achievements after Amanah update:', err);
+        }
       });
       
       console.log('✅ Amanah goals updated successfully');
@@ -267,42 +390,7 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       // Reload goals to ensure consistency
       loadAllGoals();
     }
-  }, [amanahGoals, user?.id, loadAllGoals]);
-
-  const refreshScores = useCallback(async () => {
-    if (!user?.id) {
-      return;
-    }
-
-    try {
-      const [overall, sections] = await Promise.all([
-        getOverallImanScore(user.id),
-        getCurrentSectionScores(user.id)
-      ]);
-      
-      setImanScore(overall);
-      setSectionScores(sections);
-
-      // Record scores to database for trends tracking
-      // This ensures scores are tracked whenever they change
-      try {
-        const { recordScoreHistory, shouldRecordScore } = await import('@/utils/scoreHistoryTracker');
-        // Throttle to avoid excessive writes (record at most every 5 minutes)
-        const shouldRecord = await shouldRecordScore(user.id, 5);
-        if (shouldRecord) {
-          await recordScoreHistory(user.id, overall, sections);
-        }
-      } catch (err) {
-        // Silent failure - score tracking is non-critical
-        if (__DEV__) {
-          console.log('Error recording score history:', err);
-        }
-      }
-    } catch (err) {
-      // Silent failure for background operation
-      // Error already logged in score calculator
-    }
-  }, [user?.id]);
+  }, [amanahGoals, ibadahGoals, ilmGoals, user?.id, loadAllGoals, refreshScores]);
 
   const value: ImanTrackerContextType = {
     ibadahGoals,

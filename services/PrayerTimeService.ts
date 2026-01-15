@@ -232,6 +232,7 @@ export function getTimeUntilNextPrayer(nextPrayer: PrayerTime): string {
 
 /**
  * Mark a prayer as completed
+ * This function ensures prayer completion is tracked for achievements
  */
 export async function markPrayerCompleted(
   userId: string,
@@ -240,8 +241,25 @@ export async function markPrayerCompleted(
   try {
     console.log(`✅ Marking ${prayerName} as completed for user ${userId}`);
     
-    // This will be integrated with Iman Tracker
-    // For now, just log it
+    // Increment prayer count in user_stats for achievements
+    // This is critical for achievement tracking
+    try {
+      const { incrementPrayerCount } = await import('@/utils/achievementService');
+      await incrementPrayerCount(userId, 1);
+      if (__DEV__) {
+        console.log(`✅ Prayer count incremented for achievements`);
+      }
+    } catch (err: any) {
+      // Silently handle PGRST errors - these are expected if migration hasn't been run
+      if (err?.code === 'PGRST204' || err?.code === 'PGRST205' || err?.message?.includes('Could not find')) {
+        // This is expected - achievements will use activity_log instead
+        return;
+      }
+      // Only log unexpected errors
+      if (__DEV__) {
+        console.log('⚠️ Error incrementing prayer count:', err);
+      }
+    }
   } catch (error) {
     console.error('Error marking prayer as completed:', error);
   }

@@ -520,6 +520,124 @@ export async function sendAchievementNotification(
 // Prayer notification IDs storage key
 const PRAYER_NOTIFICATION_IDS_KEY = '@prayer_notification_ids';
 
+// Iman score tracking keys
+const IMAN_SCORE_HISTORY_KEY = '@iman_score_daily_history';
+const LAST_LOW_SCORE_NOTIFICATION_KEY = '@last_low_score_notification';
+const LAST_DROP_NOTIFICATION_KEY = '@last_drop_notification';
+
+/**
+ * Check and send Iman score drop notifications
+ * - Sends notification if score drops 15% in one day
+ * - Sends notification if score drops below 50%
+ */
+export async function checkImanScoreAndNotify(
+  currentScore: number,
+  userId?: string
+): Promise<void> {
+  try {
+    // Check if iman score notifications are enabled
+    const settings = await getNotificationSettings(userId);
+    if (!settings.imanScoreNotifications) {
+      return;
+    }
+
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+
+    // Load score history
+    const historyStr = await AsyncStorage.getItem(IMAN_SCORE_HISTORY_KEY);
+    const history: { date: string; score: number }[] = historyStr ? JSON.parse(historyStr) : [];
+
+    // Get yesterday's score
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const yesterdayEntry = history.find(h => h.date === yesterdayStr);
+
+    // Check for 15% drop in one day
+    if (yesterdayEntry) {
+      const drop = yesterdayEntry.score - currentScore;
+      if (drop >= 15) {
+        // Check if we already sent this notification today
+        const lastDropNotif = await AsyncStorage.getItem(LAST_DROP_NOTIFICATION_KEY);
+        if (lastDropNotif !== today) {
+          await sendImanScoreDropNotification(drop, yesterdayEntry.score, currentScore);
+          await AsyncStorage.setItem(LAST_DROP_NOTIFICATION_KEY, today);
+        }
+      }
+    }
+
+    // Check if score is below 50%
+    if (currentScore < 50) {
+      // Only send once per day
+      const lastLowNotif = await AsyncStorage.getItem(LAST_LOW_SCORE_NOTIFICATION_KEY);
+      if (lastLowNotif !== today) {
+        await sendLowImanScoreNotification(currentScore);
+        await AsyncStorage.setItem(LAST_LOW_SCORE_NOTIFICATION_KEY, today);
+      }
+    }
+
+    // Update today's score in history (keep last 7 days)
+    const todayIndex = history.findIndex(h => h.date === today);
+    if (todayIndex >= 0) {
+      history[todayIndex].score = currentScore;
+    } else {
+      history.push({ date: today, score: currentScore });
+    }
+    // Keep only last 7 days
+    const recentHistory = history.slice(-7);
+    await AsyncStorage.setItem(IMAN_SCORE_HISTORY_KEY, JSON.stringify(recentHistory));
+  } catch (error) {
+    console.log('Error checking Iman score for notifications:', error);
+  }
+}
+
+/**
+ * Send notification when Iman score drops significantly
+ */
+async function sendImanScoreDropNotification(
+  dropAmount: number,
+  previousScore: number,
+  currentScore: number
+): Promise<void> {
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: '📉 Iman Score Alert',
+        body: `Your Iman score dropped ${Math.round(dropAmount)}% (from ${Math.round(previousScore)}% to ${Math.round(currentScore)}%). Time to reconnect with your spiritual goals!`,
+        sound: 'default',
+        priority: Notifications.AndroidNotificationPriority.HIGH,
+        data: { type: 'iman_drop', dropAmount, previousScore, currentScore },
+      },
+      trigger: null,
+    });
+    console.log(`📉 Sent Iman score drop notification: ${dropAmount}% drop`);
+  } catch (error) {
+    console.log('Error sending Iman score drop notification:', error);
+  }
+}
+
+/**
+ * Send notification when Iman score is below 50%
+ */
+async function sendLowImanScoreNotification(currentScore: number): Promise<void> {
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: '⚠️ Low Iman Score',
+        body: `Your Iman score is at ${Math.round(currentScore)}%. Consider completing some of your daily goals to strengthen your connection.`,
+        sound: 'default',
+        priority: Notifications.AndroidNotificationPriority.HIGH,
+        data: { type: 'iman_low', currentScore },
+      },
+      trigger: null,
+    });
+    console.log(`⚠️ Sent low Iman score notification: ${currentScore}%`);
+  } catch (error) {
+    console.log('Error sending low Iman score notification:', error);
+  }
+}
+
 /**
  * Schedule prayer time notifications at exact times based on user's location
  * Schedules notifications for today and tomorrow to ensure coverage

@@ -269,6 +269,28 @@ export default function MentalHealthHubScreen() {
         };
         await updateAmanahGoals(updatedGoals);
       }
+      
+      // Directly log journal entry to activity_log for achievements
+      if (user) {
+        try {
+          const { logActivity } = await import('@/utils/activityLogger');
+          await logActivity({
+            userId: user.id,
+            activityType: 'journal_entry',
+            activityCategory: 'amanah',
+            activityTitle: 'Quick Journal Entry',
+            activityDescription: 'Quick journal entry',
+            activityValue: 1, // 1 entry
+            pointsEarned: 5,
+          });
+          
+          // Also trigger achievement check
+          const { checkAndUnlockAchievements } = await import('@/utils/achievementService');
+          await checkAndUnlockAchievements(user.id);
+        } catch (error) {
+          console.log('Error logging journal activity:', error);
+        }
+      }
     }
   };
 

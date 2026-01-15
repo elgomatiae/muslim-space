@@ -7,6 +7,7 @@
 
 import { logActivity, ActivityType, ActivityCategory } from './activityLogger';
 import { IbadahGoals, IlmGoals, AmanahGoals } from './imanScoreCalculator';
+import { checkAndUnlockAchievements } from './achievementService';
 
 /**
  * Log activity when Ibadah goals are updated
@@ -209,6 +210,15 @@ export async function logIbadahActivity(
       console.log('Error logging Ibadah activity:', error);
     }
   }
+
+  // Check achievements after logging activities (non-blocking)
+  if (userId) {
+    checkAndUnlockAchievements(userId).catch(err => {
+      if (__DEV__) {
+        console.log('Error checking achievements after Ibadah activity:', err);
+      }
+    });
+  }
 }
 
 /**
@@ -342,6 +352,15 @@ export async function logIlmActivity(
     if (__DEV__) {
       console.log('Error logging Ilm activity:', error);
     }
+  }
+
+  // Check achievements after logging activities (non-blocking)
+  if (userId) {
+    checkAndUnlockAchievements(userId).catch(err => {
+      if (__DEV__) {
+        console.log('Error checking achievements after Ilm activity:', err);
+      }
+    });
   }
 }
 
@@ -551,5 +570,14 @@ export async function logAmanahActivity(
     if (__DEV__) {
       console.log('Error logging Amanah activity:', error);
     }
+  }
+
+  // Check achievements after logging activities (non-blocking)
+  if (userId) {
+    checkAndUnlockAchievements(userId).catch(err => {
+      if (__DEV__) {
+        console.log('Error checking achievements after Amanah activity:', err);
+      }
+    });
   }
 }

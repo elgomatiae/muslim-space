@@ -191,6 +191,28 @@ export default function JournalScreen() {
           console.log('✅ Updated Iman Tracker journal goal');
         }
         
+        // Directly log journal entry to activity_log for achievements
+        if (user) {
+          try {
+            const { logActivity } = await import('@/utils/activityLogger');
+            await logActivity({
+              userId: user.id,
+              activityType: 'journal_entry',
+              activityCategory: 'amanah',
+              activityTitle: 'Journal Entry Written',
+              activityDescription: title || 'Journal entry',
+              activityValue: 1, // 1 entry
+              pointsEarned: 5,
+            });
+            
+            // Also trigger achievement check
+            const { checkAndUnlockAchievements } = await import('@/utils/achievementService');
+            await checkAndUnlockAchievements(user.id);
+          } catch (error) {
+            console.log('Error logging journal activity:', error);
+          }
+        }
+        
         // Track journal entry for achievements
         await trackJournalEntry(user.id);
         
