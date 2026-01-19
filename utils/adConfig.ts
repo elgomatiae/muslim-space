@@ -25,7 +25,7 @@ let mobileAdsModule: any = null;
 const IS_EXPO_GO = isExpoGo();
 
 async function getMobileAds() {
-  // Completely skip in Expo Go
+  // Completely skip in Expo Go - return early before any import
   if (IS_EXPO_GO) {
     return false;
   }
@@ -35,18 +35,25 @@ async function getMobileAds() {
   }
   
   try {
-    // Construct module name at runtime to prevent Metro static analysis
-    const parts = ['react-native', '-', 'google', '-', 'mobile', '-', 'ads'];
-    const moduleName = parts.join('');
-    const module = await import(/* @vite-ignore */ moduleName);
-    mobileAdsModule = module;
-    return mobileAdsModule;
-  } catch (e: any) {
-    // Native module not available
-    if (__DEV__) {
-      console.log('AdMob native module not available:', e?.message || e);
+    // Import will resolve to stub in Expo Go via Metro config
+    // In native builds, this will be the real module
+    const module = await import('react-native-google-mobile-ads');
+    
+    // Check if this is the stub (stub has console.log in initialize)
+    // Real module will have native methods
+    if (module && typeof module.default === 'object' && module.default.initialize) {
+      mobileAdsModule = module;
+      return mobileAdsModule;
     }
-    mobileAdsModule = false; // Mark as unavailable
+    
+    mobileAdsModule = false;
+    return false;
+  } catch (e: any) {
+    // Import failed
+    if (__DEV__) {
+      console.log('[AdMob] Module import failed:', e?.message || e);
+    }
+    mobileAdsModule = false;
     return false;
   }
 }
@@ -157,9 +164,7 @@ export async function loadInterstitialAd() {
   }
   
   try {
-    const parts = ['react-native', '-', 'google', '-', 'mobile', '-', 'ads'];
-    const moduleName = parts.join('');
-    const adModule = await import(/* @vite-ignore */ moduleName).catch(() => null);
+    const adModule = await import('react-native-google-mobile-ads').catch(() => null);
     
     if (!adModule || !adModule.InterstitialAd) {
       return;
@@ -215,9 +220,7 @@ export async function loadRewardedAd() {
   }
   
   try {
-    const parts = ['react-native', '-', 'google', '-', 'mobile', '-', 'ads'];
-    const moduleName = parts.join('');
-    const adModule = await import(/* @vite-ignore */ moduleName).catch(() => null);
+    const adModule = await import('react-native-google-mobile-ads').catch(() => null);
     
     if (!adModule || !adModule.RewardedAd) {
       return;
@@ -253,8 +256,7 @@ export async function showRewardedAd(
   
   try {
     // Check if native module is available
-    const moduleName = 'react-native-google-mobile-ads';
-    const adModule = await new Function('return import("' + moduleName + '")')().catch(() => null);
+    const adModule = await import('react-native-google-mobile-ads').catch(() => null);
     
     if (!adModule) {
       return false;

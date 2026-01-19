@@ -29,30 +29,22 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 // Initialize AdMob (lazy load to avoid crashes in Expo Go)
-// This will only work after rebuilding with native code
-// Completely skip in Expo Go to prevent any module loading
-try {
-  const Constants = require('expo-constants');
-  const isExpoGo = Constants.executionEnvironment === 'storeClient';
-  
-  if (!isExpoGo) {
-    // Not in Expo Go, try to initialize ads after a delay
-    setTimeout(() => {
-      import('@/utils/adConfig').then((module) => {
-        module.initializeAds().catch((error) => {
-          // Silently fail - ads just won't work without native code
-          if (__DEV__) {
-            console.log('AdMob initialization skipped (native module not available)');
-          }
-        });
-      }).catch(() => {
-        // Ignore import errors - expected in Expo Go
+// Metro config will stub the module, so this is safe to call
+// In Expo Go, the stub will be used and initialization will be a no-op
+setTimeout(() => {
+  import('@/utils/adConfig')
+    .then((module) => {
+      module.initializeAds().catch((error) => {
+        // Silently fail - this is expected in Expo Go
+        if (__DEV__) {
+          console.log('[AdMob] Initialization skipped (using stub in Expo Go)');
+        }
       });
-    }, 3000); // Delay to avoid blocking app startup
-  }
-} catch {
-  // Can't check environment, skip ad initialization to be safe
-}
+    })
+    .catch(() => {
+      // Ignore import errors
+    });
+}, 2000); // Delay to avoid blocking app startup
 
 export const unstable_settings = {
   initialRouteName: "index", // Start at index which checks auth and redirects

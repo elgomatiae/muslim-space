@@ -64,18 +64,35 @@ export default function BannerAd({
     adModuleLoading = true;
     
     // Load ad config and ad module
-    const parts = ['react-native', '-', 'google', '-', 'mobile', '-', 'ads'];
-    const moduleName = parts.join('');
+    // Metro config will stub react-native-google-mobile-ads in Expo Go
     Promise.all([
       import('@/utils/adConfig').catch(() => null),
-      import(/* @vite-ignore */ moduleName).catch(() => null)
+      import('react-native-google-mobile-ads').catch(() => null)
     ])
       .then(([adConfig, adModule]) => {
         if (!adModule || !adConfig) {
           adModuleLoading = false;
+          if (__DEV__) {
+            console.log('[BannerAd] Module or config not available');
+          }
           return;
         }
         
+        // Check if we're using the stub (in Expo Go)
+        // Stub will have BannerAd as a function that returns null
+        // Real module will have BannerAd as a component class
+        const isStub = typeof adModule.BannerAd === 'function' && adModule.BannerAd.length === 0;
+        
+        if (isStub) {
+          // Using stub - don't try to render ads
+          adModuleLoading = false;
+          if (__DEV__) {
+            console.log('[BannerAd] Using stub module - ads disabled in Expo Go');
+          }
+          return;
+        }
+        
+        // Real module - proceed with ad setup
         RNBannerAd = adModule.BannerAd;
         BannerAdSize = adModule.BannerAdSize;
         TestIds = adModule.TestIds;
@@ -93,8 +110,11 @@ export default function BannerAd({
         
         setAdReady(true);
       })
-      .catch(() => {
+      .catch((error) => {
         adModuleLoading = false;
+        if (__DEV__) {
+          console.log('[BannerAd] Error loading module:', error);
+        }
       });
   }, [unitId]);
 

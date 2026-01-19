@@ -1,5 +1,5 @@
 /**
- * Stub module for react-native-google-mobile-ads
+ * Stub module for react-native-google-mobile-ads (JavaScript version)
  * This prevents crashes in Expo Go where the native module doesn't exist
  * 
  * This file replaces the real react-native-google-mobile-ads module
@@ -22,7 +22,7 @@ export const BannerAd = () => null;
 
 // InterstitialAd stub
 export const InterstitialAd = {
-  createForAdRequest: (adUnitId: string, requestOptions?: any) => {
+  createForAdRequest: (adUnitId, requestOptions) => {
     if (__DEV__) {
       console.log('[AdMob Stub] InterstitialAd.createForAdRequest() called');
     }
@@ -30,7 +30,7 @@ export const InterstitialAd = {
       load: async () => Promise.resolve(),
       show: async () => Promise.resolve(),
       loaded: false,
-      addAdEventListener: (eventType: string, listener: Function) => () => {},
+      addAdEventListener: (eventType, listener) => () => {},
       removeAllListeners: () => {},
     };
   },
@@ -38,7 +38,7 @@ export const InterstitialAd = {
 
 // RewardedAd stub
 export const RewardedAd = {
-  createForAdRequest: (adUnitId: string, requestOptions?: any) => {
+  createForAdRequest: (adUnitId, requestOptions) => {
     if (__DEV__) {
       console.log('[AdMob Stub] RewardedAd.createForAdRequest() called');
     }
@@ -46,7 +46,7 @@ export const RewardedAd = {
       load: async () => Promise.resolve(),
       show: async () => Promise.resolve(),
       loaded: false,
-      addAdEventListener: (eventType: string, listener: Function) => () => {},
+      addAdEventListener: (eventType, listener) => () => {},
       removeAllListeners: () => {},
     };
   },
