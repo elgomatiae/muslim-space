@@ -22,6 +22,7 @@ export default function WellnessLayout() {
       <Stack.Screen name="sleep-tracker" />
       <Stack.Screen name="physical-goals" />
       <Stack.Screen name="activity-history" />
+      <Stack.Screen name="sources" />
     </Stack>
   );
 }

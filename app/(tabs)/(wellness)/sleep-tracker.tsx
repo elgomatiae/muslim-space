@@ -486,6 +486,9 @@ export default function SleepTrackerScreen() {
               <Text style={styles.tipText}>
                 Adults need 7-9 hours of sleep per night for optimal health and well-being.
               </Text>
+              <Text style={styles.tipCitation}>
+                Source: National Sleep Foundation (sleepfoundation.org)
+              </Text>
             </View>
           </View>
 
@@ -582,6 +585,24 @@ export default function SleepTrackerScreen() {
           </LinearGradient>
         </View>
 
+        {/* Health Information Citations */}
+        <View style={styles.citationsSection}>
+          <View style={styles.citationsHeader}>
+            <IconSymbol
+              ios_icon_name="book.fill"
+              android_material_icon_name="menu-book"
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={styles.citationsTitle}>Health Information Sources</Text>
+          </View>
+          <View style={styles.citationsContent}>
+            <Text style={styles.citationItem}>
+              <Text style={styles.citationLabel}>Sleep Duration (7-9 hours):</Text> National Sleep Foundation. &quot;How Much Sleep Do We Really Need?&quot; sleepfoundation.org/how-sleep-works/how-much-sleep-do-we-really-need
+            </Text>
+          </View>
+        </View>
+
         <View style={styles.bottomPadding} />
       </ScrollView>
 
@@ -608,7 +629,7 @@ export default function SleepTrackerScreen() {
               placeholderTextColor={colors.textSecondary}
             />
             
-            <Text style={styles.modalHint}>Recommended: 7-9 hours</Text>
+            <Text style={styles.modalHint}>Recommended: 7-9 hours (National Sleep Foundation)</Text>
             
             <View style={styles.goalsModalButtons}>
               <TouchableOpacity
@@ -925,6 +946,13 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 18,
   },
+  tipCitation: {
+    ...typography.caption,
+    color: colors.primary,
+    fontSize: 10,
+    marginTop: spacing.xs,
+    fontStyle: 'italic',
+  },
   imanTrackerCard: {
     marginBottom: spacing.xxl,
     borderRadius: borderRadius.xl,
@@ -1087,5 +1115,38 @@ const styles = StyleSheet.create({
   completionButtonText: {
     ...typography.h4,
     color: colors.card,
+  },
+  citationsSection: {
+    marginBottom: spacing.xxl,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.small,
+  },
+  citationsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  citationsTitle: {
+    ...typography.bodyBold,
+    color: colors.text,
+    fontSize: 14,
+  },
+  citationsContent: {
+    gap: spacing.md,
+  },
+  citationItem: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    lineHeight: 20,
+  },
+  citationLabel: {
+    ...typography.caption,
+    color: colors.text,
+    fontWeight: '600',
   },
 });

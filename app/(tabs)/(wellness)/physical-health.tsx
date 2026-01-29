@@ -50,6 +50,7 @@ export default function PhysicalHealthScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [editingGoals, setEditingGoals] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'sources'>('overview');
   
   // Temporary state for editing
   const [tempWorkoutGoal, setTempWorkoutGoal] = useState('30');
@@ -749,29 +750,79 @@ export default function PhysicalHealthScreen() {
         </LinearGradient>
       </Animated.View>
 
-      {/* Settings Toggle */}
-      <View style={styles.settingsToggle}>
-        <TouchableOpacity
-          style={styles.settingsButton}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setEditingGoals(!editingGoals);
-          }}
-          activeOpacity={0.7}
-        >
-          <IconSymbol
-            ios_icon_name={editingGoals ? "checkmark.circle.fill" : "gearshape.fill"}
-            android_material_icon_name={editingGoals ? "check-circle" : "settings"}
-            size={24}
-            color={colors.primary}
-          />
-          <Text style={styles.settingsButtonText}>
-            {editingGoals ? 'Done Editing' : 'Adjust Goals'}
-          </Text>
-        </TouchableOpacity>
+      {/* Top Controls */}
+      <View style={styles.topControls}>
+        {/* Settings Toggle */}
+        <View style={styles.settingsToggle}>
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setEditingGoals(!editingGoals);
+            }}
+            activeOpacity={0.7}
+          >
+            <IconSymbol
+              ios_icon_name={editingGoals ? "checkmark.circle.fill" : "gearshape.fill"}
+              android_material_icon_name={editingGoals ? "check-circle" : "settings"}
+              size={24}
+              color={colors.primary}
+            />
+            <Text style={styles.settingsButtonText}>
+              {editingGoals ? 'Done Editing' : 'Adjust Goals'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Overview / Sources Tab Switcher */}
+        <View style={styles.tabSwitcher}>
+          <TouchableOpacity
+            style={[
+              styles.tabButton,
+              activeTab === 'overview' && styles.tabButtonActive,
+            ]}
+            onPress={() => {
+              if (activeTab !== 'overview') {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setActiveTab('overview');
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={[
+              styles.tabButtonText,
+              activeTab === 'overview' && styles.tabButtonTextActive,
+            ]}>
+              Overview
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.tabButton,
+              activeTab === 'sources' && styles.tabButtonActive,
+            ]}
+            onPress={() => {
+              if (activeTab !== 'sources') {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setActiveTab('sources');
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={[
+              styles.tabButtonText,
+              activeTab === 'sources' && styles.tabButtonTextActive,
+            ]}>
+              Sources
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Workout Section */}
+      {activeTab === 'overview' && (
+        <>
+          {/* Workout Section */}
       <View style={styles.goalSection}>
         <View style={styles.goalSectionHeader}>
           <View style={styles.goalSectionTitleRow}>
@@ -1010,7 +1061,7 @@ export default function PhysicalHealthScreen() {
               placeholderTextColor={colors.textSecondary}
               editable={tempSleepEnabled}
             />
-            <Text style={styles.editHint}>Recommended: 7-9 hours per night</Text>
+            <Text style={styles.editHint}>Recommended: 7-9 hours per night (National Sleep Foundation)</Text>
           </View>
         ) : (
           <>
@@ -1130,7 +1181,7 @@ export default function PhysicalHealthScreen() {
               placeholderTextColor={colors.textSecondary}
               editable={tempWaterEnabled}
             />
-            <Text style={styles.editHint}>1 glass = 250ml. Recommended: 8 glasses per day</Text>
+            <Text style={styles.editHint}>1 glass = 250ml. Recommended: 8 glasses per day (CDC)</Text>
           </View>
         ) : (
           <>
@@ -1242,7 +1293,40 @@ export default function PhysicalHealthScreen() {
         </LinearGradient>
       </View>
 
-      <View style={styles.bottomPadding} />
+          <View style={styles.bottomPadding} />
+        </>
+      )}
+
+      {activeTab === 'sources' && (
+        <View style={styles.citationsSection}>
+          <View style={styles.citationsHeader}>
+            <IconSymbol
+              ios_icon_name="book.fill"
+              android_material_icon_name="menu-book"
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={styles.citationsTitle}>Health & Wellness Information Sources</Text>
+          </View>
+          <View style={styles.citationsContent}>
+            <Text style={styles.citationItem}>
+              <Text style={styles.citationLabel}>Physical activity / exercise goals:</Text> World Health Organization. &quot;Physical activity.&quot; who.int/news-room/fact-sheets/detail/physical-activity — recommends that healthy adults perform at least 150–300 minutes of moderate-intensity aerobic physical activity per week, plus muscle‑strengthening activities on 2 or more days per week.
+            </Text>
+            <Text style={styles.citationItem}>
+              <Text style={styles.citationLabel}>Sleep duration (7–9 hours):</Text> National Sleep Foundation. &quot;How Much Sleep Do We Really Need?&quot; sleepfoundation.org/how-sleep-works/how-much-sleep-do-we-really-need — summarizes evidence that most healthy adults need 7–9 hours of sleep per night for optimal physical and mental functioning.
+            </Text>
+            <Text style={styles.citationItem}>
+              <Text style={styles.citationLabel}>Water intake (~8 glasses/day):</Text> Centers for Disease Control and Prevention. &quot;Water and Healthier Drinks.&quot; cdc.gov/healthyweight/healthy_eating/water-and-healthier-drinks.html — explains the importance of regular water intake for health. The common &quot;8×250ml glasses&quot; guideline is a simple way to encourage adequate hydration and is adjusted based on individual needs, activity level, and climate.
+            </Text>
+            <Text style={styles.citationItem}>
+              <Text style={styles.citationLabel}>Body as an amanah (trust):</Text> Various Islamic sources, including Sahih al‑Bukhari and Sahih Muslim, where the Prophet Muhammad (ﷺ) said, &quot;Your body has a right over you&quot; — this underpins the emphasis on balancing worship with caring for physical health, sleep, and strength.
+            </Text>
+            <Text style={styles.citationItem}>
+              <Text style={styles.citationLabel}>Medical disclaimer:</Text> The information in this section is for general wellness education only and does not replace personal medical advice. For specific exercise, nutrition, or sleep concerns, users should consult a qualified doctor or other licensed healthcare professional who knows their medical history.
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* Workout Type Selection Modal */}
       <Modal
@@ -1933,5 +2017,39 @@ const styles = StyleSheet.create({
   },
   workoutTypeSelectionCheckmark: {
     marginLeft: 'auto',
+  },
+  citationsSection: {
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.xl,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.small,
+  },
+  citationsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  citationsTitle: {
+    ...typography.bodyBold,
+    color: colors.text,
+    fontSize: 14,
+  },
+  citationsContent: {
+    gap: spacing.md,
+  },
+  citationItem: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    lineHeight: 20,
+  },
+  citationLabel: {
+    ...typography.caption,
+    color: colors.text,
+    fontWeight: '600',
   },
 });

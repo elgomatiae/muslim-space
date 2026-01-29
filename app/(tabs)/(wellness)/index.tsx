@@ -470,6 +470,7 @@ export default function WellnessScreen() {
               </View>
             )}
           </TouchableOpacity>
+
         </View>
       </Animated.View>
 
@@ -499,7 +500,42 @@ export default function WellnessScreen() {
           ))}
         </View>
 
-        {/* Inspirational Quote */}
+        {/* Sources Tab */}
+        <TouchableOpacity
+          style={styles.sourcesTabCard}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push('/(tabs)/(wellness)/sources' as any);
+          }}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={colors.gradientSecondary as unknown as readonly [string, string, ...string[]]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.sourcesTabGradient}
+          >
+            <View style={styles.sourcesTabHeaderContent}>
+              <View style={styles.sourcesTabIconWrapper}>
+                <IconSymbol
+                  ios_icon_name="book.pages.fill"
+                  android_material_icon_name="menu-book"
+                  size={28}
+                  color={colors.card}
+                />
+              </View>
+              <Text style={styles.sourcesTabTitle}>Sources</Text>
+              <IconSymbol
+                ios_icon_name="chevron.right"
+                android_material_icon_name="chevron-right"
+                size={24}
+                color={colors.card}
+              />
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        {/* Inspirational Quote Tab - Always Visible */}
         <View style={styles.quoteCard}>
           <LinearGradient
             colors={colors.gradientTeal as unknown as readonly [string, string, ...string[]]}
@@ -792,7 +828,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sourcesTabCard: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    ...shadows.medium,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  sourcesTabGradient: {
+    padding: spacing.xl,
+  },
+  sourcesTabHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  sourcesTabIconWrapper: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.small,
+  },
+  sourcesTabTitle: {
+    ...typography.h3,
+    color: colors.card,
+    flex: 1,
+    fontWeight: '700',
+  },
   quoteCard: {
+    marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,
     borderRadius: borderRadius.xl,
     overflow: 'hidden',
@@ -846,7 +915,103 @@ const styles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 0.5,
   },
+  sourcesCard: {
+    marginBottom: spacing.lg,
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    ...shadows.medium,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  sourcesGradient: {
+    padding: spacing.lg,
+  },
+  sourcesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    gap: spacing.md,
+  },
+  sourcesIconWrapper: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.small,
+  },
+  sourcesHeaderText: {
+    flex: 1,
+  },
+  sourcesTitle: {
+    ...typography.h3,
+    color: colors.card,
+    fontWeight: '800',
+    marginBottom: spacing.xs / 2,
+  },
+  sourcesSubtitle: {
+    ...typography.caption,
+    color: colors.card,
+    opacity: 0.9,
+  },
+  sourcesBody: {
+    marginTop: spacing.sm,
+    gap: spacing.xs,
+  },
+  sourcesSectionHeading: {
+    ...typography.bodyBold,
+    color: colors.text,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+    fontSize: 15,
+  },
+  sourcesItem: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: spacing.xs,
+  },
+  sourcesFooter: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.md,
+    fontStyle: 'italic',
+    lineHeight: 20,
+  },
   bottomPadding: {
     height: 100,
+  },
+  contentTabSwitcher: {
+    flexDirection: 'row',
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xs,
+    ...shadows.medium,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  contentTabButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contentTabButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  contentTabButtonText: {
+    ...typography.bodyBold,
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  contentTabButtonTextActive: {
+    color: colors.card,
+    fontWeight: '700',
   },
 });

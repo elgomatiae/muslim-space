@@ -68,6 +68,7 @@ export default function MentalHealthHubScreen() {
   const [newEntryTitle, setNewEntryTitle] = useState('');
   const [newEntryContent, setNewEntryContent] = useState('');
   const [selectedMood, setSelectedMood] = useState('');
+  const [activeTab, setActiveTab] = useState<'overview' | 'sources'>('overview');
   
   // Animation values
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
@@ -494,324 +495,445 @@ export default function MentalHealthHubScreen() {
           </Animated.View>
         </LinearGradient>
       </Animated.View>
-
-      {/* Journal Window Button */}
-      <View style={styles.journalWindowSection}>
+      
+      {/* Overview / Sources Tab Switcher */}
+      <View style={styles.sourcesTabSwitcher}>
         <TouchableOpacity
-          style={styles.journalWindowButton}
-          activeOpacity={0.8}
-          onPress={openJournalWindow}
+          style={[
+            styles.sourcesTabButton,
+            activeTab === 'overview' && styles.sourcesTabButtonActive,
+          ]}
+          onPress={() => {
+            if (activeTab !== 'overview') {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setActiveTab('overview');
+            }
+          }}
+          activeOpacity={0.7}
         >
-          <LinearGradient
-            colors={colors.gradientPrimary}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.journalWindowGradient}
+          <Text
+            style={[
+              styles.sourcesTabButtonText,
+              activeTab === 'overview' && styles.sourcesTabButtonTextActive,
+            ]}
           >
-            <View style={styles.journalWindowIcon}>
-              <IconSymbol
-                ios_icon_name="book.fill"
-                android_material_icon_name="menu-book"
-                size={48}
-                color={colors.card}
-              />
-            </View>
-            <Text style={styles.journalWindowTitle}>Open Journal</Text>
-            <Text style={styles.journalWindowSubtitle}>
-              {journalCount} {journalCount === 1 ? 'entry' : 'entries'} • Today&apos;s prompt awaits
-            </Text>
-            <View style={styles.journalWindowAction}>
-              <Text style={styles.journalWindowActionText}>Start Writing</Text>
-              <IconSymbol
-                ios_icon_name="arrow.right.circle.fill"
-                android_material_icon_name="arrow-forward"
-                size={24}
-                color={colors.card}
-              />
-            </View>
-          </LinearGradient>
+            Overview
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.sourcesTabButton,
+            activeTab === 'sources' && styles.sourcesTabButtonActive,
+          ]}
+          onPress={() => {
+            if (activeTab !== 'sources') {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setActiveTab('sources');
+            }
+          }}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={[
+              styles.sourcesTabButtonText,
+              activeTab === 'sources' && styles.sourcesTabButtonTextActive,
+            ]}
+          >
+            Sources
+          </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Quick Journal Entry */}
-      <View style={styles.quickJournalSection}>
-        <View style={styles.sectionHeader}>
-          <IconSymbol
-            ios_icon_name="pencil.circle.fill"
-            android_material_icon_name="edit"
-            size={28}
-            color={colors.primary}
-          />
-          <Text style={styles.sectionTitle}>Quick Journal</Text>
-          <View style={styles.imanBadge}>
-            <IconSymbol
-              ios_icon_name="sparkles"
-              android_material_icon_name="auto-awesome"
-              size={14}
-              color={colors.primary}
-            />
-            <Text style={styles.imanBadgeText}>+Iman</Text>
-          </View>
-        </View>
-        <View style={styles.quickJournalCard}>
-          <TextInput
-            style={styles.quickJournalInput}
-            placeholder="How are you feeling today? Express your thoughts..."
-            placeholderTextColor={colors.textSecondary}
-            value={quickJournalText}
-            onChangeText={setQuickJournalText}
-            multiline
-            numberOfLines={3}
-          />
-          <TouchableOpacity
-            style={styles.quickJournalButton}
-            onPress={handleQuickJournal}
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={colors.gradientPrimary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.quickJournalGradient}
-            >
-              <IconSymbol
-                ios_icon_name="arrow.up.circle.fill"
-                android_material_icon_name="send"
-                size={24}
-                color={colors.card}
-              />
-              <Text style={styles.quickJournalButtonText}>Save & Track</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-          <Text style={styles.quickJournalHint}>
-            Journaling counts toward your mental health goals in the Iman Tracker
-          </Text>
-        </View>
-      </View>
-
-      {/* Mood Tracker */}
-      {moodEntries.length > 0 && (
-        <View style={styles.moodSection}>
-          <View style={styles.sectionHeader}>
-            <IconSymbol
-              ios_icon_name="chart.line.uptrend.xyaxis"
-              android_material_icon_name="insights"
-              size={28}
-              color={colors.primary}
-            />
-            <Text style={styles.sectionTitle}>Mood This Week</Text>
+      {activeTab === 'overview' && (
+        <>
+          {/* Journal Window Button */}
+          <View style={styles.journalWindowSection}>
             <TouchableOpacity
-              onPress={() => router.push('/(tabs)/(wellness)/mood-tracker' as any)}
-              style={styles.seeAllButton}
+              style={styles.journalWindowButton}
+              activeOpacity={0.8}
+              onPress={openJournalWindow}
             >
-              <Text style={styles.seeAllText}>Track</Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron-right"
-                size={18}
-                color={colors.primary}
-              />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.moodGrid}>
-            {moodEntries.map((entry, index) => (
-              <React.Fragment key={index}>
-                <View style={styles.moodItem}>
-                  <Text style={styles.moodEmoji}>{getMoodEmoji(entry.mood)}</Text>
-                  <Text style={styles.moodDate}>{formatDate(entry.date)}</Text>
+              <LinearGradient
+                colors={colors.gradientPrimary}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.journalWindowGradient}
+              >
+                <View style={styles.journalWindowIcon}>
+                  <IconSymbol
+                    ios_icon_name="book.fill"
+                    android_material_icon_name="menu-book"
+                    size={48}
+                    color={colors.card}
+                  />
                 </View>
-              </React.Fragment>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* Healing Duas */}
-      {duas.length > 0 && (
-        <View style={styles.duasSection}>
-          <View style={styles.sectionHeader}>
-            <IconSymbol
-              ios_icon_name="hands.sparkles.fill"
-              android_material_icon_name="self-improvement"
-              size={28}
-              color={colors.primary}
-            />
-            <Text style={styles.sectionTitle}>Healing Duas</Text>
-            <TouchableOpacity
-              onPress={() => router.push('/(tabs)/(wellness)/mental-duas' as any)}
-              style={styles.seeAllButton}
-            >
-              <Text style={styles.seeAllText}>See All</Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron-right"
-                size={18}
-                color={colors.primary}
-              />
+                <Text style={styles.journalWindowTitle}>Open Journal</Text>
+                <Text style={styles.journalWindowSubtitle}>
+                  {journalCount} {journalCount === 1 ? 'entry' : 'entries'} • Today&apos;s prompt awaits
+                </Text>
+                <View style={styles.journalWindowAction}>
+                  <Text style={styles.journalWindowActionText}>Start Writing</Text>
+                  <IconSymbol
+                    ios_icon_name="arrow.right.circle.fill"
+                    android_material_icon_name="arrow-forward"
+                    size={24}
+                    color={colors.card}
+                  />
+                </View>
+              </LinearGradient>
             </TouchableOpacity>
           </View>
-          <View style={styles.duasGrid}>
-            {duas.map((dua, index) => (
-              <React.Fragment key={index}>
-                <TouchableOpacity
-                  style={styles.duaCard}
-                  activeOpacity={0.8}
-                  onPress={() => router.push({
-                    pathname: '/(tabs)/(wellness)/mental-duas' as any,
-                    params: { duaId: dua.id }
-                  })}
+
+          {/* Quick Journal Entry */}
+          <View style={styles.quickJournalSection}>
+            <View style={styles.sectionHeader}>
+              <IconSymbol
+                ios_icon_name="pencil.circle.fill"
+                android_material_icon_name="edit"
+                size={28}
+                color={colors.primary}
+              />
+              <Text style={styles.sectionTitle}>Quick Journal</Text>
+              <View style={styles.imanBadge}>
+                <IconSymbol
+                  ios_icon_name="sparkles"
+                  android_material_icon_name="auto-awesome"
+                  size={14}
+                  color={colors.primary}
+                />
+                <Text style={styles.imanBadgeText}>+Iman</Text>
+              </View>
+            </View>
+            <View style={styles.quickJournalCard}>
+              <TextInput
+                style={styles.quickJournalInput}
+                placeholder="How are you feeling today? Express your thoughts..."
+                placeholderTextColor={colors.textSecondary}
+                value={quickJournalText}
+                onChangeText={setQuickJournalText}
+                multiline
+                numberOfLines={3}
+              />
+              <TouchableOpacity
+                style={styles.quickJournalButton}
+                onPress={handleQuickJournal}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={colors.gradientPrimary}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.quickJournalGradient}
                 >
-                  <LinearGradient
-                    colors={colors.gradientPurple}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.duaGradient}
-                  >
-                    <View style={styles.duaHeader}>
-                      <IconSymbol
-                        ios_icon_name="hands.sparkles.fill"
-                        android_material_icon_name="self-improvement"
-                        size={24}
-                        color={colors.card}
-                      />
-                      <Text style={styles.duaCategory}>{dua.emotion_category}</Text>
-                    </View>
-                    <Text style={styles.duaTitle} numberOfLines={2}>
-                      {dua.title}
-                    </Text>
-                    <Text style={styles.duaTranslation} numberOfLines={3}>
-                      {dua.translation}
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </React.Fragment>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* Wellness Tools */}
-      <View style={styles.toolsSection}>
-        <View style={styles.sectionHeader}>
-          <IconSymbol
-            ios_icon_name="wrench.and.screwdriver.fill"
-            android_material_icon_name="build"
-            size={28}
-            color={colors.primary}
-          />
-          <Text style={styles.sectionTitle}>Wellness Tools</Text>
-        </View>
-        <View style={styles.toolsGrid}>
-          <TouchableOpacity
-            style={styles.toolCard}
-            activeOpacity={0.8}
-            onPress={() => router.push('/(tabs)/(wellness)/meditation' as any)}
-          >
-            <LinearGradient
-              colors={colors.gradientSecondary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.toolGradient}
-            >
-              <IconSymbol
-                ios_icon_name="leaf.fill"
-                android_material_icon_name="spa"
-                size={36}
-                color={colors.card}
-              />
-              <Text style={styles.toolTitle}>Meditation</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.toolCard}
-            activeOpacity={0.8}
-            onPress={() => router.push('/(tabs)/(wellness)/emotional-support' as any)}
-          >
-            <LinearGradient
-              colors={colors.gradientAccent}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.toolGradient}
-            >
-              <IconSymbol
-                ios_icon_name="heart.fill"
-                android_material_icon_name="favorite"
-                size={36}
-                color={colors.card}
-              />
-              <Text style={styles.toolTitle}>Support</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Crisis Support Banner */}
-      <TouchableOpacity
-        style={styles.crisisCard}
-        activeOpacity={0.8}
-        onPress={() => router.push('/(tabs)/(wellness)/crisis-support' as any)}
-      >
-        <LinearGradient
-          colors={['#FF6B6B', '#EE5A6F']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.crisisGradient}
-        >
-          <View style={styles.crisisContent}>
-            <IconSymbol
-              ios_icon_name="exclamationmark.triangle.fill"
-              android_material_icon_name="warning"
-              size={32}
-              color={colors.card}
-            />
-            <View style={styles.crisisText}>
-              <Text style={styles.crisisTitle}>Need Immediate Help?</Text>
-              <Text style={styles.crisisSubtitle}>Crisis support resources available 24/7</Text>
+                  <IconSymbol
+                    ios_icon_name="arrow.up.circle.fill"
+                    android_material_icon_name="send"
+                    size={24}
+                    color={colors.card}
+                  />
+                  <Text style={styles.quickJournalButtonText}>Save & Track</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              <Text style={styles.quickJournalHint}>
+                Journaling counts toward your mental health goals in the Iman Tracker
+              </Text>
             </View>
           </View>
-          <IconSymbol
-            ios_icon_name="arrow.right.circle.fill"
-            android_material_icon_name="arrow-forward"
-            size={28}
-            color={colors.card}
-          />
-        </LinearGradient>
-      </TouchableOpacity>
 
-      {/* Inspirational Quote */}
-      <View style={styles.quoteSection}>
-        <LinearGradient
-          colors={colors.gradientTeal}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.quoteGradient}
-        >
-          <IconSymbol
-            ios_icon_name="quote.opening"
-            android_material_icon_name="format-quote"
-            size={32}
-            color={colors.card}
-          />
-          <Text style={styles.quoteText}>
-            &quot;Verily, with hardship comes ease.&quot;
+          {/* Mood Tracker */}
+          {moodEntries.length > 0 && (
+            <View style={styles.moodSection}>
+              <View style={styles.sectionHeader}>
+                <IconSymbol
+                  ios_icon_name="chart.line.uptrend.xyaxis"
+                  android_material_icon_name="insights"
+                  size={28}
+                  color={colors.primary}
+                />
+                <Text style={styles.sectionTitle}>Mood This Week</Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/(tabs)/(wellness)/mood-tracker' as any)}
+                  style={styles.seeAllButton}
+                >
+                  <Text style={styles.seeAllText}>Track</Text>
+                  <IconSymbol
+                    ios_icon_name="chevron.right"
+                    android_material_icon_name="chevron-right"
+                    size={18}
+                    color={colors.primary}
+                  />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.moodGrid}>
+                {moodEntries.map((entry, index) => (
+                  <React.Fragment key={index}>
+                    <View style={styles.moodItem}>
+                      <Text style={styles.moodEmoji}>{getMoodEmoji(entry.mood)}</Text>
+                      <Text style={styles.moodDate}>{formatDate(entry.date)}</Text>
+                    </View>
+                  </React.Fragment>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Healing Duas */}
+          {duas.length > 0 && (
+            <View style={styles.duasSection}>
+              <View style={styles.sectionHeader}>
+                <IconSymbol
+                  ios_icon_name="hands.sparkles.fill"
+                  android_material_icon_name="self-improvement"
+                  size={28}
+                  color={colors.primary}
+                />
+                <Text style={styles.sectionTitle}>Healing Duas</Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/(tabs)/(wellness)/mental-duas' as any)}
+                  style={styles.seeAllButton}
+                >
+                  <Text style={styles.seeAllText}>See All</Text>
+                  <IconSymbol
+                    ios_icon_name="chevron.right"
+                    android_material_icon_name="chevron-right"
+                    size={18}
+                    color={colors.primary}
+                  />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.duasGrid}>
+                {duas.map((dua, index) => (
+                  <React.Fragment key={index}>
+                    <TouchableOpacity
+                      style={styles.duaCard}
+                      activeOpacity={0.8}
+                      onPress={() => router.push({
+                        pathname: '/(tabs)/(wellness)/mental-duas' as any,
+                        params: { duaId: dua.id }
+                      })}
+                    >
+                      <LinearGradient
+                        colors={colors.gradientPurple}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.duaGradient}
+                      >
+                        <View style={styles.duaHeader}>
+                          <IconSymbol
+                            ios_icon_name="hands.sparkles.fill"
+                            android_material_icon_name="self-improvement"
+                            size={24}
+                            color={colors.card}
+                          />
+                          <Text style={styles.duaCategory}>{dua.emotion_category}</Text>
+                        </View>
+                        <Text style={styles.duaTitle} numberOfLines={2}>
+                          {dua.title}
+                        </Text>
+                        <Text style={styles.duaTranslation} numberOfLines={3}>
+                          {dua.translation}
+                        </Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </React.Fragment>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Wellness Tools */}
+          <View style={styles.toolsSection}>
+            <View style={styles.sectionHeader}>
+              <IconSymbol
+                ios_icon_name="wrench.and.screwdriver.fill"
+                android_material_icon_name="build"
+                size={28}
+                color={colors.primary}
+              />
+              <Text style={styles.sectionTitle}>Wellness Tools</Text>
+            </View>
+            <View style={styles.toolsGrid}>
+              <TouchableOpacity
+                style={styles.toolCard}
+                activeOpacity={0.8}
+                onPress={() => router.push('/(tabs)/(wellness)/meditation' as any)}
+              >
+                <LinearGradient
+                  colors={colors.gradientSecondary}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.toolGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="leaf.fill"
+                    android_material_icon_name="spa"
+                    size={36}
+                    color={colors.card}
+                  />
+                  <Text style={styles.toolTitle}>Meditation</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.toolCard}
+                activeOpacity={0.8}
+                onPress={() => router.push('/(tabs)/(wellness)/emotional-support' as any)}
+              >
+                <LinearGradient
+                  colors={colors.gradientAccent}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.toolGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="heart.fill"
+                    android_material_icon_name="favorite"
+                    size={36}
+                    color={colors.card}
+                  />
+                  <Text style={styles.toolTitle}>Support</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Crisis Support Banner */}
+          <TouchableOpacity
+            style={styles.crisisCard}
+            activeOpacity={0.8}
+            onPress={() => router.push('/(tabs)/(wellness)/crisis-support' as any)}
+          >
+            <LinearGradient
+              colors={['#FF6B6B', '#EE5A6F']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.crisisGradient}
+            >
+              <View style={styles.crisisContent}>
+                <IconSymbol
+                  ios_icon_name="exclamationmark.triangle.fill"
+                  android_material_icon_name="warning"
+                  size={32}
+                  color={colors.card}
+                />
+                <View style={styles.crisisText}>
+                  <Text style={styles.crisisTitle}>Need Immediate Help?</Text>
+                  <Text style={styles.crisisSubtitle}>Crisis support resources available 24/7</Text>
+                </View>
+              </View>
+              <IconSymbol
+                ios_icon_name="arrow.right.circle.fill"
+                android_material_icon_name="arrow-forward"
+                size={28}
+                color={colors.card}
+              />
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* Inspirational Quote */}
+          <View style={styles.quoteSection}>
+            <LinearGradient
+              colors={colors.gradientTeal}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.quoteGradient}
+            >
+              <IconSymbol
+                ios_icon_name="quote.opening"
+                android_material_icon_name="format-quote"
+                size={32}
+                color={colors.card}
+              />
+              <Text style={styles.quoteText}>
+                &quot;Verily, with hardship comes ease.&quot;
+              </Text>
+              <Text style={styles.quoteSource}>Quran 94:6</Text>
+            </LinearGradient>
+          </View>
+
+          {/* Disclaimer */}
+          <View style={styles.disclaimerCard}>
+            <IconSymbol
+              ios_icon_name="info.circle.fill"
+              android_material_icon_name="info"
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={styles.disclaimerText}>
+              This app provides Islamic guidance and support resources, but is not a substitute for professional mental health care.
+            </Text>
+          </View>
+        </>
+      )}
+
+      {activeTab === 'sources' && (
+        <View style={styles.sourcesCard}>
+          <Text style={styles.sourcesTitle}>Health & Wellness Information Sources</Text>
+          <Text style={styles.sourcesIntro}>
+            The mental wellness tools in this app (journaling, mood tracking, duas, meditation, and crisis support links)
+            are designed for reflection and spiritual support. They do not replace professional diagnosis, treatment,
+            or therapy. Below are key references that informed the wellness guidance in this section.
           </Text>
-          <Text style={styles.quoteSource}>Quran 94:6</Text>
-        </LinearGradient>
-      </View>
 
-      {/* Disclaimer */}
-      <View style={styles.disclaimerCard}>
-        <IconSymbol
-          ios_icon_name="info.circle.fill"
-          android_material_icon_name="info"
-          size={20}
-          color={colors.primary}
-        />
-        <Text style={styles.disclaimerText}>
-          This app provides Islamic guidance and support resources, but is not a substitute for professional mental health care.
-        </Text>
-      </View>
+          <Text style={styles.sourcesSectionHeading}>Mental Health & Self‑Care</Text>
+          <Text style={styles.sourcesItem}>
+            • American Psychological Association. &quot;Journaling for mental health.&quot; apa.org — discusses how expressive writing and
+            journaling can help process emotions, reduce stress, and support therapy.
+          </Text>
+          <Text style={styles.sourcesItem}>
+            • National Institute of Mental Health (NIMH). &quot;Caring for Your Mental Health.&quot; nimh.nih.gov — guidance on healthy coping
+            strategies such as staying connected, tracking mood, and seeking professional help when needed.
+          </Text>
+          <Text style={styles.sourcesItem}>
+            • Mayo Clinic. &quot;Stress management: Strengthen your social support.&quot; mayoclinic.org — highlights the importance of
+            social support, talking to trusted people, and using coping skills alongside professional care.
+          </Text>
+
+          <Text style={styles.sourcesSectionHeading}>Mindfulness & Relaxation</Text>
+          <Text style={styles.sourcesItem}>
+            • National Health Service (NHS, UK). &quot;Mental wellbeing — Mindfulness.&quot; nhs.uk — explains how regular mindfulness and
+            breathing practices can reduce stress and improve emotional regulation.
+          </Text>
+          <Text style={styles.sourcesItem}>
+            • American Psychological Association. &quot;Mindfulness meditation: A research‑proven way to reduce stress.&quot; apa.org — summarizes
+            evidence that brief, regular mindfulness exercises can support anxiety and stress management.
+          </Text>
+
+          <Text style={styles.sourcesSectionHeading}>Sleep & Daily Rhythm</Text>
+          <Text style={styles.sourcesItem}>
+            • National Sleep Foundation. &quot;How Much Sleep Do We Really Need?&quot; sleepfoundation.org/how-sleep-works/how-much-sleep-do-we-really-need —
+            recommends 7–9 hours of nightly sleep for most healthy adults and highlights the mental health benefits of sufficient rest.
+          </Text>
+
+          <Text style={styles.sourcesSectionHeading}>Islamic Spiritual Wellbeing</Text>
+          <Text style={styles.sourcesItem}>
+            • Quran 13:28 — &quot;Verily, in the remembrance of Allah do hearts find rest.&quot; This underpins the emphasis on dhikr, dua,
+            and Quranic reflection as spiritual supports for emotional wellbeing.
+          </Text>
+          <Text style={styles.sourcesItem}>
+            • Sahih al‑Bukhari, Book of Medicine; Sahih Muslim — collections that include supplications and prophetic guidance related
+            to hardship, anxiety, and seeking spiritual comfort.
+          </Text>
+          <Text style={styles.sourcesItem}>
+            • Various collections of &quot;Adhkar&quot; and &quot;Duas&quot; (e.g., Hisn al‑Muslim) used as references for the healing duas presented in‑app.
+          </Text>
+
+          <Text style={styles.sourcesSectionHeading}>Crisis & Professional Support</Text>
+          <Text style={styles.sourcesItem}>
+            • World Health Organization. &quot;Suicide.&quot; who.int/news-room/fact-sheets/detail/suicide — emphasizes the importance of
+            immediate, local crisis support and professional care for suicidal thoughts or severe distress.
+          </Text>
+          <Text style={styles.sourcesItem}>
+            • National and local crisis hotlines and emergency services (for example, 988 in the United States) are recommended
+            as first‑line resources in emergencies; users should contact the equivalent services in their own country.
+          </Text>
+
+          <Text style={styles.sourcesFooter}>
+            Always consult a qualified doctor, psychiatrist, or licensed therapist for concerns about mood, anxiety, or other
+            mental health conditions. This app is intended only as a complementary spiritual and self‑reflection tool.
+          </Text>
+        </View>
+      )}
 
       {/* Journal Modal Window */}
       <Modal
@@ -1648,5 +1770,76 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 120,
+  },
+  sourcesTabSwitcher: {
+    flexDirection: 'row',
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.lg,
+    marginBottom: spacing.lg,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xs,
+    ...shadows.medium,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sourcesTabButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sourcesTabButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  sourcesTabButtonText: {
+    ...typography.bodyBold,
+    color: colors.textSecondary,
+    fontSize: 14,
+  },
+  sourcesTabButtonTextActive: {
+    color: colors.card,
+  },
+  sourcesCard: {
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.lg,
+    marginBottom: spacing.xxl,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.medium,
+  },
+  sourcesTitle: {
+    ...typography.h3,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  sourcesIntro: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
+    lineHeight: 22,
+  },
+  sourcesSectionHeading: {
+    ...typography.bodyBold,
+    color: colors.text,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  sourcesItem: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+    lineHeight: 20,
+  },
+  sourcesFooter: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.lg,
+    lineHeight: 20,
+    fontStyle: 'italic',
   },
 });
