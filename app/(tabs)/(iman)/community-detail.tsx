@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from '@/contexts/I18nContext';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -26,6 +27,7 @@ import MemberAchievements from '@/components/iman/MemberAchievements';
 import Svg, { Circle } from 'react-native-svg';
 
 export default function CommunityDetailScreen() {
+  const { t } = useTranslation();
   const { communityId } = useLocalSearchParams<{ communityId: string }>();
   const { user } = useAuth();
   const [community, setCommunity] = useState<LocalCommunity | null>(null);
@@ -57,7 +59,7 @@ export default function CommunityDetailScreen() {
       
       if (!communityData) {
         console.log('❌ Community not found');
-        Alert.alert('Error', 'Community not found');
+        Alert.alert(t('common.error'), t('iman.communityNotFound'));
         router.back();
         return;
       }
@@ -74,7 +76,7 @@ export default function CommunityDetailScreen() {
       console.log(`✅ Successfully loaded community: ${communityData.name}`);
     } catch (error) {
       console.error('❌ Error loading community data:', error);
-      Alert.alert('Error', 'Failed to load community data. Please try again.');
+      Alert.alert(t('common.error'), t('iman.failedToLoadCommunity'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -106,13 +108,13 @@ export default function CommunityDetailScreen() {
               
               console.log('🚪 Leaving community...');
               await removeMemberFromCommunity(communityId, user.id);
-              Alert.alert('Success', 'You have left the community');
+              Alert.alert(t('common.success'), t('iman.leftCommunity'));
               router.back();
               console.log('✅ Successfully left community');
             } catch (error) {
               console.error('❌ Failed to leave community:', error);
               const { getErrorMessage } = require('@/utils/errorHandler');
-              Alert.alert('Error', getErrorMessage(error) || 'Failed to leave community. Please try again.');
+              Alert.alert(t('common.error'), getErrorMessage(error) || t('iman.failedToLeaveCommunity'));
             }
           },
         },
@@ -135,13 +137,13 @@ export default function CommunityDetailScreen() {
               
               console.log(`🗑️ Removing member ${username}...`);
               await removeMemberFromCommunity(communityId, memberId);
-              Alert.alert('Success', 'Member removed successfully');
+              Alert.alert(t('common.success'), t('iman.memberRemoved'));
               loadCommunityData();
               console.log('✅ Member removed successfully');
             } catch (error) {
               console.error('❌ Failed to remove member:', error);
               const { getErrorMessage } = require('@/utils/errorHandler');
-              Alert.alert('Error', getErrorMessage(error) || 'Failed to remove member. Please try again.');
+              Alert.alert(t('common.error'), getErrorMessage(error) || t('iman.failedToRemoveMember'));
             }
           },
         },

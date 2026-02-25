@@ -7,10 +7,12 @@ import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
+import { useTranslation } from '@/contexts/I18nContext';
 import { useImanTracker } from '@/contexts/ImanTrackerContext';
 import type { PrayerGoals } from "@/utils/imanScoreCalculator";
 
 export default function PrayerGoalsScreen() {
+  const { t } = useTranslation();
   const { prayerGoals: contextGoals, updatePrayerGoals } = useImanTracker();
   
   const [goals, setGoals] = useState<PrayerGoals | null>(contextGoals);
@@ -32,12 +34,12 @@ export default function PrayerGoalsScreen() {
     const tahajjudGoal = parseInt(tahajjudInput) || 0;
 
     if (sunnahGoal < 0 || sunnahGoal > 20) {
-      Alert.alert('Invalid Input', 'Sunnah prayers must be between 0 and 20 per day.');
+      Alert.alert(t('common.error'), t('iman.invalidSunnahPrayers'));
       return;
     }
 
     if (tahajjudGoal < 0 || tahajjudGoal > 7) {
-      Alert.alert('Invalid Input', 'Tahajjud goal must be between 0 and 7 per week.');
+      Alert.alert(t('common.error'), t('iman.invalidTahajjudGoal'));
       return;
     }
 
@@ -49,8 +51,8 @@ export default function PrayerGoalsScreen() {
 
     await updatePrayerGoals(updatedGoals);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert('Success', 'Prayer goals saved! The Iman Tracker has been updated.', [
-      { text: 'OK', onPress: () => router.back() }
+    Alert.alert(t('common.success'), t('iman.prayerGoalsSaved'), [
+      { text: t('common.ok'), onPress: () => router.back() }
     ]);
   };
 
@@ -244,7 +246,7 @@ export default function PrayerGoalsScreen() {
               onChangeText={setSunnahInput}
               keyboardType="number-pad"
               maxLength={2}
-              placeholder="0-20"
+              placeholder={t('iman.sunnahPlaceholder')}
               placeholderTextColor={colors.textSecondary}
             />
             <Text style={styles.goalInputUnit}>prayers/day</Text>
@@ -318,7 +320,7 @@ export default function PrayerGoalsScreen() {
               onChangeText={setTahajjudInput}
               keyboardType="number-pad"
               maxLength={1}
-              placeholder="0-7"
+              placeholder={t('iman.tahajjudPlaceholder')}
               placeholderTextColor={colors.textSecondary}
             />
             <Text style={styles.goalInputUnit}>times/week</Text>

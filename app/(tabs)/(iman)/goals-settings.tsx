@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Modal, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
@@ -11,9 +11,17 @@ import { useImanTracker } from '@/contexts/ImanTrackerContext';
 import { IbadahGoals, IlmGoals, AmanahGoals } from '@/utils/imanScoreCalculator';
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTranslation } from "@/contexts/I18nContext";
 
 type SectionType = 'ibadah' | 'ilm' | 'amanah';
 type FrequencyType = 'daily' | 'weekly';
+
+interface ExerciseGoal {
+  id: string;
+  workoutType: string;
+  amount: number;
+  frequency: FrequencyType;
+}
 
 interface GoalConfig {
   id: string;
@@ -46,6 +54,7 @@ const WORKOUT_TYPES = [
 const FARD_PRAYERS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 
 export default function GoalsSettingsScreen() {
+  const { t } = useTranslation();
   const params = useLocalSearchParams();
   const { user } = useAuth();
   const { ibadahGoals, ilmGoals, amanahGoals, updateIbadahGoals, updateIlmGoals, updateAmanahGoals, refreshScores } = useImanTracker();
@@ -56,14 +65,55 @@ export default function GoalsSettingsScreen() {
   const [localAmanahGoals, setLocalAmanahGoals] = useState<AmanahGoals | null>(null);
   const [selectedWorkoutTypes, setSelectedWorkoutTypes] = useState<string[]>(['general']);
   const [goalFrequencies, setGoalFrequencies] = useState<{ [key: string]: FrequencyType }>({});
+  const [exerciseGoals, setExerciseGoals] = useState<ExerciseGoal[]>([]);
+  const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
+  const [editingExerciseGoal, setEditingExerciseGoal] = useState<ExerciseGoal | null>(null);
 
   useEffect(() => {
     if (ibadahGoals) setLocalIbadahGoals({ ...ibadahGoals });
     if (ilmGoals) setLocalIlmGoals({ ...ilmGoals });
-    if (amanahGoals) setLocalAmanahGoals({ ...amanahGoals });
+    if (amanahGoals) {
+      setLocalAmanahGoals({ ...amanahGoals });
+      loadExerciseGoals(amanahGoals);
+    }
     loadWorkoutTypes();
     loadGoalFrequencies();
   }, [ibadahGoals, ilmGoals, amanahGoals]);
+
+  const loadExerciseGoals = (goals: AmanahGoals) => {
+    const loadedGoals: ExerciseGoal[] = [];
+    if (goals.workoutTypeGoals) {
+      Object.entries(goals.workoutTypeGoals).forEach(([type, typeGoals], index) => {
+        if (typeGoals.daily && typeGoals.daily > 0) {
+          loadedGoals.push({
+            id: `${type}-daily-${index}-${Date.now()}`,
+            workoutType: type,
+            amount: typeGoals.daily,
+            frequency: 'daily',
+          });
+        }
+        if (typeGoals.weekly && typeGoals.weekly > 0) {
+          loadedGoals.push({
+            id: `${type}-weekly-${index}-${Date.now()}`,
+            workoutType: type,
+            amount: typeGoals.weekly,
+            frequency: 'weekly',
+          });
+        }
+      });
+    }
+    // If no workout type goals exist but dailyExerciseGoal exists, migrate it
+    if (loadedGoals.length === 0 && goals.dailyExerciseGoal > 0) {
+      const defaultType = goals.workout_types?.[0] || goals.workout_type || 'general';
+      loadedGoals.push({
+        id: `${defaultType}-daily-migrated-${Date.now()}`,
+        workoutType: defaultType,
+        amount: goals.dailyExerciseGoal,
+        frequency: 'daily',
+      });
+    }
+    setExerciseGoals(loadedGoals);
+  };
 
   const loadGoalFrequencies = async () => {
     if (!user) return;
@@ -87,12 +137,10 @@ export default function GoalsSettingsScreen() {
       if (data.dua_goal_frequency) frequencies.dua = data.dua_goal_frequency;
       if (data.fasting_goal_frequency) frequencies.fasting = data.fasting_goal_frequency;
       if (data.lectures_goal_frequency) frequencies.lectures = data.lectures_goal_frequency;
-      if (data.recitations_goal_frequency) frequencies.recitations = data.recitations_goal_frequency;
       if (data.quizzes_goal_frequency) frequencies.quizzes = data.quizzes_goal_frequency;
       if (data.reflection_goal_frequency) frequencies.reflection = data.reflection_goal_frequency;
       if (data.exercise_goal_frequency) frequencies.exercise = data.exercise_goal_frequency;
       if (data.water_goal_frequency) frequencies.water = data.water_goal_frequency;
-      if (data.workout_goal_frequency) frequencies.workout = data.workout_goal_frequency;
       if (data.meditation_goal_frequency) frequencies.meditation = data.meditation_goal_frequency;
       if (data.journal_goal_frequency) frequencies.journal = data.journal_goal_frequency;
       if (data.sleep_goal_frequency) frequencies.sleep = data.sleep_goal_frequency;
@@ -123,7 +171,7 @@ export default function GoalsSettingsScreen() {
     setSelectedWorkoutTypes(prev => {
       if (prev.includes(type)) {
         if (prev.length === 1) {
-          Alert.alert('Notice', 'You must have at least one workout type selected.');
+          Alert.alert(t('common.error'), t('iman.mustSelectWorkoutType'));
           return prev;
         }
         return prev.filter(t => t !== type);
@@ -153,6 +201,73 @@ export default function GoalsSettingsScreen() {
         amanah_workout_types: types,
         updated_at: new Date().toISOString(),
       });
+  };
+
+  const addExerciseGoal = () => {
+    const availableTypes = WORKOUT_TYPES.filter(
+      type => !exerciseGoals.some(goal => goal.workoutType === type.value && goal.frequency === 'daily') &&
+               !exerciseGoals.some(goal => goal.workoutType === type.value && goal.frequency === 'weekly')
+    );
+    
+    if (availableTypes.length === 0) {
+      Alert.alert(t('common.error'), 'All workout types already have goals. Please remove one first.');
+      return;
+    }
+    
+    setEditingExerciseGoal({
+      id: `new-${Date.now()}`,
+      workoutType: availableTypes[0].value,
+      amount: 30,
+      frequency: 'daily',
+    });
+    setShowAddExerciseModal(true);
+  };
+
+  const editExerciseGoal = (goal: ExerciseGoal) => {
+    setEditingExerciseGoal({ ...goal });
+    setShowAddExerciseModal(true);
+  };
+
+  const removeExerciseGoal = (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert(
+      'Remove Exercise Goal',
+      'Are you sure you want to remove this exercise goal?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            setExerciseGoals(prev => prev.filter(g => g.id !== id));
+          },
+        },
+      ]
+    );
+  };
+
+  const saveExerciseGoal = () => {
+    if (!editingExerciseGoal) return;
+    
+    if (editingExerciseGoal.amount <= 0) {
+      Alert.alert(t('common.error'), 'Please enter a valid amount (greater than 0).');
+      return;
+    }
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    if (editingExerciseGoal.id.startsWith('new-')) {
+      // New goal
+      setExerciseGoals(prev => [...prev, { ...editingExerciseGoal }]);
+    } else {
+      // Update existing
+      setExerciseGoals(prev =>
+        prev.map(g => g.id === editingExerciseGoal.id ? editingExerciseGoal : g)
+      );
+    }
+    
+    setShowAddExerciseModal(false);
+    setEditingExerciseGoal(null);
   };
 
   const toggleFrequency = (goalId: string) => {
@@ -312,22 +427,6 @@ export default function GoalsSettingsScreen() {
       currentFrequency: goalFrequencies.lectures || 'weekly',
     },
     {
-      id: 'recitations',
-      label: 'Quran Recitations',
-      description: 'Recitation listening goal',
-      goalField: 'weeklyRecitationsGoal',
-      completedField: 'weeklyRecitationsCompleted',
-      frequencyField: 'recitations_goal_frequency',
-      min: 0,
-      max: 10,
-      step: 1,
-      unit: 'recitations',
-      enabled: (localIlmGoals?.weeklyRecitationsGoal ?? 0) > 0,
-      canDisable: true,
-      defaultFrequency: 'weekly',
-      currentFrequency: goalFrequencies.recitations || 'weekly',
-    },
-    {
       id: 'quizzes',
       label: 'Knowledge Quizzes',
       description: 'Quiz goal',
@@ -363,25 +462,9 @@ export default function GoalsSettingsScreen() {
 
   const amanahGoalConfigs: GoalConfig[] = [
     {
-      id: 'exercise',
-      label: 'Exercise',
-      description: 'Exercise duration goal',
-      goalField: 'dailyExerciseGoal',
-      completedField: 'dailyExerciseCompleted',
-      frequencyField: 'exercise_goal_frequency',
-      min: 0,
-      max: 120,
-      step: 5,
-      unit: 'minutes',
-      enabled: (localAmanahGoals?.dailyExerciseGoal ?? 0) > 0,
-      canDisable: true,
-      defaultFrequency: 'daily',
-      currentFrequency: goalFrequencies.exercise || 'daily',
-    },
-    {
       id: 'water',
-      label: 'Water Intake',
-      description: 'Water consumption goal',
+      label: 'Daily Water Intake',
+      description: 'Track how many glasses of water you drink each day',
       goalField: 'dailyWaterGoal',
       completedField: 'dailyWaterCompleted',
       frequencyField: 'water_goal_frequency',
@@ -395,25 +478,25 @@ export default function GoalsSettingsScreen() {
       currentFrequency: goalFrequencies.water || 'daily',
     },
     {
-      id: 'workout',
-      label: 'Workouts',
-      description: 'Workout sessions goal',
-      goalField: 'weeklyWorkoutGoal',
-      completedField: 'weeklyWorkoutCompleted',
-      frequencyField: 'workout_goal_frequency',
+      id: 'sleep',
+      label: 'Daily Sleep',
+      description: 'Track your sleep duration each night',
+      goalField: 'dailySleepGoal',
+      completedField: 'dailySleepCompleted',
+      frequencyField: 'sleep_goal_frequency',
       min: 0,
-      max: 7,
-      step: 1,
-      unit: 'sessions',
-      enabled: (localAmanahGoals?.weeklyWorkoutGoal ?? 0) > 0,
+      max: 12,
+      step: 0.5,
+      unit: 'hours',
+      enabled: (localAmanahGoals?.dailySleepGoal ?? 0) > 0,
       canDisable: true,
-      defaultFrequency: 'weekly',
-      currentFrequency: goalFrequencies.workout || 'weekly',
+      defaultFrequency: 'daily',
+      currentFrequency: goalFrequencies.sleep || 'daily',
     },
     {
       id: 'meditation',
-      label: 'Meditation Sessions',
-      description: 'Meditation & mindfulness goal',
+      label: 'Meditation & Mindfulness',
+      description: 'Track meditation or mindfulness sessions per week',
       goalField: 'weeklyMeditationGoal',
       completedField: 'weeklyMeditationCompleted',
       frequencyField: 'meditation_goal_frequency',
@@ -428,8 +511,8 @@ export default function GoalsSettingsScreen() {
     },
     {
       id: 'journal',
-      label: 'Journal Entries',
-      description: 'Journaling & reflection goal',
+      label: 'Journaling & Reflection',
+      description: 'Track journal entries or reflection sessions per week',
       goalField: 'weeklyJournalGoal',
       completedField: 'weeklyJournalCompleted',
       frequencyField: 'journal_goal_frequency',
@@ -441,22 +524,6 @@ export default function GoalsSettingsScreen() {
       canDisable: true,
       defaultFrequency: 'weekly',
       currentFrequency: goalFrequencies.journal || 'weekly',
-    },
-    {
-      id: 'sleep',
-      label: 'Sleep',
-      description: 'Sleep duration goal',
-      goalField: 'dailySleepGoal',
-      completedField: 'dailySleepCompleted',
-      frequencyField: 'sleep_goal_frequency',
-      min: 0,
-      max: 12,
-      step: 0.5,
-      unit: 'hours',
-      enabled: (localAmanahGoals?.dailySleepGoal ?? 0) > 0,
-      canDisable: true,
-      defaultFrequency: 'daily',
-      currentFrequency: goalFrequencies.sleep || 'daily',
     },
   ];
 
@@ -580,7 +647,6 @@ export default function GoalsSettingsScreen() {
       weeklyReflectionGoal: 3,
       dailyExerciseGoal: 30,
       dailyWaterGoal: 8,
-      weeklyWorkoutGoal: 3,
       weeklyMeditationGoal: 2,
       weeklyJournalGoal: 2,
       dailySleepGoal: 7,
@@ -591,99 +657,114 @@ export default function GoalsSettingsScreen() {
 
   const saveGoals = async () => {
     try {
-      if (selectedWorkoutTypes.length === 0) {
-        Alert.alert('Error', 'Please select at least one workout type.');
-        return;
+      // Build workoutTypeGoals from exerciseGoals
+      const workoutTypeGoals: { [key: string]: { daily?: number; weekly?: number } } = {};
+      const allWorkoutTypes = new Set<string>();
+      
+      exerciseGoals.forEach(goal => {
+        if (!workoutTypeGoals[goal.workoutType]) {
+          workoutTypeGoals[goal.workoutType] = {};
+        }
+        workoutTypeGoals[goal.workoutType][goal.frequency] = goal.amount;
+        allWorkoutTypes.add(goal.workoutType);
+      });
+
+      // Prepare updated goals
+      let updatedAmanahGoals: AmanahGoals | null = null;
+      if (localAmanahGoals) {
+        updatedAmanahGoals = {
+          ...localAmanahGoals,
+          workoutTypeGoals: Object.keys(workoutTypeGoals).length > 0 ? workoutTypeGoals : undefined,
+          dailyExerciseGoal: exerciseGoals
+            .filter(g => g.frequency === 'daily')
+            .reduce((sum, g) => sum + g.amount, 0),
+        };
       }
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      
-      // Save all goals first
+      // Update state immediately (optimistic UI updates)
+      // The update functions update state synchronously first, then save in background
       if (localIbadahGoals) {
-        await updateIbadahGoals(localIbadahGoals);
+        updateIbadahGoals(localIbadahGoals).catch(err => console.log('Background save error:', err));
       }
       if (localIlmGoals) {
-        await updateIlmGoals(localIlmGoals);
+        updateIlmGoals(localIlmGoals).catch(err => console.log('Background save error:', err));
       }
-      if (localAmanahGoals) {
-        await updateAmanahGoals(localAmanahGoals);
-        
-        if (user) {
-          await supabase
-            .from('physical_wellness_goals')
-            .upsert({
-              user_id: user.id,
-              daily_exercise_minutes_goal: localAmanahGoals.dailyExerciseGoal || 0,
-              daily_water_glasses_goal: localAmanahGoals.dailyWaterGoal || 0,
-              daily_sleep_hours_goal: localAmanahGoals.dailySleepGoal || 0,
-              workout_enabled: (localAmanahGoals.dailyExerciseGoal || 0) > 0,
-              water_enabled: (localAmanahGoals.dailyWaterGoal || 0) > 0,
-              sleep_enabled: (localAmanahGoals.dailySleepGoal || 0) > 0,
-              updated_at: new Date().toISOString(),
-            });
-        }
+      if (updatedAmanahGoals) {
+        updateAmanahGoals(updatedAmanahGoals).catch(err => console.log('Background save error:', err));
       }
-      
-      // Save workout types
-      await saveWorkoutTypes(selectedWorkoutTypes);
-      
-      // Save goal frequencies
-      if (user) {
-        const frequencyUpdates: any = {};
-        Object.entries(goalFrequencies).forEach(([key, value]) => {
-          const config = [...ibadahGoalConfigs, ...ilmGoalConfigs, ...amanahGoalConfigs].find(c => c.id === key);
-          if (config?.frequencyField) {
-            frequencyUpdates[config.frequencyField] = value;
-          }
-        });
-        
-        if (Object.keys(frequencyUpdates).length > 0) {
-          await supabase
-            .from('iman_tracker_goals')
-            .update({
-              ...frequencyUpdates,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('user_id', user.id);
-        }
-      }
-      
-      // Force a final score recalculation with all saved goals
-      // This ensures newly enabled goals are included in the calculation
-      // Use the latest local state which includes all changes
-      try {
-        const { calculateAllSectionScores } = await import('@/utils/imanScoreCalculator');
-        const WEIGHTS = { ibadah: 0.60, ilm: 0.25, amanah: 0.15 };
-        
-        const finalIbadah = localIbadahGoals || ibadahGoals;
-        const finalIlm = localIlmGoals || ilmGoals;
-        const finalAmanah = localAmanahGoals || amanahGoals;
-        
-        const sections = await calculateAllSectionScores(finalIbadah, finalIlm, finalAmanah, user?.id);
-        const overall = Math.round(
-          (sections.ibadah * WEIGHTS.ibadah) +
-          (sections.ilm * WEIGHTS.ilm) +
-          (sections.amanah * WEIGHTS.amanah)
-        );
-        
-        // Update scores via context (this will trigger UI update)
-        // We need to use the context's refreshScores to update the state
-        await refreshScores();
-        
-        console.log(`✅ Final recalculation after save: Ibadah=${sections.ibadah}%, Ilm=${sections.ilm}%, Amanah=${sections.amanah}%, Overall=${overall}%`);
-      } catch (scoreError) {
-        console.log('Error recalculating scores after save:', scoreError);
-        // Fallback to refreshScores
-        await refreshScores();
-      }
-      
-      Alert.alert('Success', 'Your goals have been saved! The Iman Tracker has been recalibrated.', [
-        { text: 'OK', onPress: () => router.back() }
+
+      // Show success immediately (state is already updated optimistically)
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert(t('common.success'), t('iman.goalsSaved'), [
+        { text: t('common.ok'), onPress: () => router.back() }
       ]);
+
+      // Continue with database operations in background (non-blocking)
+      (async () => {
+        try {
+          
+          // Database operations in parallel (non-critical, can happen after)
+          if (user && updatedAmanahGoals) {
+            const workoutTypesArray = Array.from(allWorkoutTypes);
+            
+            const dbPromises = [
+              supabase
+                .from('physical_wellness_goals')
+                .upsert({
+                  user_id: user.id,
+                  daily_exercise_minutes_goal: updatedAmanahGoals.dailyExerciseGoal || 0,
+                  daily_water_glasses_goal: updatedAmanahGoals.dailyWaterGoal || 0,
+                  daily_sleep_hours_goal: updatedAmanahGoals.dailySleepGoal || 0,
+                  workout_enabled: exerciseGoals.length > 0,
+                  water_enabled: (updatedAmanahGoals.dailyWaterGoal || 0) > 0,
+                  sleep_enabled: (updatedAmanahGoals.dailySleepGoal || 0) > 0,
+                  workout_type: workoutTypesArray[0] || 'general',
+                  workout_types: workoutTypesArray.length > 0 ? workoutTypesArray : ['general'],
+                  updated_at: new Date().toISOString(),
+                }),
+            ];
+            
+            if (workoutTypesArray.length > 0) {
+              dbPromises.push(saveWorkoutTypes(workoutTypesArray));
+            }
+            
+            // Save goal frequencies
+            const frequencyUpdates: any = {};
+            Object.entries(goalFrequencies).forEach(([key, value]) => {
+              const config = [...ibadahGoalConfigs, ...ilmGoalConfigs, ...amanahGoalConfigs].find(c => c.id === key);
+              if (config?.frequencyField) {
+                frequencyUpdates[config.frequencyField] = value;
+              }
+            });
+            
+            if (Object.keys(frequencyUpdates).length > 0) {
+              dbPromises.push(
+                supabase
+                  .from('iman_tracker_goals')
+                  .update({
+                    ...frequencyUpdates,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('user_id', user.id)
+              );
+            }
+            
+            // Run database operations in background (don't wait)
+            Promise.all(dbPromises).catch(err => {
+              console.log('Background database save error:', err);
+            });
+          }
+        } catch (error) {
+          console.log('Background save error:', error);
+          // Don't show error to user - they already saw success
+          // The state was updated optimistically, so UI is consistent
+        }
+      })();
+      
     } catch (error) {
       console.log('Error saving goals:', error);
       const { getErrorMessage } = require('@/utils/errorHandler');
-      Alert.alert('Error', getErrorMessage(error) || 'Failed to save goals. Please try again.');
+      Alert.alert(t('common.error'), getErrorMessage(error) || t('iman.failedToSaveGoals'));
     }
   };
 
@@ -694,7 +775,6 @@ export default function GoalsSettingsScreen() {
     const currentValue = currentGoals[config.goalField as keyof typeof currentGoals] as number;
     const isEnabled = currentValue > 0;
     const currentFreq = config.currentFrequency || config.defaultFrequency;
-    const isExerciseGoal = config.id === 'exercise' && activeSection === 'amanah';
 
     return (
       <View key={config.id} style={styles.goalItem}>
@@ -715,62 +795,6 @@ export default function GoalsSettingsScreen() {
 
         {isEnabled && (
           <View style={styles.goalControls}>
-            {/* Workout Type Selection for Exercise Goal */}
-            {isExerciseGoal && (
-              <View style={styles.workoutTypeSelectionInline}>
-                <Text style={styles.workoutTypeSelectionLabel}>Select Workout Types:</Text>
-                <Text style={styles.workoutTypeSelectionHint}>
-                  Choose the types of exercises you want to track
-                </Text>
-                <View style={styles.workoutTypesGridInline}>
-                  {WORKOUT_TYPES.map((type, index) => (
-                    <TouchableOpacity
-                      key={`workout-type-inline-${type.value}-${index}`}
-                      style={[
-                        styles.workoutTypeCardInline,
-                        selectedWorkoutTypes.includes(type.value) && styles.workoutTypeCardInlineActive,
-                      ]}
-                      onPress={() => toggleWorkoutType(type.value)}
-                      activeOpacity={0.7}
-                    >
-                      <IconSymbol
-                        ios_icon_name={type.icon.ios}
-                        android_material_icon_name={type.icon.android}
-                        size={20}
-                        color={selectedWorkoutTypes.includes(type.value) ? colors.accent : colors.textSecondary}
-                      />
-                      <Text style={[
-                        styles.workoutTypeLabelInline,
-                        selectedWorkoutTypes.includes(type.value) && styles.workoutTypeLabelInlineActive,
-                      ]}>
-                        {type.label}
-                      </Text>
-                      {selectedWorkoutTypes.includes(type.value) && (
-                        <View style={styles.checkmarkBadgeInline}>
-                          <IconSymbol
-                            ios_icon_name="checkmark"
-                            android_material_icon_name="check"
-                            size={10}
-                            color={colors.card}
-                          />
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <View style={styles.selectedTypesInfoInline}>
-                  <IconSymbol
-                    ios_icon_name="info.circle"
-                    android_material_icon_name="info"
-                    size={14}
-                    color={colors.accent}
-                  />
-                  <Text style={styles.selectedTypesTextInline}>
-                    {selectedWorkoutTypes.length} type{selectedWorkoutTypes.length !== 1 ? 's' : ''} selected
-                  </Text>
-                </View>
-              </View>
-            )}
 
             {/* Frequency Toggle */}
             <View style={styles.frequencyToggle}>
@@ -1019,15 +1043,325 @@ export default function GoalsSettingsScreen() {
         )}
 
 
+        {activeSection === 'amanah' && (
+          <View style={styles.exerciseGoalsSection}>
+            <View style={styles.exerciseGoalsHeader}>
+              <View>
+                <Text style={styles.exerciseGoalsTitle}>Exercise Goals</Text>
+                <Text style={styles.exerciseGoalsDescription}>
+                  Track your physical activity by setting goals for specific exercise types (cardio, strength, yoga, etc.). Each goal can be set for daily or weekly frequency with a target duration in minutes.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.addExerciseButton}
+                onPress={addExerciseGoal}
+                activeOpacity={0.7}
+              >
+                <IconSymbol
+                  ios_icon_name="plus.circle.fill"
+                  android_material_icon_name="add-circle"
+                  size={24}
+                  color={colors.primary}
+                />
+                <Text style={styles.addExerciseButtonText}>Add Goal</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {exerciseGoals.length === 0 ? (
+              <View style={styles.emptyExerciseGoals}>
+                <IconSymbol
+                  ios_icon_name="figure.mixed.cardio"
+                  android_material_icon_name="fitness-center"
+                  size={48}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.emptyExerciseGoalsText}>
+                  No exercise goals set yet
+                </Text>
+                <Text style={styles.emptyExerciseGoalsSubtext}>
+                  Tap "Add Goal" to create your first exercise goal
+                </Text>
+              </View>
+            ) : (
+              exerciseGoals.map((goal) => {
+                const workoutType = WORKOUT_TYPES.find(t => t.value === goal.workoutType);
+                return (
+                  <View key={goal.id} style={styles.exerciseGoalCard}>
+                    <View style={styles.exerciseGoalHeader}>
+                      <View style={styles.exerciseGoalTypeInfo}>
+                        <IconSymbol
+                          ios_icon_name={workoutType?.icon.ios || 'figure.mixed.cardio'}
+                          android_material_icon_name={workoutType?.icon.android || 'fitness-center'}
+                          size={24}
+                          color={colors.primary}
+                        />
+                        <View style={styles.exerciseGoalTypeDetails}>
+                          <Text style={styles.exerciseGoalTypeLabel}>
+                            {workoutType?.label || 'General Fitness'}
+                          </Text>
+                          <Text style={styles.exerciseGoalFrequency}>
+                            {goal.frequency === 'daily' ? 'Daily' : 'Weekly'}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.exerciseGoalActions}>
+                        <Text style={styles.exerciseGoalAmount}>
+                          {goal.amount} min
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => editExerciseGoal(goal)}
+                          style={styles.editExerciseButton}
+                          activeOpacity={0.7}
+                        >
+                          <IconSymbol
+                            ios_icon_name="pencil"
+                            android_material_icon_name="edit"
+                            size={18}
+                            color={colors.textSecondary}
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => removeExerciseGoal(goal.id)}
+                          style={styles.removeExerciseButton}
+                          activeOpacity={0.7}
+                        >
+                          <IconSymbol
+                            ios_icon_name="trash"
+                            android_material_icon_name="delete"
+                            size={18}
+                            color={colors.error || '#EF4444'}
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </View>
+        )}
+
         <View style={styles.goalsSection}>
           <Text style={styles.goalsSectionTitle}>
-            {activeSection === 'ibadah' ? 'Optional Worship Goals' : 'Goals'}
+            {activeSection === 'ibadah' ? 'Optional Worship Goals' : activeSection === 'amanah' ? 'Wellness Goals' : 'Goals'}
           </Text>
           {getCurrentConfigs().map(config => renderGoalItem(config))}
         </View>
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      {/* Add/Edit Exercise Goal Modal */}
+      <Modal
+        visible={showAddExerciseModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowAddExerciseModal(false);
+          setEditingExerciseGoal(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {editingExerciseGoal?.id.startsWith('new-') ? 'Add Exercise Goal' : 'Edit Exercise Goal'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowAddExerciseModal(false);
+                  setEditingExerciseGoal(null);
+                }}
+                style={styles.modalCloseButton}
+              >
+                <IconSymbol
+                  ios_icon_name="xmark"
+                  android_material_icon_name="close"
+                  size={24}
+                  color={colors.text}
+                />
+              </TouchableOpacity>
+            </View>
+
+            {editingExerciseGoal && (
+              <ScrollView style={styles.modalBody}>
+                {/* Workout Type Selection */}
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionLabel}>Workout Type</Text>
+                  <View style={styles.modalWorkoutTypesGrid}>
+                    {WORKOUT_TYPES.map((type) => {
+                      const isSelected = editingExerciseGoal.workoutType === type.value;
+                      const isDisabled = exerciseGoals.some(
+                        g => g.workoutType === type.value && 
+                             g.frequency === editingExerciseGoal.frequency &&
+                             g.id !== editingExerciseGoal.id
+                      );
+                      return (
+                        <TouchableOpacity
+                          key={type.value}
+                          style={[
+                            styles.modalWorkoutTypeCard,
+                            isSelected && styles.modalWorkoutTypeCardActive,
+                            isDisabled && styles.modalWorkoutTypeCardDisabled,
+                          ]}
+                          onPress={() => {
+                            if (!isDisabled) {
+                              setEditingExerciseGoal({ ...editingExerciseGoal, workoutType: type.value });
+                            }
+                          }}
+                          disabled={isDisabled}
+                          activeOpacity={0.7}
+                        >
+                          <IconSymbol
+                            ios_icon_name={type.icon.ios}
+                            android_material_icon_name={type.icon.android}
+                            size={24}
+                            color={isSelected ? colors.primary : (isDisabled ? colors.border : colors.textSecondary)}
+                          />
+                          <Text style={[
+                            styles.modalWorkoutTypeLabel,
+                            isSelected && styles.modalWorkoutTypeLabelActive,
+                            isDisabled && styles.modalWorkoutTypeLabelDisabled,
+                          ]}>
+                            {type.label}
+                          </Text>
+                          {isDisabled && (
+                            <Text style={styles.modalWorkoutTypeDisabledText}>
+                              Already set
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {/* Frequency Selection */}
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionLabel}>Frequency</Text>
+                  <View style={styles.modalFrequencyButtons}>
+                    <TouchableOpacity
+                      style={[
+                        styles.modalFrequencyButton,
+                        editingExerciseGoal.frequency === 'daily' && styles.modalFrequencyButtonActive,
+                      ]}
+                      onPress={() => {
+                        // Check if this type already has a daily goal
+                        const hasDaily = exerciseGoals.some(
+                          g => g.workoutType === editingExerciseGoal.workoutType && 
+                               g.frequency === 'daily' &&
+                               g.id !== editingExerciseGoal.id
+                        );
+                        if (!hasDaily) {
+                          setEditingExerciseGoal({ ...editingExerciseGoal, frequency: 'daily' });
+                        } else {
+                          Alert.alert('Already Set', 'This workout type already has a daily goal.');
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[
+                        styles.modalFrequencyButtonText,
+                        editingExerciseGoal.frequency === 'daily' && styles.modalFrequencyButtonTextActive,
+                      ]}>
+                        Daily
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.modalFrequencyButton,
+                        editingExerciseGoal.frequency === 'weekly' && styles.modalFrequencyButtonActive,
+                      ]}
+                      onPress={() => {
+                        // Check if this type already has a weekly goal
+                        const hasWeekly = exerciseGoals.some(
+                          g => g.workoutType === editingExerciseGoal.workoutType && 
+                               g.frequency === 'weekly' &&
+                               g.id !== editingExerciseGoal.id
+                        );
+                        if (!hasWeekly) {
+                          setEditingExerciseGoal({ ...editingExerciseGoal, frequency: 'weekly' });
+                        } else {
+                          Alert.alert('Already Set', 'This workout type already has a weekly goal.');
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[
+                        styles.modalFrequencyButtonText,
+                        editingExerciseGoal.frequency === 'weekly' && styles.modalFrequencyButtonTextActive,
+                      ]}>
+                        Weekly
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Amount Input */}
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionLabel}>Duration (minutes)</Text>
+                  <View style={styles.modalAmountControls}>
+                    <TouchableOpacity
+                      style={styles.modalAmountButton}
+                      onPress={() => {
+                        if (editingExerciseGoal.amount > 5) {
+                          setEditingExerciseGoal({ ...editingExerciseGoal, amount: editingExerciseGoal.amount - 5 });
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <IconSymbol
+                        ios_icon_name="minus"
+                        android_material_icon_name="remove"
+                        size={20}
+                        color={colors.text}
+                      />
+                    </TouchableOpacity>
+                    <TextInput
+                      style={styles.modalAmountInput}
+                      value={editingExerciseGoal.amount.toString()}
+                      onChangeText={(text) => {
+                        const num = parseInt(text) || 0;
+                        if (num >= 0 && num <= 300) {
+                          setEditingExerciseGoal({ ...editingExerciseGoal, amount: num });
+                        }
+                      }}
+                      keyboardType="numeric"
+                      selectTextOnFocus
+                    />
+                    <TouchableOpacity
+                      style={styles.modalAmountButton}
+                      onPress={() => {
+                        if (editingExerciseGoal.amount < 300) {
+                          setEditingExerciseGoal({ ...editingExerciseGoal, amount: editingExerciseGoal.amount + 5 });
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <IconSymbol
+                        ios_icon_name="plus"
+                        android_material_icon_name="add"
+                        size={20}
+                        color={colors.text}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.modalAmountHint}>Range: 5 - 300 minutes</Text>
+                </View>
+
+                {/* Save Button */}
+                <TouchableOpacity
+                  style={styles.modalSaveButton}
+                  onPress={saveExerciseGoal}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.modalSaveButtonText}>Save Goal</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1447,5 +1781,260 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontWeight: '600',
     fontSize: 11,
+  },
+  exerciseGoalsSection: {
+    marginBottom: spacing.xl,
+  },
+  exerciseGoalsHeader: {
+    marginBottom: spacing.md,
+  },
+  exerciseGoalsTitle: {
+    ...typography.h4,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  exerciseGoalsDescription: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
+  },
+  addExerciseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.primary + '20',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  addExerciseButtonText: {
+    ...typography.bodyBold,
+    color: colors.primary,
+  },
+  emptyExerciseGoals: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+  },
+  emptyExerciseGoalsText: {
+    ...typography.body,
+    color: colors.text,
+    marginTop: spacing.md,
+    fontWeight: '600',
+  },
+  emptyExerciseGoalsSubtext: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  exerciseGoalCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.small,
+  },
+  exerciseGoalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  exerciseGoalTypeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  exerciseGoalTypeDetails: {
+    flex: 1,
+  },
+  exerciseGoalTypeLabel: {
+    ...typography.bodyBold,
+    color: colors.text,
+  },
+  exerciseGoalFrequency: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  exerciseGoalActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  exerciseGoalAmount: {
+    ...typography.h3,
+    color: colors.primary,
+    fontWeight: '700',
+    marginRight: spacing.xs,
+  },
+  editExerciseButton: {
+    padding: spacing.xs,
+  },
+  removeExerciseButton: {
+    padding: spacing.xs,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    maxHeight: '80%',
+    paddingBottom: spacing.xl,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalTitle: {
+    ...typography.h3,
+    color: colors.text,
+    flex: 1,
+  },
+  modalCloseButton: {
+    padding: spacing.xs,
+  },
+  modalBody: {
+    padding: spacing.lg,
+  },
+  modalSection: {
+    marginBottom: spacing.lg,
+  },
+  modalSectionLabel: {
+    ...typography.bodyBold,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  modalWorkoutTypesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  modalWorkoutTypeCard: {
+    width: '31%',
+    backgroundColor: colors.highlight,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  modalWorkoutTypeCardActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '20',
+  },
+  modalWorkoutTypeCardDisabled: {
+    opacity: 0.5,
+    borderColor: colors.border,
+  },
+  modalWorkoutTypeLabel: {
+    ...typography.small,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    textAlign: 'center',
+  },
+  modalWorkoutTypeLabelActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  modalWorkoutTypeLabelDisabled: {
+    color: colors.border,
+  },
+  modalWorkoutTypeDisabledText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 10,
+    marginTop: 2,
+  },
+  modalFrequencyButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  modalFrequencyButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.highlight,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  modalFrequencyButtonActive: {
+    backgroundColor: colors.primary + '20',
+    borderColor: colors.primary,
+  },
+  modalFrequencyButtonText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  modalFrequencyButtonTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  modalAmountControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  modalAmountButton: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.highlight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modalAmountInput: {
+    ...typography.h2,
+    color: colors.text,
+    fontWeight: '700',
+    textAlign: 'center',
+    minWidth: 80,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modalAmountHint: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  modalSaveButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  modalSaveButtonText: {
+    ...typography.bodyBold,
+    color: colors.card,
   },
 });

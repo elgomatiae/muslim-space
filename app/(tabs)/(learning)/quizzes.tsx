@@ -50,12 +50,16 @@ export default function QuizzesScreen() {
           setLoading(false);
           return;
         }
+        // For other errors, still set empty array to prevent UI issues
+        setCategories([]);
+        setLoading(false);
         return;
       }
 
       setCategories(data || []);
     } catch (error) {
       console.error('Error loading quizzes:', error);
+      setCategories([]);
     } finally {
       setLoading(false);
     }
@@ -95,6 +99,8 @@ export default function QuizzesScreen() {
           setStats({});
           return;
         }
+        // For other errors, use empty stats to prevent UI issues
+        setStats({});
         return;
       }
 

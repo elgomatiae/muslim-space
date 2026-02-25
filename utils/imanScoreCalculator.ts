@@ -63,8 +63,6 @@ export interface IbadahGoals {
 export interface IlmGoals {
   weeklyLecturesGoal: number;
   weeklyLecturesCompleted: number;
-  weeklyRecitationsGoal: number;
-  weeklyRecitationsCompleted: number;
   weeklyQuizzesGoal: number;
   weeklyQuizzesCompleted: number;
   weeklyReflectionGoal: number;
@@ -265,12 +263,6 @@ export function calculateIlmScore(goals: IlmGoals): number {
     });
   }
 
-  if (goals.weeklyRecitationsGoal > 0) {
-    items.push({
-      progress: calculateProgress(goals.weeklyRecitationsCompleted, goals.weeklyRecitationsGoal),
-      weight: 1,
-    });
-  }
 
   if (goals.weeklyQuizzesGoal > 0) {
     items.push({
@@ -506,7 +498,6 @@ export async function resetWeeklyGoals(userId?: string | null): Promise<void> {
     ibadahGoals.fastingWeeklyCompleted = 0;
     
     ilmGoals.weeklyLecturesCompleted = 0;
-    ilmGoals.weeklyRecitationsCompleted = 0;
     ilmGoals.weeklyQuizzesCompleted = 0;
     ilmGoals.weeklyReflectionCompleted = 0;
     
@@ -647,10 +638,6 @@ export async function loadIlmGoals(userId?: string | null): Promise<IlmGoals> {
     const saved = await AsyncStorage.getItem(storageKey);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (!Object.prototype.hasOwnProperty.call(parsed, 'weeklyRecitationsGoal')) {
-        parsed.weeklyRecitationsGoal = 0;
-        parsed.weeklyRecitationsCompleted = 0;
-      }
       return parsed;
     }
   } catch (error) {
@@ -660,8 +647,6 @@ export async function loadIlmGoals(userId?: string | null): Promise<IlmGoals> {
   return {
     weeklyLecturesGoal: 0,
     weeklyLecturesCompleted: 0,
-    weeklyRecitationsGoal: 0,
-    weeklyRecitationsCompleted: 0,
     weeklyQuizzesGoal: 0,
     weeklyQuizzesCompleted: 0,
     weeklyReflectionGoal: 0,

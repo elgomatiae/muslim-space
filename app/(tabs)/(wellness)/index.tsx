@@ -7,6 +7,7 @@ import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from 'expo-haptics';
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
+import { useTranslation } from "@/contexts/I18nContext";
 import { router } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
@@ -96,6 +97,7 @@ const WellnessCard: React.FC<WellnessCardProps> = ({ title, subtitle, icon, andr
 };
 
 export default function WellnessScreen() {
+  const { t } = useTranslation();
   const { amanahGoals, sectionScores } = useImanTracker();
   const [activeTab, setActiveTab] = useState<WellnessTab>('mental');
   const tabScaleAnim = useRef(new Animated.Value(1)).current;
@@ -212,32 +214,32 @@ export default function WellnessScreen() {
 
   const mentalHealthCards = [
     {
-      title: 'Journal',
-      subtitle: 'Express your thoughts',
+      title: t('wellness.journal'),
+      subtitle: t('wellness.journalSubtitle'),
       icon: 'book.fill',
       androidIcon: 'menu-book',
       gradient: colors.gradientPrimary,
       route: '/(tabs)/(wellness)/journal',
     },
     {
-      title: 'Meditation',
-      subtitle: 'Find inner peace',
+      title: t('wellness.meditation'),
+      subtitle: t('wellness.meditationSubtitle'),
       icon: 'leaf.fill',
       androidIcon: 'spa',
       gradient: colors.gradientTeal,
       route: '/(tabs)/(wellness)/meditation',
     },
     {
-      title: 'Healing Duas',
-      subtitle: 'Spiritual comfort',
+      title: t('wellness.healingDuas'),
+      subtitle: t('wellness.healingDuasSubtitle'),
       icon: 'hands.sparkles.fill',
       androidIcon: 'self-improvement',
       gradient: colors.gradientPurple,
       route: '/(tabs)/(wellness)/mental-duas',
     },
     {
-      title: 'Support',
-      subtitle: 'Get guidance',
+      title: t('wellness.support'),
+      subtitle: t('wellness.supportSubtitle'),
       icon: 'heart.fill',
       androidIcon: 'favorite',
       gradient: colors.gradientAccent,
@@ -247,32 +249,32 @@ export default function WellnessScreen() {
 
   const physicalHealthCards = [
     {
-      title: 'Activity',
-      subtitle: 'Log workouts',
+      title: t('wellness.activity'),
+      subtitle: t('wellness.activitySubtitle'),
       icon: 'figure.mixed.cardio',
       androidIcon: 'fitness-center',
       gradient: colors.gradientWarning,
       route: '/(tabs)/(wellness)/activity-tracker',
     },
     {
-      title: 'Sleep',
-      subtitle: 'Monitor rest',
+      title: t('wellness.sleep'),
+      subtitle: t('wellness.sleepSubtitle'),
       icon: 'moon.stars.fill',
       androidIcon: 'bedtime',
       gradient: colors.gradientSecondary,
       route: '/(tabs)/(wellness)/sleep-tracker',
     },
     {
-      title: 'Goals',
-      subtitle: 'Set & achieve',
+      title: t('wellness.goals'),
+      subtitle: t('wellness.goalsSubtitle'),
       icon: 'target',
       androidIcon: 'track-changes',
       gradient: colors.gradientInfo,
       route: '/(tabs)/(wellness)/physical-goals',
     },
     {
-      title: 'History',
-      subtitle: 'View progress',
+      title: t('wellness.history'),
+      subtitle: t('wellness.historySubtitle'),
       icon: 'chart.line.uptrend.xyaxis',
       androidIcon: 'trending-up',
       gradient: colors.gradientPurple,

@@ -115,6 +115,19 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       setAmanahGoals(amanah);
 
       await refreshScores();
+      
+      // Schedule daily and weekly goal reminders after loading goals (non-blocking)
+      const { scheduleDailyGoalReminders, scheduleWeeklyGoalReminders } = await import('@/utils/notificationService');
+      scheduleDailyGoalReminders(user.id).catch(err => {
+        if (__DEV__) {
+          console.log('Error scheduling daily goal reminders after load:', err);
+        }
+      });
+      scheduleWeeklyGoalReminders(user.id).catch(err => {
+        if (__DEV__) {
+          console.log('Error scheduling weekly goal reminders after load:', err);
+        }
+      });
     } catch (err) {
       setError('Failed to load goals. Please try again.');
     } finally {
@@ -134,9 +147,20 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
         // App has come to the foreground - check if it's a new day
         console.log('📱 App came to foreground, checking for daily resets...');
         checkAndHandleResets(user.id)
-          .then(() => {
+          .then(async () => {
             // Reload goals if reset happened
-            loadAllGoals();
+            await loadAllGoals();
+            // Schedule daily and weekly goal reminders after reset
+            try {
+              const { scheduleDailyGoalReminders, scheduleWeeklyGoalReminders } = await import('@/utils/notificationService');
+              await scheduleDailyGoalReminders(user.id);
+              await scheduleWeeklyGoalReminders(user.id);
+            } catch (err) {
+              // Silent failure - notifications are non-critical
+              if (__DEV__) {
+                console.log('Error scheduling goal reminders:', err);
+              }
+            }
           })
           .catch(err => {
             console.error('Error checking resets on app foreground:', err);
@@ -154,9 +178,23 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
   useFocusEffect(
     useCallback(() => {
       if (user?.id) {
-        checkAndHandleResets(user.id).catch(err => {
-          console.error('Error checking resets on focus:', err);
-        });
+        checkAndHandleResets(user.id)
+          .then(async () => {
+            // Schedule daily and weekly goal reminders after checking resets
+            try {
+              const { scheduleDailyGoalReminders, scheduleWeeklyGoalReminders } = await import('@/utils/notificationService');
+              await scheduleDailyGoalReminders(user.id);
+              await scheduleWeeklyGoalReminders(user.id);
+            } catch (err) {
+              // Silent failure - notifications are non-critical
+              if (__DEV__) {
+                console.log('Error scheduling goal reminders:', err);
+              }
+            }
+          })
+          .catch(err => {
+            console.error('Error checking resets on focus:', err);
+          });
       }
     }, [user?.id])
   );
@@ -186,9 +224,23 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
     loadAllGoals();
     
     // Check for daily/weekly resets on initial load
-    checkAndHandleResets(user.id).catch(err => {
-      console.error('Error checking resets:', err);
-    });
+    checkAndHandleResets(user.id)
+      .then(async () => {
+        // Schedule daily and weekly goal reminders after checking resets
+        try {
+          const { scheduleDailyGoalReminders, scheduleWeeklyGoalReminders } = await import('@/utils/notificationService');
+          await scheduleDailyGoalReminders(user.id);
+          await scheduleWeeklyGoalReminders(user.id);
+        } catch (err) {
+          // Silent failure - notifications are non-critical
+          if (__DEV__) {
+            console.log('Error scheduling goal reminders:', err);
+          }
+        }
+      })
+      .catch(err => {
+        console.error('Error checking resets:', err);
+      });
   }, [user?.id, loadAllGoals]);
 
   const updateIbadahGoals = useCallback(async (goals: Partial<IbadahGoals>) => {
@@ -245,6 +297,26 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       checkAndUnlockAchievements(user.id).catch(err => {
         if (__DEV__) {
           console.log('Error checking achievements after Ibadah update:', err);
+        }
+      });
+      
+      // Reschedule daily and weekly goal reminders after goal update (non-blocking)
+      // Cancel existing notifications first to force rescheduling
+      const { scheduleDailyGoalReminders, scheduleWeeklyGoalReminders, cancelDailyGoalNotifications, cancelWeeklyGoalNotifications } = await import('@/utils/notificationService');
+      await cancelDailyGoalNotifications().catch(() => {});
+      await cancelWeeklyGoalNotifications().catch(() => {});
+      // Clear the check keys to allow rescheduling
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      await AsyncStorage.removeItem('@last_daily_goal_check_date').catch(() => {});
+      await AsyncStorage.removeItem('@last_weekly_goal_check_date').catch(() => {});
+      scheduleDailyGoalReminders(user.id).catch(err => {
+        if (__DEV__) {
+          console.log('Error rescheduling daily goal reminders after Ibadah update:', err);
+        }
+      });
+      scheduleWeeklyGoalReminders(user.id).catch(err => {
+        if (__DEV__) {
+          console.log('Error rescheduling weekly goal reminders after Ibadah update:', err);
         }
       });
       
@@ -315,6 +387,26 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
         }
       });
       
+      // Reschedule daily and weekly goal reminders after goal update (non-blocking)
+      // Cancel existing notifications first to force rescheduling
+      const { scheduleDailyGoalReminders, scheduleWeeklyGoalReminders, cancelDailyGoalNotifications, cancelWeeklyGoalNotifications } = await import('@/utils/notificationService');
+      await cancelDailyGoalNotifications().catch(() => {});
+      await cancelWeeklyGoalNotifications().catch(() => {});
+      // Clear the check keys to allow rescheduling
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      await AsyncStorage.removeItem('@last_daily_goal_check_date').catch(() => {});
+      await AsyncStorage.removeItem('@last_weekly_goal_check_date').catch(() => {});
+      scheduleDailyGoalReminders(user.id).catch(err => {
+        if (__DEV__) {
+          console.log('Error rescheduling daily goal reminders after Ilm update:', err);
+        }
+      });
+      scheduleWeeklyGoalReminders(user.id).catch(err => {
+        if (__DEV__) {
+          console.log('Error rescheduling weekly goal reminders after Ilm update:', err);
+        }
+      });
+      
       console.log('✅ Ilm goals updated successfully');
     } catch (err) {
       console.error('❌ Error updating Ilm goals:', err);
@@ -379,6 +471,26 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       checkAndUnlockAchievements(user.id).catch(err => {
         if (__DEV__) {
           console.log('Error checking achievements after Amanah update:', err);
+        }
+      });
+      
+      // Reschedule daily and weekly goal reminders after goal update (non-blocking)
+      // Cancel existing notifications first to force rescheduling
+      const { scheduleDailyGoalReminders, scheduleWeeklyGoalReminders, cancelDailyGoalNotifications, cancelWeeklyGoalNotifications } = await import('@/utils/notificationService');
+      await cancelDailyGoalNotifications().catch(() => {});
+      await cancelWeeklyGoalNotifications().catch(() => {});
+      // Clear the check keys to allow rescheduling
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      await AsyncStorage.removeItem('@last_daily_goal_check_date').catch(() => {});
+      await AsyncStorage.removeItem('@last_weekly_goal_check_date').catch(() => {});
+      scheduleDailyGoalReminders(user.id).catch(err => {
+        if (__DEV__) {
+          console.log('Error rescheduling daily goal reminders after Amanah update:', err);
+        }
+      });
+      scheduleWeeklyGoalReminders(user.id).catch(err => {
+        if (__DEV__) {
+          console.log('Error rescheduling weekly goal reminders after Amanah update:', err);
         }
       });
       

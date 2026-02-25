@@ -7,6 +7,7 @@ import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTranslation } from "@/contexts/I18nContext";
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -36,8 +37,15 @@ const DHIKR_PHRASES = [
 ];
 
 export default function MeditationScreen() {
+  const { t } = useTranslation();
   const { user } = useAuth();
-  const { dhikrGoals, updateDhikrGoals, refreshData } = useImanTracker();
+  const { 
+    ibadahGoals, 
+    updateIbadahGoals, 
+    amanahGoals, 
+    updateAmanahGoals, 
+    refreshScores 
+  } = useImanTracker();
   const [sessions, setSessions] = useState<MeditationSession[]>([]);
   const [todayCount, setTodayCount] = useState(0);
   const [dailyGoal, setDailyGoal] = useState(1);
@@ -251,11 +259,11 @@ export default function MeditationScreen() {
   const handleTimerComplete = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     Alert.alert(
-      'Meditation Complete! 🎉',
-      'Great job! Your session has been completed.',
+      t('meditation.complete'),
+      t('meditation.sessionCompleted'),
       [
         {
-          text: 'Save Session',
+          text: t('meditation.saveSession'),
           onPress: () => handleCompletePractice(),
         },
       ]
@@ -296,11 +304,11 @@ export default function MeditationScreen() {
         // Completed all phrases
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert(
-          'Dhikr Complete! 🎉',
-          'MashaAllah! You have completed all 100 dhikr.',
+          t('meditation.dhikrComplete'),
+          t('meditation.dhikrCompleteMessage'),
           [
             {
-              text: 'Save Session',
+              text: t('meditation.saveSession'),
               onPress: () => handleCompletePractice(),
             },
           ]
@@ -315,6 +323,7 @@ export default function MeditationScreen() {
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+      // Save session (critical - wait for this)
       const { error: sessionError } = await supabase
         .from('meditation_sessions')
         .insert({
@@ -353,54 +362,7 @@ export default function MeditationScreen() {
         }
       }
 
-      // Directly log meditation to activity_log for achievements
-      if (user) {
-        try {
-          const { logActivity } = await import('@/utils/activityLogger');
-          await logActivity({
-            userId: user.id,
-            activityType: 'meditation_session',
-            activityCategory: 'amanah',
-            activityTitle: 'Meditation Session Completed',
-            activityDescription: `Completed ${selectedPractice.duration} minute(s) ${selectedPractice.type} meditation`,
-            activityValue: 1, // 1 session
-            pointsEarned: 8,
-          });
-          
-          // Also trigger achievement check
-          const { checkAndUnlockAchievements } = await import('@/utils/achievementService');
-          await checkAndUnlockAchievements(user.id);
-        } catch (error) {
-          console.log('Error logging meditation activity:', error);
-        }
-      }
-      
-
-      // Update Amanah goals - meditation counter
-      if (amanahGoals) {
-        const updatedGoals = {
-          ...amanahGoals,
-          weeklyMeditationCompleted: Math.min(
-            amanahGoals.weeklyMeditationCompleted + 1,
-            amanahGoals.weeklyMeditationGoal
-          ),
-        };
-        await updateAmanahGoals(updatedGoals);
-      }
-
-      if (selectedPractice.type === 'dhikr' && dhikrGoals) {
-        const totalDhikr = DHIKR_PHRASES.reduce((sum, phrase) => sum + phrase.count, 0);
-        const updatedDhikrGoals = {
-          ...dhikrGoals,
-          dailyCompleted: dhikrGoals.dailyCompleted + totalDhikr,
-          weeklyCompleted: dhikrGoals.weeklyCompleted + totalDhikr,
-        };
-        await updateDhikrGoals(updatedDhikrGoals);
-      }
-
-      await loadMeditationData();
-      await refreshData();
-
+      // Close modal immediately for better UX
       setShowSessionModal(false);
       setSelectedPractice(null);
       setSessionNotes('');
@@ -413,15 +375,94 @@ export default function MeditationScreen() {
         setTimerInterval(null);
       }
 
+      // Show success message immediately
       Alert.alert(
-        'Great Job! 🎉',
-        `You completed ${selectedPractice.title}. Your Iman Tracker has been updated!`,
-        [{ text: 'OK' }]
+        t('meditation.greatJob'),
+        t('meditation.practiceCompleted', { title: selectedPractice.title }),
+        [{ text: t('common.ok') }]
       );
+
+      // Run all background operations in parallel (non-blocking)
+      const backgroundTasks: Promise<void>[] = [
+        // Log activity and check achievements (non-critical)
+        (async () => {
+          try {
+            const { logActivity } = await import('@/utils/activityLogger');
+            await logActivity({
+              userId: user.id,
+              activityType: 'meditation_session',
+              activityCategory: 'amanah',
+              activityTitle: 'Meditation Session Completed',
+              activityDescription: `Completed ${selectedPractice.duration} minute(s) ${selectedPractice.type} meditation`,
+              activityValue: 1,
+              pointsEarned: 8,
+            });
+            
+            const { checkAndUnlockAchievements } = await import('@/utils/achievementService');
+            await checkAndUnlockAchievements(user.id);
+          } catch (error) {
+            console.log('Error logging meditation activity:', error);
+          }
+        })(),
+
+        // Update Amanah goals (non-critical - can happen in background)
+        (async () => {
+          try {
+            if (updateAmanahGoals && typeof updateAmanahGoals === 'function') {
+              const currentCompleted = (amanahGoals?.weeklyMeditationCompleted ?? 0);
+              const currentGoal = (amanahGoals?.weeklyMeditationGoal ?? 0);
+              const updatedGoals = {
+                ...(amanahGoals || {}),
+                weeklyMeditationCompleted: Math.min(currentCompleted + 1, currentGoal),
+              };
+              await updateAmanahGoals(updatedGoals);
+            }
+          } catch (goalError) {
+            console.error('Error updating amanah goals:', goalError);
+          }
+        })(),
+
+        // Reload data and refresh scores (non-critical - can happen in background)
+        (async () => {
+          try {
+            await loadMeditationData();
+            await refreshScores();
+          } catch (error) {
+            console.log('Error refreshing data:', error);
+          }
+        })(),
+      ];
+
+      // Add dhikr goal update if needed
+      if (selectedPractice.type === 'dhikr') {
+        backgroundTasks.push(
+          (async () => {
+            try {
+              if (ibadahGoals && updateIbadahGoals && typeof updateIbadahGoals === 'function') {
+                const totalDhikr = DHIKR_PHRASES.reduce((sum, phrase) => sum + phrase.count, 0);
+                const updatedIbadahGoals = {
+                  ...ibadahGoals,
+                  dhikrDailyCompleted: (ibadahGoals.dhikrDailyCompleted || 0) + totalDhikr,
+                  dhikrWeeklyCompleted: (ibadahGoals.dhikrWeeklyCompleted || 0) + totalDhikr,
+                };
+                await updateIbadahGoals(updatedIbadahGoals);
+              }
+            } catch (dhikrError) {
+              console.error('Error updating dhikr goals:', dhikrError);
+            }
+          })()
+        );
+      }
+
+      // Run all background tasks in parallel (don't await - let them run in background)
+      Promise.all(backgroundTasks).catch(err => {
+        console.log('Error in background operations:', err);
+      });
+
     } catch (error) {
       console.error('Error completing practice:', error);
       const { getErrorMessage } = require('@/utils/errorHandler');
-      Alert.alert('Error', getErrorMessage(error) || 'Failed to complete meditation session. Please try again.');
+      Alert.alert(t('common.error'), getErrorMessage(error) || t('meditation.failedToCompleteSession'));
     }
   };
 
@@ -754,8 +795,10 @@ export default function MeditationScreen() {
                   ) : (
                     <View style={styles.breathingContainer}>
                       <View style={styles.timerDisplay}>
-                        <Text style={styles.timerText}>{formatTime(timeRemaining)}</Text>
-                        <Text style={styles.timerLabel}>
+                        <Text style={styles.timerText} numberOfLines={1}>
+                          {formatTime(timeRemaining)}
+                        </Text>
+                        <Text style={styles.timerLabel} numberOfLines={1}>
                           {isTimerActive ? getBreathingPhase() : timeRemaining === 0 ? 'Complete' : 'Ready'}
                         </Text>
                       </View>
@@ -881,7 +924,7 @@ export default function MeditationScreen() {
                     <Text style={styles.notesLabel}>Notes (optional)</Text>
                     <TextInput
                       style={styles.notesInput}
-                      placeholder="How did you feel during this practice?"
+                      placeholder={t('meditation.howDidYouFeel')}
                       placeholderTextColor={colors.textSecondary}
                       value={sessionNotes}
                       onChangeText={setSessionNotes}
@@ -1154,37 +1197,49 @@ const styles = StyleSheet.create({
   },
   sessionContent: {
     padding: spacing.xl,
+    paddingBottom: spacing.xxl,
   },
   breathingContainer: {
     alignItems: 'center',
     marginBottom: spacing.xxl,
+    width: '100%',
+    paddingHorizontal: spacing.md,
   },
   timerDisplay: {
     alignItems: 'center',
     marginBottom: spacing.xxl,
+    paddingHorizontal: spacing.md,
+    width: '100%',
   },
   timerText: {
-    ...typography.h1,
-    fontSize: 48,
+    fontSize: 64,
+    fontWeight: '700',
     color: colors.text,
-    fontWeight: 'bold',
+    letterSpacing: 2,
+    textAlign: 'center',
+    minWidth: 140,
   },
   timerLabel: {
-    ...typography.h4,
+    ...typography.bodyBold,
     color: colors.textSecondary,
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
+    textAlign: 'center',
+    fontSize: 16,
   },
   breathingCircleContainer: {
-    width: 250,
-    height: 250,
+    width: '100%',
+    maxWidth: 280,
+    aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.xxl,
+    paddingHorizontal: spacing.md,
   },
   breathingCircle: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
+    width: '85%',
+    maxWidth: 220,
+    aspectRatio: 1,
+    borderRadius: 110,
     overflow: 'hidden',
     ...shadows.large,
   },
@@ -1196,11 +1251,13 @@ const styles = StyleSheet.create({
   },
   progressRing: {
     width: '100%',
+    maxWidth: 300,
     height: 8,
     backgroundColor: colors.highlight,
     borderRadius: borderRadius.sm,
     overflow: 'hidden',
     marginBottom: spacing.xxl,
+    alignSelf: 'center',
   },
   progressRingFill: {
     height: '100%',
@@ -1211,6 +1268,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginBottom: spacing.xxl,
     width: '100%',
+    paddingHorizontal: spacing.xs,
   },
   controlButton: {
     flex: 1,
@@ -1235,7 +1293,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.xxl,
     lineHeight: 24,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
   },
   dhikrContainer: {
     alignItems: 'center',

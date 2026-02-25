@@ -7,12 +7,14 @@ import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTranslation } from "@/contexts/I18nContext";
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
 import Svg, { Circle, Defs, RadialGradient as SvgRadialGradient, Stop } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { supabase } from "@/lib/supabase";
 
 export default function SleepTrackerScreen() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { amanahGoals, updateAmanahGoals, refreshData } = useImanTracker();
   const [refreshing, setRefreshing] = useState(false);
@@ -130,14 +132,14 @@ export default function SleepTrackerScreen() {
     const hours = parseFloat(customHours);
     
     if (isNaN(hours) || hours <= 0 || hours > 24) {
-      Alert.alert('Error', 'Please enter a valid number of hours (0-24).');
+      Alert.alert(t('common.error'), t('wellness.invalidSleepHours'));
       return;
     }
     
     await logSleep(hours);
     setShowCustomModal(false);
     setCustomHours('');
-    Alert.alert('Success', `Logged ${hours} hours of sleep!`);
+    Alert.alert(t('common.success'), t('wellness.loggedSleepHours', { hours }));
   };
 
   const updateGoalsProgress = async (hours: number) => {
@@ -157,7 +159,7 @@ export default function SleepTrackerScreen() {
     const newGoal = parseFloat(tempGoal) || 7;
     
     if (newGoal < 1 || newGoal > 12) {
-      Alert.alert('Error', 'Please enter a goal between 1 and 12 hours.');
+      Alert.alert(t('common.error'), t('wellness.invalidSleepGoal'));
       return;
     }
     
@@ -169,7 +171,7 @@ export default function SleepTrackerScreen() {
     });
     
     setShowGoalsModal(false);
-    Alert.alert('Success', 'Your sleep goal has been updated!');
+    Alert.alert(t('common.success'), t('wellness.sleepGoalUpdated'));
   };
 
   // Ring configuration

@@ -7,9 +7,11 @@ import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
+import { useTranslation } from "@/contexts/I18nContext";
 import { loadQuranGoals, saveQuranGoals, type QuranGoals } from "@/utils/imanScoreCalculator";
 
 export default function QuranGoalsScreen() {
+  const { t } = useTranslation();
   const [goals, setGoals] = useState<QuranGoals>({
     dailyPagesGoal: 2,
     dailyPagesCompleted: 0,
@@ -41,17 +43,17 @@ export default function QuranGoalsScreen() {
     const memorizationGoal = parseInt(memorizationInput) || 0;
 
     if (pagesGoal < 0 || pagesGoal > 604) {
-      Alert.alert('Invalid Input', 'Daily pages must be between 0 and 604.');
+      Alert.alert(t('common.error'), t('iman.invalidDailyPages'));
       return;
     }
 
     if (versesGoal < 0 || versesGoal > 1000) {
-      Alert.alert('Invalid Input', 'Daily verses must be between 0 and 1000.');
+      Alert.alert(t('common.error'), t('iman.invalidDailyVerses'));
       return;
     }
 
     if (memorizationGoal < 0 || memorizationGoal > 100) {
-      Alert.alert('Invalid Input', 'Weekly memorization must be between 0 and 100 verses.');
+      Alert.alert(t('common.error'), t('iman.invalidWeeklyMemorization'));
       return;
     }
 

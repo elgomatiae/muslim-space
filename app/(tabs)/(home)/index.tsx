@@ -7,6 +7,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle } from 'react-native-svg';
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTranslation } from "@/contexts/I18nContext";
 import PrayerTimesWidget from '@/components/PrayerTimesWidget';
 
 import { getDailyVerse, getDailyHadith, type DailyVerse, type DailyHadith } from '@/services/DailyContentService';
@@ -20,6 +21,7 @@ import AllStreaksDisplay from '@/components/iman/AllStreaksDisplay';
 
 
 export default function HomeScreen() {
+  const { t, locale } = useTranslation();
   const { user } = useAuth();
   const { 
     ibadahGoals,
@@ -45,8 +47,8 @@ export default function HomeScreen() {
     setContentLoading(true);
     try {
       const [verse, hadith] = await Promise.all([
-        getDailyVerse(),
-        getDailyHadith(),
+        getDailyVerse(locale),
+        getDailyHadith(locale),
       ]);
       setDailyVerse(verse);
       setDailyHadith(hadith);
@@ -87,8 +89,7 @@ export default function HomeScreen() {
       console.log('Error checking achievements:', error);
     }
   };
-
-  const currentDate = new Date().toLocaleDateString('en-US', { 
+  const currentDate = new Date().toLocaleDateString(locale === 'ar' ? 'ar-SA' : locale === 'es' ? 'es-ES' : locale === 'fr' ? 'fr-FR' : locale === 'de' ? 'de-DE' : locale === 'tr' ? 'tr-TR' : locale === 'ur' ? 'ur-PK' : locale === 'id' ? 'id-ID' : locale === 'ms' ? 'ms-MY' : 'en-US', { 
     weekday: 'long', 
     year: 'numeric', 
     month: 'long', 
@@ -207,7 +208,7 @@ export default function HomeScreen() {
           
           {/* Center Content */}
           <View style={styles.ringsCenterContent}>
-            <Text style={styles.ringsCenterTitle}>Iman</Text>
+            <Text style={styles.ringsCenterTitle}>{t('home.iman')}</Text>
             <Text style={styles.ringsCenterPercentage}>{imanScore}%</Text>
           </View>
         </View>
@@ -216,17 +217,17 @@ export default function HomeScreen() {
         <View style={styles.ringsLabels}>
           <View style={styles.ringLabelItem}>
             <View style={[styles.ringLabelDot, { backgroundColor: ibadahColor }]} />
-            <Text style={styles.ringLabelText}>ʿIbādah</Text>
+            <Text style={styles.ringLabelText}>{t('home.ibadah')}</Text>
             <Text style={styles.ringLabelValue}>{Math.round(ibadahScore)}%</Text>
           </View>
           <View style={styles.ringLabelItem}>
             <View style={[styles.ringLabelDot, { backgroundColor: ilmColor }]} />
-            <Text style={styles.ringLabelText}>ʿIlm</Text>
+            <Text style={styles.ringLabelText}>{t('home.ilm')}</Text>
             <Text style={styles.ringLabelValue}>{Math.round(ilmScore)}%</Text>
           </View>
           <View style={styles.ringLabelItem}>
             <View style={[styles.ringLabelDot, { backgroundColor: amanahColor }]} />
-            <Text style={styles.ringLabelText}>Amanah</Text>
+            <Text style={styles.ringLabelText}>{t('home.amanah')}</Text>
             <Text style={styles.ringLabelValue}>{Math.round(amanahScore)}%</Text>
           </View>
         </View>
@@ -262,7 +263,7 @@ export default function HomeScreen() {
               />
             </View>
             <View style={styles.headerTextSection}>
-              <Text style={styles.greeting}>As-Salamu Alaykum</Text>
+              <Text style={styles.greeting}>{t('home.greeting')}</Text>
               <Text style={styles.date}>{currentDate}</Text>
             </View>
           </View>
@@ -285,7 +286,7 @@ export default function HomeScreen() {
                 color={colors.primary}
               />
             </View>
-            <Text style={styles.sectionTitle}>Iman Score</Text>
+            <Text style={styles.sectionTitle}>{t('home.imanScore')}</Text>
           </View>
           <View style={styles.imanScoreCard}>
             {renderImanRings()}
@@ -303,7 +304,7 @@ export default function HomeScreen() {
                 color={colors.error}
               />
             </View>
-            <Text style={styles.sectionTitle}>Your Streaks</Text>
+            <Text style={styles.sectionTitle}>{t('home.yourStreaks')}</Text>
           </View>
           <AllStreaksDisplay />
         </View>

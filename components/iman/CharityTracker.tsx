@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal } from "react-native";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
+import { useTranslation } from "@/contexts/I18nContext";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -14,6 +15,7 @@ interface CharityEntry {
 }
 
 export default function CharityTracker() {
+  const { t } = useTranslation();
   const [totalCharity, setTotalCharity] = useState(0);
   const [charityCount, setCharityCount] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
@@ -156,7 +158,7 @@ export default function CharityTracker() {
                 value={amount}
                 onChangeText={setAmount}
                 keyboardType="decimal-pad"
-                placeholder="0.00"
+                placeholder={t('charity.amountPlaceholder')}
                 placeholderTextColor={colors.textSecondary}
               />
             </View>
@@ -167,7 +169,7 @@ export default function CharityTracker() {
                 style={styles.modalInput}
                 value={description}
                 onChangeText={setDescription}
-                placeholder="e.g., Masjid donation"
+                placeholder={t('charity.descriptionPlaceholder')}
                 placeholderTextColor={colors.textSecondary}
               />
             </View>

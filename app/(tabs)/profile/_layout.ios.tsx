@@ -25,6 +25,13 @@ export default function ProfileLayout() {
           title: 'Health Check',
         }}
       />
+      <Stack.Screen 
+        name="language-settings"
+        options={{
+          presentation: 'modal',
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 }

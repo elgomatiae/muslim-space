@@ -3,8 +3,11 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
+import { useTranslation } from '@/contexts/I18nContext';
 
 export default function TabLayout() {
+  const { t } = useTranslation();
+  
   return (
     <Tabs
       screenOptions={{
@@ -27,7 +30,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="(home)"
         options={{
-          title: 'Home',
+          title: t('tabs.home'),
           tabBarIcon: ({ color, focused }) => (
             <IconSymbol 
               ios_icon_name={focused ? 'house.fill' : 'house'}
@@ -41,7 +44,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="(learning)"
         options={{
-          title: 'Learning',
+          title: t('tabs.learning'),
           tabBarIcon: ({ color, focused }) => (
             <IconSymbol 
               ios_icon_name={focused ? 'book.fill' : 'book'}
@@ -55,7 +58,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="(iman)"
         options={{
-          title: 'Iman',
+          title: t('tabs.iman'),
           tabBarIcon: ({ color, focused }) => (
             <IconSymbol 
               ios_icon_name={focused ? 'target' : 'target'}
@@ -73,7 +76,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="(wellness)"
         options={{
-          title: 'Wellness',
+          title: t('tabs.wellness'),
           tabBarIcon: ({ color, focused }) => (
             <IconSymbol 
               ios_icon_name={focused ? 'heart.circle.fill' : 'heart.circle'}
@@ -87,7 +90,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: t('tabs.profile'),
           tabBarIcon: ({ color, focused }) => (
             <IconSymbol 
               ios_icon_name={focused ? 'person.fill' : 'person'}

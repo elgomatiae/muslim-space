@@ -19,8 +19,10 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase';
 import * as Haptics from 'expo-haptics';
 import { initializeUserProfile } from '@/utils/profileSupabaseSync';
+import { useTranslation } from '@/contexts/I18nContext';
 
 export default function SignupScreen() {
+  const { t } = useTranslation();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -35,23 +37,23 @@ export default function SignupScreen() {
     setErrorMessage('');
 
     if (!username || !email || !password || !confirmPassword) {
-      const errorMsg = 'Please fill in all fields';
+      const errorMsg = t('auth.fillAllFields');
       setErrorMessage(errorMsg);
-      Alert.alert('Error', errorMsg);
+      Alert.alert(t('common.error'), errorMsg);
       return;
     }
 
     if (password !== confirmPassword) {
-      const errorMsg = 'Passwords do not match';
+      const errorMsg = t('auth.passwordsDoNotMatch');
       setErrorMessage(errorMsg);
-      Alert.alert('Error', errorMsg);
+      Alert.alert(t('common.error'), errorMsg);
       return;
     }
 
     if (password.length < 6) {
-      const errorMsg = 'Password must be at least 6 characters long';
+      const errorMsg = t('auth.passwordMinLength');
       setErrorMessage(errorMsg);
-      Alert.alert('Error', errorMsg);
+      Alert.alert(t('common.error'), errorMsg);
       return;
     }
 
@@ -81,7 +83,7 @@ export default function SignupScreen() {
         const errorMessage = getErrorMessage(error);
         
         setErrorMessage(errorMessage);
-        Alert.alert('Signup Failed', errorMessage);
+        Alert.alert(t('auth.signupFailed'), errorMessage);
         setLoading(false);
         return;
       }
@@ -101,11 +103,11 @@ export default function SignupScreen() {
         if (data.user.identities && data.user.identities.length === 0) {
           // User already exists
           Alert.alert(
-            'Account Exists',
-            'An account with this email already exists. Please sign in instead.',
+            t('auth.accountExists'),
+            t('auth.accountExistsMessage'),
             [
               {
-                text: 'OK',
+                text: t('common.ok'),
                 onPress: () => router.replace('/(auth)/login'),
               },
             ]
@@ -128,11 +130,11 @@ export default function SignupScreen() {
           
           // Show email verification message
           Alert.alert(
-            'Verify Your Email',
-            'We have sent you a verification email. Please check your inbox and verify your email address before logging in.',
+            t('auth.verifyYourEmail'),
+            t('auth.verificationEmailSent'),
             [
               {
-                text: 'OK',
+                text: t('common.ok'),
                 onPress: () => router.replace('/(auth)/login'),
               },
             ]
@@ -142,9 +144,9 @@ export default function SignupScreen() {
       }
     } catch (error: any) {
       console.error('Signup error:', error);
-      const errorMsg = 'An unexpected error occurred. Please try again.';
+      const errorMsg = t('auth.unexpectedError');
       setErrorMessage(errorMsg);
-      Alert.alert('Error', errorMsg);
+      Alert.alert(t('common.error'), errorMsg);
       setLoading(false);
     }
   };
@@ -173,8 +175,8 @@ export default function SignupScreen() {
               color={colors.card}
             />
           </LinearGradient>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Join us on your spiritual journey</Text>
+          <Text style={styles.title}>{t('auth.createAccount')}</Text>
+          <Text style={styles.subtitle}>{t('auth.joinUs')}</Text>
         </View>
 
         <View style={styles.form}>
@@ -201,7 +203,7 @@ export default function SignupScreen() {
             </View>
             <TextInput
               style={styles.input}
-              placeholder="Username"
+              placeholder={t('auth.username')}
               placeholderTextColor={colors.textSecondary}
               value={username}
               onChangeText={(text) => {
@@ -224,7 +226,7 @@ export default function SignupScreen() {
             </View>
             <TextInput
               style={styles.input}
-              placeholder="Email"
+              placeholder={t('auth.email')}
               placeholderTextColor={colors.textSecondary}
               value={email}
               onChangeText={(text) => {
@@ -249,7 +251,7 @@ export default function SignupScreen() {
             </View>
             <TextInput
               style={styles.input}
-              placeholder="Password"
+              placeholder={t('auth.password')}
               placeholderTextColor={colors.textSecondary}
               value={password}
               onChangeText={(text) => {
@@ -285,7 +287,7 @@ export default function SignupScreen() {
             </View>
             <TextInput
               style={styles.input}
-              placeholder="Confirm Password"
+              placeholder={t('auth.confirmPassword')}
               placeholderTextColor={colors.textSecondary}
               value={confirmPassword}
               onChangeText={(text) => {
@@ -325,14 +327,14 @@ export default function SignupScreen() {
               {loading ? (
                 <ActivityIndicator color={colors.card} />
               ) : (
-                <Text style={styles.signupButtonText}>Create Account</Text>
+                <Text style={styles.signupButtonText}>{t('auth.createAccount')}</Text>
               )}
             </LinearGradient>
           </TouchableOpacity>
 
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
+            <Text style={styles.dividerText}>{t('common.or')}</Text>
             <View style={styles.dividerLine} />
           </View>
 
@@ -348,7 +350,7 @@ export default function SignupScreen() {
             activeOpacity={0.7}
           >
             <Text style={styles.loginButtonText}>
-              Already have an account? <Text style={styles.loginButtonTextBold}>Sign In</Text>
+              {t('auth.alreadyHaveAccount')} <Text style={styles.loginButtonTextBold}>{t('auth.signInLink')}</Text>
             </Text>
           </TouchableOpacity>
         </View>

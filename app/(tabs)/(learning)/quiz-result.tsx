@@ -12,21 +12,32 @@ export default function QuizResultScreen() {
   const params = useLocalSearchParams();
   const { updateIlmGoals, ilmGoals } = useImanTracker();
 
-  const score = parseInt(params.score as string);
-  const total = parseInt(params.total as string);
-  const percentage = parseFloat(params.percentage as string);
-  const categoryName = params.categoryName as string;
+  const score = parseInt(params.score as string) || 0;
+  const total = parseInt(params.total as string) || 0;
+  const percentage = parseFloat(params.percentage as string) || 0;
+  const categoryName = (params.categoryName as string) || 'Quiz';
   const timeTaken = params.timeTaken ? parseInt(params.timeTaken as string) : null;
 
   useEffect(() => {
     // Update Ilm goals - increment quiz completion
-    if (ilmGoals) {
-      const updatedGoals = {
-        ...ilmGoals,
-        weeklyQuizzesCompleted: ilmGoals.weeklyQuizzesCompleted + 1,
-      };
-      updateIlmGoals(updatedGoals);
-    }
+    const updateGoals = async () => {
+      try {
+        if (ilmGoals && updateIlmGoals && typeof updateIlmGoals === 'function') {
+          const currentCompleted = ilmGoals.weeklyQuizzesCompleted || 0;
+          const currentGoal = ilmGoals.weeklyQuizzesGoal || 0;
+          const updatedGoals = {
+            ...ilmGoals,
+            weeklyQuizzesCompleted: Math.min(currentCompleted + 1, currentGoal),
+          };
+          await updateIlmGoals(updatedGoals);
+        }
+      } catch (error) {
+        console.error('Error updating quiz goals:', error);
+        // Don't block UI - goal update is non-critical
+      }
+    };
+    
+    updateGoals();
   }, []);
 
   const getPerformanceMessage = () => {
@@ -112,7 +123,7 @@ export default function QuizResultScreen() {
                 color={colors.error}
               />
             </View>
-            <Text style={styles.statValue}>{total - score}</Text>
+            <Text style={styles.statValue}>{Math.max(0, total - score)}</Text>
             <Text style={styles.statLabel}>Incorrect</Text>
           </View>
 

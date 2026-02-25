@@ -22,6 +22,7 @@ import { getScreenWidth, getScreenHeight } from '@/utils/screenDimensions';
 import { LinearGradient } from 'expo-linear-gradient';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
+import { useTranslation } from '@/contexts/I18nContext';
 import ShareCard from './ShareCard';
 import { ShareCardData } from '@/utils/shareCardGenerator';
 import { shareCard, shareToInstagramStories, shareToWhatsApp, shareToSnapchat } from '@/utils/shareService';
@@ -37,6 +38,7 @@ interface ShareCardModalProps {
 }
 
 export default function ShareCardModal({ visible, data, onClose }: ShareCardModalProps) {
+  const { t } = useTranslation();
   const cardRef = useRef<any>(null);
   const [sharing, setSharing] = useState(false);
   
@@ -96,7 +98,7 @@ export default function ShareCardModal({ visible, data, onClose }: ShareCardModa
       }
     } catch (error) {
       console.error('Error sharing:', error);
-      Alert.alert('Error', 'Unable to share. Please try again.');
+      Alert.alert(t('common.error'), t('share.unableToShare'));
     } finally {
       setSharing(false);
     }

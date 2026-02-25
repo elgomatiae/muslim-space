@@ -8,6 +8,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from 'expo-haptics';
 import { useAuth } from "@/contexts/AuthContext";
+import { useTranslation } from "@/contexts/I18nContext";
 import { syncProfileFromSupabase, updateUserProfile, deleteUserAccount } from "@/utils/profileSupabaseSync";
 import { router } from "expo-router";
 
@@ -38,6 +39,7 @@ const TAP_TIMEOUT = 3000;
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
+  const { t } = useTranslation();
   const [profile, setProfile] = useState<UserProfile>({
     name: user?.user_metadata?.username || user?.email?.split('@')[0] || "User",
     email: user?.email || "user@example.com",
@@ -48,9 +50,9 @@ export default function ProfileScreen() {
   const [savingProfile, setSavingProfile] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [stats, setStats] = useState<StatItem[]>([
-    { value: '0', label: 'Days Active', iosIcon: 'calendar', androidIcon: 'calendar-today', color: colors.primary },
-    { value: '0', label: 'Prayers', iosIcon: 'moon.stars', androidIcon: 'self-improvement', color: colors.accent },
-    { value: '0', label: 'Day Streak', iosIcon: 'flame.fill', androidIcon: 'local-fire-department', color: colors.error },
+    { value: '0', label: t('profile.daysActive'), iosIcon: 'calendar', androidIcon: 'calendar-today', color: colors.primary },
+    { value: '0', label: t('profile.prayers'), iosIcon: 'moon.stars', androidIcon: 'self-improvement', color: colors.accent },
+    { value: '0', label: t('profile.dayStreak'), iosIcon: 'flame.fill', androidIcon: 'local-fire-department', color: colors.error },
   ]);
 
   const [tapCount, setTapCount] = useState(0);
@@ -104,9 +106,9 @@ export default function ProfileScreen() {
       }
 
       setStats([
-        { value: daysActive.toString(), label: 'Days Active', iosIcon: 'calendar', androidIcon: 'calendar-today', color: colors.primary },
-        { value: totalPrayers.toString(), label: 'Prayers', iosIcon: 'moon.stars', androidIcon: 'self-improvement', color: colors.accent },
-        { value: currentStreak.toString(), label: 'Day Streak', iosIcon: 'flame.fill', androidIcon: 'local-fire-department', color: colors.error },
+        { value: daysActive.toString(), label: t('profile.daysActive'), iosIcon: 'calendar', androidIcon: 'calendar-today', color: colors.primary },
+        { value: totalPrayers.toString(), label: t('profile.prayers'), iosIcon: 'moon.stars', androidIcon: 'self-improvement', color: colors.accent },
+        { value: currentStreak.toString(), label: t('profile.dayStreak'), iosIcon: 'flame.fill', androidIcon: 'local-fire-department', color: colors.error },
       ]);
     } catch (error) {
       console.log('Error loading stats:', error);
@@ -250,7 +252,7 @@ export default function ProfileScreen() {
       console.log('Navigation command executed successfully');
     } catch (error) {
       console.error('Navigation error:', error);
-      Alert.alert('Navigation Error', 'Failed to open notification settings. Please try again.');
+      Alert.alert(t('common.error'), t('profile.navigationError'));
     }
     
     console.log('=== NOTIFICATION NAVIGATION END ===');
@@ -263,7 +265,17 @@ export default function ProfileScreen() {
       router.push('/(tabs)/profile/about');
     } catch (error) {
       console.error('Navigation error:', error);
-      Alert.alert('Navigation Error', 'Failed to open about screen. Please try again.');
+      Alert.alert(t('common.error'), t('profile.navigationError'));
+    }
+  };
+
+  const handleLanguage = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      router.push('/(tabs)/profile/language-settings');
+    } catch (error) {
+      console.error('Navigation error:', error);
+      Alert.alert(t('common.error'), t('profile.navigationError'));
     }
   };
 
@@ -332,21 +344,28 @@ export default function ProfileScreen() {
 
   const profileOptions: ProfileOption[] = [
     { 
-      title: 'Edit Profile', 
+      title: t('profile.editProfile'), 
       iosIcon: 'pencil', 
       androidIcon: 'edit', 
       color: colors.primary,
       action: handleEditProfile
     },
     { 
-      title: 'Notifications', 
+      title: t('profile.notifications'), 
       iosIcon: 'bell', 
       androidIcon: 'notifications', 
       color: colors.accent,
       action: handleNotifications
     },
     { 
-      title: 'About', 
+      title: t('profile.language'), 
+      iosIcon: 'globe', 
+      androidIcon: 'language', 
+      color: colors.secondary,
+      action: handleLanguage
+    },
+    { 
+      title: t('profile.about'), 
       iosIcon: 'info.circle', 
       androidIcon: 'info', 
       color: colors.secondary,

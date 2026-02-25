@@ -66,6 +66,24 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
           lightColor: '#FFD700',
           sound: 'default',
         });
+
+        // Create daily goal reminder channel
+        await Notifications.setNotificationChannelAsync('daily_goal', {
+          name: 'Daily Goal Reminders',
+          importance: Notifications.AndroidImportance.DEFAULT,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#10B981',
+          sound: 'default',
+        });
+
+        // Create weekly goal reminder channel
+        await Notifications.setNotificationChannelAsync('weekly_goal', {
+          name: 'Weekly Goal Reminders',
+          importance: Notifications.AndroidImportance.DEFAULT,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#3B82F6',
+          sound: 'default',
+        });
       } catch (channelError) {
         console.warn('Error setting notification channels:', channelError);
         // Continue - channels might already exist
@@ -108,13 +126,15 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
   }
 }
 
-// Check if notifications are enabled
+// Check if notifications are enabled (general check - defaults to true)
 export async function areNotificationsEnabled(): Promise<boolean> {
   try {
     const prefs = await AsyncStorage.getItem('notificationPreferences');
     if (!prefs) return true;
     
     const preferences = JSON.parse(prefs);
+    // Check if any notification type is explicitly disabled
+    // If all are undefined/null, default to enabled
     return preferences.achievement_notifications !== false;
   } catch (error) {
     console.log('Error checking notification preferences:', error);
@@ -128,6 +148,7 @@ export async function sendAchievementUnlocked(
   message: string
 ): Promise<void> {
   try {
+    configureNotificationHandler();
     const enabled = await areNotificationsEnabled();
     if (!enabled) return;
 
@@ -154,6 +175,7 @@ export async function sendMilestoneReached(
   message: string
 ): Promise<void> {
   try {
+    configureNotificationHandler();
     const enabled = await areNotificationsEnabled();
     if (!enabled) return;
 
@@ -179,6 +201,7 @@ export async function sendImanTrackerMilestone(
   message: string
 ): Promise<void> {
   try {
+    configureNotificationHandler();
     const enabled = await areNotificationsEnabled();
     if (!enabled) return;
 
@@ -572,6 +595,14 @@ export async function sendAchievementNotification(
 // Prayer notification IDs storage key
 const PRAYER_NOTIFICATION_IDS_KEY = '@prayer_notification_ids';
 
+// Daily goal reminder notification IDs storage key
+const DAILY_GOAL_NOTIFICATION_IDS_KEY = '@daily_goal_notification_ids';
+const LAST_DAILY_GOAL_CHECK_KEY = '@last_daily_goal_check_date';
+
+// Weekly goal reminder notification IDs storage key
+const WEEKLY_GOAL_NOTIFICATION_IDS_KEY = '@weekly_goal_notification_ids';
+const LAST_WEEKLY_GOAL_CHECK_KEY = '@last_weekly_goal_check_date';
+
 // Iman score tracking keys
 const IMAN_SCORE_HISTORY_KEY = '@iman_score_daily_history';
 const LAST_LOW_SCORE_NOTIFICATION_KEY = '@last_low_score_notification';
@@ -653,6 +684,7 @@ async function sendImanScoreDropNotification(
   currentScore: number
 ): Promise<void> {
   try {
+    configureNotificationHandler();
     await Notifications.scheduleNotificationAsync({
       content: {
         title: '📉 Iman Score Alert',
@@ -674,6 +706,7 @@ async function sendImanScoreDropNotification(
  */
 async function sendLowImanScoreNotification(currentScore: number): Promise<void> {
   try {
+    configureNotificationHandler();
     await Notifications.scheduleNotificationAsync({
       content: {
         title: '⚠️ Low Iman Score',
@@ -712,6 +745,9 @@ export async function schedulePrayerNotifications(
   }
 ): Promise<void> {
   try {
+    // Configure notification handler before scheduling
+    configureNotificationHandler();
+
     // Check if prayer notifications are enabled
     const settings = await getNotificationSettings(userId);
     if (!settings.prayerNotifications) {
@@ -852,5 +888,574 @@ export async function cancelPrayerNotifications(): Promise<void> {
     console.log('✅ Cancelled existing prayer notifications');
   } catch (error) {
     console.error('Error cancelling prayer notifications:', error);
+  }
+}
+
+/**
+ * Interface for incomplete daily goals
+ */
+interface IncompleteDailyGoal {
+  type: string;
+  title: string;
+  message: string;
+  goal: number;
+  completed: number;
+}
+
+/**
+ * Check for incomplete daily goals and schedule notifications
+ * Notifications are spread throughout the day (not all at once)
+ */
+export async function scheduleDailyGoalReminders(userId?: string): Promise<void> {
+  try {
+    // Check if goal reminder notifications are enabled
+    const settings = await getNotificationSettings(userId);
+    if (!settings.goalReminderNotifications) {
+      console.log('📵 Daily goal reminder notifications are disabled');
+      return;
+    }
+
+    // Check notification permission
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') {
+      console.log('📵 Notification permission not granted');
+      return;
+    }
+
+    // Configure notification handler before scheduling
+    configureNotificationHandler();
+
+    // Check if we've already scheduled notifications for today
+    // Note: We still allow rescheduling if goals are updated (checked by caller)
+    const today = new Date().toISOString().split('T')[0];
+    const lastCheck = await AsyncStorage.getItem(LAST_DAILY_GOAL_CHECK_KEY);
+    if (lastCheck === today) {
+      console.log('✅ Daily goal reminders already scheduled for today');
+      // Still allow rescheduling if called explicitly (e.g., after goal update)
+      // The caller should cancel existing notifications first if needed
+      return;
+    }
+
+    // Cancel existing daily goal notifications
+    await cancelDailyGoalNotifications();
+
+    // Load goals
+    const { loadIbadahGoals, loadAmanahGoals } = await import('./imanScoreCalculator');
+    const ibadahGoals = await loadIbadahGoals(userId);
+    const amanahGoals = await loadAmanahGoals(userId);
+
+    // Find incomplete daily goals
+    const incompleteGoals: IncompleteDailyGoal[] = [];
+
+    // Check Sunnah prayers
+    if (ibadahGoals.sunnahDailyGoal > 0 && ibadahGoals.sunnahCompleted < ibadahGoals.sunnahDailyGoal) {
+      incompleteGoals.push({
+        type: 'sunnah',
+        title: 'Sunnah Prayers Reminder',
+        message: `You have ${ibadahGoals.sunnahDailyGoal - ibadahGoals.sunnahCompleted} sunnah prayer${ibadahGoals.sunnahDailyGoal - ibadahGoals.sunnahCompleted > 1 ? 's' : ''} remaining today. Keep up the good work!`,
+        goal: ibadahGoals.sunnahDailyGoal,
+        completed: ibadahGoals.sunnahCompleted,
+      });
+    }
+
+    // Check Quran pages
+    if (ibadahGoals.quranDailyPagesGoal > 0 && ibadahGoals.quranDailyPagesCompleted < ibadahGoals.quranDailyPagesGoal) {
+      incompleteGoals.push({
+        type: 'quran_pages',
+        title: 'Quran Reading Reminder',
+        message: `You have ${ibadahGoals.quranDailyPagesGoal - ibadahGoals.quranDailyPagesCompleted} page${ibadahGoals.quranDailyPagesGoal - ibadahGoals.quranDailyPagesCompleted > 1 ? 's' : ''} of Quran remaining to read today.`,
+        goal: ibadahGoals.quranDailyPagesGoal,
+        completed: ibadahGoals.quranDailyPagesCompleted,
+      });
+    }
+
+    // Check Quran verses
+    if (ibadahGoals.quranDailyVersesGoal > 0 && ibadahGoals.quranDailyVersesCompleted < ibadahGoals.quranDailyVersesGoal) {
+      incompleteGoals.push({
+        type: 'quran_verses',
+        title: 'Quran Verses Reminder',
+        message: `You have ${ibadahGoals.quranDailyVersesGoal - ibadahGoals.quranDailyVersesCompleted} verse${ibadahGoals.quranDailyVersesGoal - ibadahGoals.quranDailyVersesCompleted > 1 ? 's' : ''} remaining to read today.`,
+        goal: ibadahGoals.quranDailyVersesGoal,
+        completed: ibadahGoals.quranDailyVersesCompleted,
+      });
+    }
+
+    // Check Dhikr
+    if (ibadahGoals.dhikrDailyGoal > 0 && ibadahGoals.dhikrDailyCompleted < ibadahGoals.dhikrDailyGoal) {
+      incompleteGoals.push({
+        type: 'dhikr',
+        title: 'Dhikr Reminder',
+        message: `You have ${ibadahGoals.dhikrDailyGoal - ibadahGoals.dhikrDailyCompleted} dhikr${ibadahGoals.dhikrDailyGoal - ibadahGoals.dhikrDailyCompleted > 1 ? 's' : ''} remaining today.`,
+        goal: ibadahGoals.dhikrDailyGoal,
+        completed: ibadahGoals.dhikrDailyCompleted,
+      });
+    }
+
+    // Check Dua
+    if (ibadahGoals.duaDailyGoal > 0 && ibadahGoals.duaDailyCompleted < ibadahGoals.duaDailyGoal) {
+      incompleteGoals.push({
+        type: 'dua',
+        title: 'Dua Reminder',
+        message: `You have ${ibadahGoals.duaDailyGoal - ibadahGoals.duaDailyCompleted} dua${ibadahGoals.duaDailyGoal - ibadahGoals.duaDailyCompleted > 1 ? 's' : ''} remaining today.`,
+        goal: ibadahGoals.duaDailyGoal,
+        completed: ibadahGoals.duaDailyCompleted,
+      });
+    }
+
+    // NOTE: Fard prayers are NOT included in daily goal reminders
+    // Fard prayers have their own prayer time notifications (schedulePrayerNotifications)
+    // which notify users at the exact prayer times. We don't send additional
+    // daily goal reminders for fard prayers to avoid notification overload.
+
+    // Check Exercise (if goal is set)
+    if (amanahGoals.dailyExerciseGoal > 0 && amanahGoals.dailyExerciseCompleted < amanahGoals.dailyExerciseGoal) {
+      incompleteGoals.push({
+        type: 'exercise',
+        title: 'Exercise Reminder',
+        message: `You have ${amanahGoals.dailyExerciseGoal - amanahGoals.dailyExerciseCompleted} minute${amanahGoals.dailyExerciseGoal - amanahGoals.dailyExerciseCompleted > 1 ? 's' : ''} of exercise remaining today.`,
+        goal: amanahGoals.dailyExerciseGoal,
+        completed: amanahGoals.dailyExerciseCompleted,
+      });
+    }
+
+    // Check Water (if goal is set)
+    if (amanahGoals.dailyWaterGoal > 0 && amanahGoals.dailyWaterCompleted < amanahGoals.dailyWaterGoal) {
+      incompleteGoals.push({
+        type: 'water',
+        title: 'Water Intake Reminder',
+        message: `You have ${amanahGoals.dailyWaterGoal - amanahGoals.dailyWaterCompleted} glass${amanahGoals.dailyWaterGoal - amanahGoals.dailyWaterCompleted > 1 ? 'es' : ''} of water remaining today.`,
+        goal: amanahGoals.dailyWaterGoal,
+        completed: amanahGoals.dailyWaterCompleted,
+      });
+    }
+
+    // Check Sleep (if goal is set)
+    if (amanahGoals.dailySleepGoal > 0 && amanahGoals.dailySleepCompleted < amanahGoals.dailySleepGoal) {
+      incompleteGoals.push({
+        type: 'sleep',
+        title: 'Sleep Goal Reminder',
+        message: `You have ${amanahGoals.dailySleepGoal - amanahGoals.dailySleepCompleted} hour${amanahGoals.dailySleepGoal - amanahGoals.dailySleepCompleted > 1 ? 's' : ''} of sleep remaining to reach your goal today.`,
+        goal: amanahGoals.dailySleepGoal,
+        completed: amanahGoals.dailySleepCompleted,
+      });
+    }
+
+    if (incompleteGoals.length === 0) {
+      console.log('✅ All daily goals are complete! No reminders needed.');
+      await AsyncStorage.setItem(LAST_DAILY_GOAL_CHECK_KEY, today);
+      return;
+    }
+
+    // Schedule notifications spread throughout the day
+    // Start from 10 AM and space them out evenly until 8 PM
+    const startHour = 10; // 10:00 AM
+    const endHour = 20; // 8:00 PM
+    const minIntervalMinutes = 30; // Minimum 30 minutes between notifications
+    const totalMinutes = (endHour - startHour) * 60;
+    
+    // Calculate interval, ensuring minimum spacing
+    let intervalMinutes = Math.floor(totalMinutes / Math.max(1, incompleteGoals.length));
+    if (intervalMinutes < minIntervalMinutes && incompleteGoals.length > 1) {
+      // If we have too many goals, space them with minimum interval
+      intervalMinutes = minIntervalMinutes;
+    }
+    
+    const now = new Date();
+    const nowHour = now.getHours();
+    const nowMinute = now.getMinutes();
+    const nowTotalMinutes = nowHour * 60 + nowMinute;
+    
+    // If it's after 8 PM, schedule all for tomorrow
+    const scheduleForTomorrow = nowTotalMinutes >= endHour * 60;
+    
+    const notificationIds: string[] = [];
+    
+    for (let i = 0; i < incompleteGoals.length; i++) {
+      const goal = incompleteGoals[i];
+      const scheduledMinutes = startHour * 60 + (i * intervalMinutes);
+      const scheduledHour = Math.floor(scheduledMinutes / 60);
+      const scheduledMinute = scheduledMinutes % 60;
+      
+      // Create notification date
+      const notificationDate = new Date();
+      if (scheduleForTomorrow) {
+        // Schedule for tomorrow starting from 10 AM
+        notificationDate.setDate(notificationDate.getDate() + 1);
+        notificationDate.setHours(scheduledHour, scheduledMinute, 0, 0);
+      } else {
+        // Schedule for today, but if time has passed, schedule for tomorrow
+        notificationDate.setHours(scheduledHour, scheduledMinute, 0, 0);
+        if (notificationDate <= now) {
+          notificationDate.setDate(notificationDate.getDate() + 1);
+        }
+      }
+      
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `📿 ${goal.title}`,
+          body: goal.message,
+          sound: 'default',
+          priority: Notifications.AndroidNotificationPriority.DEFAULT,
+          categoryIdentifier: 'daily_goal',
+          channelId: 'daily_goal',
+          data: {
+            type: 'daily_goal',
+            goalType: goal.type,
+            goal: goal.goal,
+            completed: goal.completed,
+          },
+        },
+        trigger: {
+          type: 'date',
+          date: notificationDate,
+        },
+        identifier: `daily_goal_${goal.type}_${notificationDate.toISOString()}`,
+      });
+
+      notificationIds.push(notificationId);
+      console.log(`✅ Scheduled ${goal.title} notification for ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')} (ID: ${notificationId})`);
+    }
+
+    // Save notification IDs
+    await AsyncStorage.setItem(DAILY_GOAL_NOTIFICATION_IDS_KEY, JSON.stringify(notificationIds));
+    await AsyncStorage.setItem(LAST_DAILY_GOAL_CHECK_KEY, today);
+    console.log(`✅ Scheduled ${notificationIds.length} daily goal reminder notifications`);
+  } catch (error) {
+    console.error('❌ Error scheduling daily goal reminders:', error);
+  }
+}
+
+/**
+ * Cancel all existing daily goal reminder notifications
+ */
+export async function cancelDailyGoalNotifications(): Promise<void> {
+  try {
+    // Get stored notification IDs
+    const storedIds = await AsyncStorage.getItem(DAILY_GOAL_NOTIFICATION_IDS_KEY);
+    if (storedIds) {
+      const notificationIds: string[] = JSON.parse(storedIds);
+      for (const id of notificationIds) {
+        try {
+          await Notifications.cancelScheduledNotificationAsync(id);
+        } catch (err) {
+          // Ignore errors for individual cancellations
+        }
+      }
+    }
+
+    // Also cancel any notifications with daily_goal identifier pattern
+    const allNotifications = await Notifications.getAllScheduledNotificationsAsync();
+    for (const notification of allNotifications) {
+      if (notification.identifier?.startsWith('daily_goal_')) {
+        try {
+          await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+        } catch (err) {
+          // Ignore errors
+        }
+      }
+    }
+
+    await AsyncStorage.removeItem(DAILY_GOAL_NOTIFICATION_IDS_KEY);
+    console.log('✅ Cancelled existing daily goal reminder notifications');
+  } catch (error) {
+    console.error('Error cancelling daily goal reminder notifications:', error);
+  }
+}
+
+/**
+ * Interface for incomplete weekly goals
+ */
+interface IncompleteWeeklyGoal {
+  type: string;
+  title: string;
+  message: string;
+  goal: number;
+  completed: number;
+}
+
+/**
+ * Check for incomplete weekly goals and schedule notifications for Friday
+ * Only schedules if it's Thursday or Friday
+ */
+export async function scheduleWeeklyGoalReminders(userId?: string): Promise<void> {
+  try {
+    // Check if goal reminder notifications are enabled
+    const settings = await getNotificationSettings(userId);
+    if (!settings.goalReminderNotifications) {
+      console.log('📵 Weekly goal reminder notifications are disabled');
+      return;
+    }
+
+    // Check notification permission
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') {
+      console.log('📵 Notification permission not granted');
+      return;
+    }
+
+    // Check current day of week (0 = Sunday, 1 = Monday, ..., 5 = Friday, 6 = Saturday)
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    
+    // Only schedule on Thursday (4) or Friday (5)
+    if (dayOfWeek < 4) {
+      console.log(`📅 Too early in the week (day ${dayOfWeek}). Weekly reminders will be scheduled on Thursday/Friday.`);
+      return;
+    }
+
+    // Configure notification handler before scheduling
+    configureNotificationHandler();
+
+    // Check if we've already scheduled notifications for this week
+    // Note: We still allow rescheduling if goals are updated (checked by caller)
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - dayOfWeek); // Go to Sunday
+    weekStart.setHours(0, 0, 0, 0);
+    const weekKey = weekStart.toISOString().split('T')[0];
+    
+    const lastCheck = await AsyncStorage.getItem(LAST_WEEKLY_GOAL_CHECK_KEY);
+    if (lastCheck === weekKey) {
+      console.log('✅ Weekly goal reminders already scheduled for this week');
+      // Still allow rescheduling if called explicitly (e.g., after goal update)
+      // The caller should cancel existing notifications first if needed
+      return;
+    }
+
+    // Cancel existing weekly goal notifications
+    await cancelWeeklyGoalNotifications();
+
+    // Load goals
+    const { loadIbadahGoals, loadIlmGoals, loadAmanahGoals } = await import('./imanScoreCalculator');
+    const ibadahGoals = await loadIbadahGoals(userId);
+    const ilmGoals = await loadIlmGoals(userId);
+    const amanahGoals = await loadAmanahGoals(userId);
+
+    // Find incomplete weekly goals
+    const incompleteGoals: IncompleteWeeklyGoal[] = [];
+
+    // Check Tahajjud
+    if (ibadahGoals.tahajjudWeeklyGoal > 0 && ibadahGoals.tahajjudCompleted < ibadahGoals.tahajjudWeeklyGoal) {
+      incompleteGoals.push({
+        type: 'tahajjud',
+        title: 'Tahajjud Prayer Reminder',
+        message: `You have ${ibadahGoals.tahajjudWeeklyGoal - ibadahGoals.tahajjudCompleted} tahajjud prayer${ibadahGoals.tahajjudWeeklyGoal - ibadahGoals.tahajjudCompleted > 1 ? 's' : ''} remaining this week.`,
+        goal: ibadahGoals.tahajjudWeeklyGoal,
+        completed: ibadahGoals.tahajjudCompleted,
+      });
+    }
+
+    // Check Quran Memorization
+    if (ibadahGoals.quranWeeklyMemorizationGoal > 0 && ibadahGoals.quranWeeklyMemorizationCompleted < ibadahGoals.quranWeeklyMemorizationGoal) {
+      incompleteGoals.push({
+        type: 'quran_memorization',
+        title: 'Quran Memorization Reminder',
+        message: `You have ${ibadahGoals.quranWeeklyMemorizationGoal - ibadahGoals.quranWeeklyMemorizationCompleted} verse${ibadahGoals.quranWeeklyMemorizationGoal - ibadahGoals.quranWeeklyMemorizationCompleted > 1 ? 's' : ''} remaining to memorize this week.`,
+        goal: ibadahGoals.quranWeeklyMemorizationGoal,
+        completed: ibadahGoals.quranWeeklyMemorizationCompleted,
+      });
+    }
+
+    // Check Weekly Dhikr
+    if (ibadahGoals.dhikrWeeklyGoal > 0 && ibadahGoals.dhikrWeeklyCompleted < ibadahGoals.dhikrWeeklyGoal) {
+      incompleteGoals.push({
+        type: 'dhikr_weekly',
+        title: 'Weekly Dhikr Reminder',
+        message: `You have ${ibadahGoals.dhikrWeeklyGoal - ibadahGoals.dhikrWeeklyCompleted} dhikr${ibadahGoals.dhikrWeeklyGoal - ibadahGoals.dhikrWeeklyCompleted > 1 ? 's' : ''} remaining this week.`,
+        goal: ibadahGoals.dhikrWeeklyGoal,
+        completed: ibadahGoals.dhikrWeeklyCompleted,
+      });
+    }
+
+    // Check Fasting
+    if (ibadahGoals.fastingWeeklyGoal > 0 && ibadahGoals.fastingWeeklyCompleted < ibadahGoals.fastingWeeklyGoal) {
+      incompleteGoals.push({
+        type: 'fasting',
+        title: 'Fasting Reminder',
+        message: `You have ${ibadahGoals.fastingWeeklyGoal - ibadahGoals.fastingWeeklyCompleted} day${ibadahGoals.fastingWeeklyGoal - ibadahGoals.fastingWeeklyCompleted > 1 ? 's' : ''} of fasting remaining this week.`,
+        goal: ibadahGoals.fastingWeeklyGoal,
+        completed: ibadahGoals.fastingWeeklyCompleted,
+      });
+    }
+
+    // Check Lectures
+    if (ilmGoals.weeklyLecturesGoal > 0 && ilmGoals.weeklyLecturesCompleted < ilmGoals.weeklyLecturesGoal) {
+      incompleteGoals.push({
+        type: 'lectures',
+        title: 'Islamic Lectures Reminder',
+        message: `You have ${ilmGoals.weeklyLecturesGoal - ilmGoals.weeklyLecturesCompleted} lecture${ilmGoals.weeklyLecturesGoal - ilmGoals.weeklyLecturesCompleted > 1 ? 's' : ''} remaining this week.`,
+        goal: ilmGoals.weeklyLecturesGoal,
+        completed: ilmGoals.weeklyLecturesCompleted,
+      });
+    }
+
+
+    // Check Quizzes
+    if (ilmGoals.weeklyQuizzesGoal > 0 && ilmGoals.weeklyQuizzesCompleted < ilmGoals.weeklyQuizzesGoal) {
+      incompleteGoals.push({
+        type: 'quizzes',
+        title: 'Islamic Quizzes Reminder',
+        message: `You have ${ilmGoals.weeklyQuizzesGoal - ilmGoals.weeklyQuizzesCompleted} quiz${ilmGoals.weeklyQuizzesGoal - ilmGoals.weeklyQuizzesCompleted > 1 ? 'zes' : ''} remaining this week.`,
+        goal: ilmGoals.weeklyQuizzesGoal,
+        completed: ilmGoals.weeklyQuizzesCompleted,
+      });
+    }
+
+    // Check Reflection
+    if (ilmGoals.weeklyReflectionGoal > 0 && ilmGoals.weeklyReflectionCompleted < ilmGoals.weeklyReflectionGoal) {
+      incompleteGoals.push({
+        type: 'reflection',
+        title: 'Reflection Reminder',
+        message: `You have ${ilmGoals.weeklyReflectionGoal - ilmGoals.weeklyReflectionCompleted} reflection${ilmGoals.weeklyReflectionGoal - ilmGoals.weeklyReflectionCompleted > 1 ? 's' : ''} remaining this week.`,
+        goal: ilmGoals.weeklyReflectionGoal,
+        completed: ilmGoals.weeklyReflectionCompleted,
+      });
+    }
+
+    // Check Weekly Workout
+    if (amanahGoals.weeklyWorkoutGoal > 0 && amanahGoals.weeklyWorkoutCompleted < amanahGoals.weeklyWorkoutGoal) {
+      incompleteGoals.push({
+        type: 'workout',
+        title: 'Weekly Workout Reminder',
+        message: `You have ${amanahGoals.weeklyWorkoutGoal - amanahGoals.weeklyWorkoutCompleted} workout${amanahGoals.weeklyWorkoutGoal - amanahGoals.weeklyWorkoutCompleted > 1 ? 's' : ''} remaining this week.`,
+        goal: amanahGoals.weeklyWorkoutGoal,
+        completed: amanahGoals.weeklyWorkoutCompleted,
+      });
+    }
+
+    // Check Meditation
+    if (amanahGoals.weeklyMeditationGoal > 0 && amanahGoals.weeklyMeditationCompleted < amanahGoals.weeklyMeditationGoal) {
+      incompleteGoals.push({
+        type: 'meditation',
+        title: 'Meditation Reminder',
+        message: `You have ${amanahGoals.weeklyMeditationGoal - amanahGoals.weeklyMeditationCompleted} meditation session${amanahGoals.weeklyMeditationGoal - amanahGoals.weeklyMeditationCompleted > 1 ? 's' : ''} remaining this week.`,
+        goal: amanahGoals.weeklyMeditationGoal,
+        completed: amanahGoals.weeklyMeditationCompleted,
+      });
+    }
+
+    // Check Journal
+    if (amanahGoals.weeklyJournalGoal > 0 && amanahGoals.weeklyJournalCompleted < amanahGoals.weeklyJournalGoal) {
+      incompleteGoals.push({
+        type: 'journal',
+        title: 'Journaling Reminder',
+        message: `You have ${amanahGoals.weeklyJournalGoal - amanahGoals.weeklyJournalCompleted} journal entry${amanahGoals.weeklyJournalGoal - amanahGoals.weeklyJournalCompleted > 1 ? 'ies' : ''} remaining this week.`,
+        goal: amanahGoals.weeklyJournalGoal,
+        completed: amanahGoals.weeklyJournalCompleted,
+      });
+    }
+
+    if (incompleteGoals.length === 0) {
+      console.log('✅ All weekly goals are complete! No reminders needed.');
+      await AsyncStorage.setItem(LAST_WEEKLY_GOAL_CHECK_KEY, weekKey);
+      return;
+    }
+
+    // Schedule notifications for Friday (or today if it's Friday)
+    // Spread them throughout Friday from 10 AM to 6 PM
+    const targetDay = new Date(now);
+    if (dayOfWeek === 4) {
+      // If it's Thursday, schedule for Friday (tomorrow)
+      targetDay.setDate(now.getDate() + 1);
+    }
+    // If it's Friday (dayOfWeek === 5), targetDay is already today
+    
+    const startHour = 10; // 10:00 AM
+    const endHour = 18; // 6:00 PM
+    const minIntervalMinutes = 30; // Minimum 30 minutes between notifications
+    const totalMinutes = (endHour - startHour) * 60;
+    
+    // Calculate interval, ensuring minimum spacing
+    let intervalMinutes = Math.floor(totalMinutes / Math.max(1, incompleteGoals.length));
+    if (intervalMinutes < minIntervalMinutes && incompleteGoals.length > 1) {
+      intervalMinutes = minIntervalMinutes;
+    }
+    
+    const notificationIds: string[] = [];
+    
+    for (let i = 0; i < incompleteGoals.length; i++) {
+      const goal = incompleteGoals[i];
+      const scheduledMinutes = startHour * 60 + (i * intervalMinutes);
+      const scheduledHour = Math.floor(scheduledMinutes / 60);
+      const scheduledMinute = scheduledMinutes % 60;
+      
+      // Create notification date for Friday
+      const notificationDate = new Date(targetDay);
+      notificationDate.setHours(scheduledHour, scheduledMinute, 0, 0);
+      
+      // If it's Friday and the time has already passed, schedule for next Friday
+      if (dayOfWeek === 5 && notificationDate <= now) {
+        notificationDate.setDate(notificationDate.getDate() + 7);
+      }
+      
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `📅 ${goal.title}`,
+          body: goal.message,
+          sound: 'default',
+          priority: Notifications.AndroidNotificationPriority.DEFAULT,
+          categoryIdentifier: 'weekly_goal',
+          channelId: 'weekly_goal',
+          data: {
+            type: 'weekly_goal',
+            goalType: goal.type,
+            goal: goal.goal,
+            completed: goal.completed,
+          },
+        },
+        trigger: {
+          type: 'date',
+          date: notificationDate,
+        },
+        identifier: `weekly_goal_${goal.type}_${notificationDate.toISOString()}`,
+      });
+
+      notificationIds.push(notificationId);
+      const dayName = dayOfWeek === 5 ? 'Friday' : 'Friday (tomorrow)';
+      console.log(`✅ Scheduled ${goal.title} notification for ${dayName} at ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')} (ID: ${notificationId})`);
+    }
+
+    // Save notification IDs
+    await AsyncStorage.setItem(WEEKLY_GOAL_NOTIFICATION_IDS_KEY, JSON.stringify(notificationIds));
+    await AsyncStorage.setItem(LAST_WEEKLY_GOAL_CHECK_KEY, weekKey);
+    console.log(`✅ Scheduled ${notificationIds.length} weekly goal reminder notifications for Friday`);
+  } catch (error) {
+    console.error('❌ Error scheduling weekly goal reminders:', error);
+  }
+}
+
+/**
+ * Cancel all existing weekly goal reminder notifications
+ */
+export async function cancelWeeklyGoalNotifications(): Promise<void> {
+  try {
+    // Get stored notification IDs
+    const storedIds = await AsyncStorage.getItem(WEEKLY_GOAL_NOTIFICATION_IDS_KEY);
+    if (storedIds) {
+      const notificationIds: string[] = JSON.parse(storedIds);
+      for (const id of notificationIds) {
+        try {
+          await Notifications.cancelScheduledNotificationAsync(id);
+        } catch (err) {
+          // Ignore errors for individual cancellations
+        }
+      }
+    }
+
+    // Also cancel any notifications with weekly_goal identifier pattern
+    const allNotifications = await Notifications.getAllScheduledNotificationsAsync();
+    for (const notification of allNotifications) {
+      if (notification.identifier?.startsWith('weekly_goal_')) {
+        try {
+          await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+        } catch (err) {
+          // Ignore errors
+        }
+      }
+    }
+
+    await AsyncStorage.removeItem(WEEKLY_GOAL_NOTIFICATION_IDS_KEY);
+    console.log('✅ Cancelled existing weekly goal reminder notifications');
+  } catch (error) {
+    console.error('Error cancelling weekly goal reminder notifications:', error);
   }
 }

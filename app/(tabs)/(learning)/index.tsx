@@ -108,14 +108,6 @@ export default function LearningScreen() {
       route: '/(tabs)/(learning)/lectures',
     },
     {
-      title: 'Quran Recitations',
-      description: 'Beautiful recitations of the Holy Quran',
-      iosIcon: 'music.note',
-      androidIcon: 'headset',
-      gradientColors: colors.gradientAccent,
-      route: '/(tabs)/(learning)/recitations',
-    },
-    {
       title: 'Islamic Quizzes',
       description: 'Test your Islamic knowledge',
       iosIcon: 'questionmark.circle.fill',

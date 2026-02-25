@@ -5,6 +5,7 @@ import { colors, typography, spacing, borderRadius, shadows } from '@/styles/com
 import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from '@/contexts/I18nContext';
 import { useImanTracker } from '@/contexts/ImanTrackerContext';
 import { 
   fetchJournalEntries, 
@@ -86,7 +87,7 @@ export default function JournalScreen() {
       console.log(`✅ Loaded ${data.length} journal entries`);
     } catch (error) {
       console.error('Error loading entries:', error);
-      Alert.alert('Error', 'Failed to load journal entries. Please try again.');
+      Alert.alert(t('common.error'), t('wellness.failedToLoadJournal'));
     } finally {
       setLoading(false);
     }
@@ -133,12 +134,12 @@ export default function JournalScreen() {
 
   const handleSave = async () => {
     if (!content.trim()) {
-      Alert.alert('Error', 'Please write something in your journal entry');
+      Alert.alert(t('common.error'), t('wellness.writeSomething'));
       return;
     }
 
     if (!user) {
-      Alert.alert('Error', 'You must be logged in to save entries');
+      Alert.alert(t('common.error'), t('wellness.mustBeLoggedInToSave'));
       return;
     }
 
@@ -161,7 +162,7 @@ export default function JournalScreen() {
         }
         
         console.log('✅ Journal entry updated and saved to your profile');
-        Alert.alert('Success', 'Your journal entry has been updated and saved to your profile');
+        Alert.alert(t('common.success'), t('wellness.journalEntryUpdated'));
       } else {
         // Create new entry - saved to Supabase with user_id for cross-device sync
         const saved = await saveJournalEntry(
@@ -216,7 +217,7 @@ export default function JournalScreen() {
         // Track journal entry for achievements
         await trackJournalEntry(user.id);
         
-        Alert.alert('Success', 'Your journal entry has been saved to your profile');
+        Alert.alert(t('common.success'), t('wellness.journalEntrySaved'));
       }
       
       setShowEntryModal(false);
@@ -234,12 +235,12 @@ export default function JournalScreen() {
 
   const handleDelete = async (entryId: string) => {
     Alert.alert(
-      'Delete Entry',
-      'Are you sure you want to delete this journal entry? This action cannot be undone.',
+      t('wellness.deleteEntry'),
+      t('wellness.deleteEntryConfirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -249,7 +250,7 @@ export default function JournalScreen() {
               await loadEntries();
             } catch (error) {
               console.error('Error deleting entry:', error);
-              Alert.alert('Error', 'Failed to delete entry. Please try again.');
+              Alert.alert(t('common.error'), t('wellness.failedToDeleteEntry'));
             }
           },
         },
@@ -373,7 +374,7 @@ export default function JournalScreen() {
           />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search entries..."
+            placeholder={t('wellness.searchEntries')}
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -558,7 +559,7 @@ export default function JournalScreen() {
               <Text style={styles.formLabel}>Title (Optional)</Text>
               <TextInput
                 style={styles.titleInput}
-                placeholder="Give your entry a title..."
+                placeholder={t('wellness.giveEntryTitle')}
                 placeholderTextColor={colors.textSecondary}
                 value={title}
                 onChangeText={setTitle}
@@ -568,7 +569,7 @@ export default function JournalScreen() {
               <Text style={styles.formLabel}>Your Thoughts *</Text>
               <TextInput
                 style={styles.contentInput}
-                placeholder="Write your thoughts, reflections, and feelings..."
+                placeholder={t('wellness.writeYourThoughts')}
                 placeholderTextColor={colors.textSecondary}
                 value={content}
                 onChangeText={setContent}
@@ -627,7 +628,7 @@ export default function JournalScreen() {
               <View style={styles.customTagContainer}>
                 <TextInput
                   style={styles.customTagInput}
-                  placeholder="Add custom tag..."
+                  placeholder={t('wellness.addCustomTag')}
                   placeholderTextColor={colors.textSecondary}
                   value={customTag}
                   onChangeText={setCustomTag}

@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
+import { useTranslation } from "@/contexts/I18nContext";
 
 interface StreakData {
   currentStreak: number;
@@ -19,6 +20,7 @@ interface StreakData {
 }
 
 export default function PrayerStreakScreen() {
+  const { t } = useTranslation();
   const { prayerGoals } = useImanTracker();
   const [streakData, setStreakData] = useState<StreakData>({
     currentStreak: 0,
@@ -271,14 +273,14 @@ export default function PrayerStreakScreen() {
               size={24}
               color={colors.warning}
             />
-            <Text style={styles.motivationTitle}>Keep Going!</Text>
+            <Text style={styles.motivationTitle}>{t('iman.keepGoing')}</Text>
           </View>
           <Text style={styles.motivationText}>
-            {streakData.currentStreak === 0 && "Complete all 5 prayers today to start your streak!"}
-            {streakData.currentStreak > 0 && streakData.currentStreak < 7 && "You're building a great habit! Keep it up!"}
-            {streakData.currentStreak >= 7 && streakData.currentStreak < 30 && "One week down! You're doing amazing!"}
-            {streakData.currentStreak >= 30 && streakData.currentStreak < 100 && "A month of consistency! Masha'Allah!"}
-            {streakData.currentStreak >= 100 && "100+ days! You're an inspiration!"}
+            {streakData.currentStreak === 0 && t('iman.startStreakMessage')}
+            {streakData.currentStreak > 0 && streakData.currentStreak < 7 && t('iman.buildingHabit')}
+            {streakData.currentStreak >= 7 && streakData.currentStreak < 30 && t('iman.oneWeekDown')}
+            {streakData.currentStreak >= 30 && streakData.currentStreak < 100 && t('iman.monthConsistency')}
+            {streakData.currentStreak >= 100 && t('iman.hundredDays')}
           </Text>
         </View>
 
@@ -290,14 +292,14 @@ export default function PrayerStreakScreen() {
               size={20}
               color={colors.accent}
             />
-            <Text style={styles.tipsTitle}>Tips for Maintaining Your Streak</Text>
+            <Text style={styles.tipsTitle}>{t('iman.tipsForMaintainingStreak')}</Text>
           </View>
           <Text style={styles.tipsText}>
-            - Set reminders for each prayer time{'\n'}
-            - Pray as soon as you hear the adhan{'\n'}
-            - Find an accountability partner{'\n'}
-            - Make dua for consistency{'\n'}
-            - Remember: quality over quantity
+            - {t('iman.setReminders')}{'\n'}
+            - {t('iman.prayAfterAdhan')}{'\n'}
+            - {t('iman.findAccountabilityPartner')}{'\n'}
+            - {t('iman.makeDuaForConsistency')}{'\n'}
+            - {t('iman.qualityOverQuantity')}
           </Text>
         </View>
 

@@ -21,23 +21,59 @@ export default function NotificationSettingsScreen() {
   const [refreshingPrayer, setRefreshingPrayer] = useState(false);
 
   const handleRequestPermissions = async () => {
+    if (requesting || loading) {
+      console.log('⏳ Permission request already in progress, skipping...');
+      return; // Prevent multiple simultaneous requests
+    }
+    
+    console.log('📱 Starting permission request...');
     setRequesting(true);
+    
     try {
+      // Request permissions - this may show system dialogs
+      // The system dialogs will appear and the user can interact with them
+      // The screen should remain open during this process
       await requestPermissions();
-      Alert.alert(
-        'Permissions Updated',
-        'Your notification and location permissions have been updated.',
-        [{ text: 'OK' }]
-      );
+      
+      console.log('✅ Permissions request completed successfully');
+      
+      // Wait a bit for state to update, then show success message
+      // Use a longer delay to ensure the permission dialogs have fully closed
+      setTimeout(() => {
+        Alert.alert(
+          'Permissions Updated',
+          'Your notification and location permissions have been updated. You can now enable specific notification types below.',
+          [{ 
+            text: 'OK',
+            onPress: () => {
+              console.log('✅ User acknowledged permissions update');
+            }
+          }]
+        );
+      }, 1000);
     } catch (error) {
-      console.error('Error requesting permissions:', error);
-      Alert.alert(
-        'Error',
-        'Failed to update permissions. Please try again.',
-        [{ text: 'OK' }]
-      );
+      console.error('❌ Error requesting permissions:', error);
+      
+      // Show error alert after a delay to ensure screen is still mounted
+      setTimeout(() => {
+        Alert.alert(
+          'Error',
+          `Failed to update permissions: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
+          [{ 
+            text: 'OK',
+            onPress: () => {
+              console.log('✅ User acknowledged error');
+            }
+          }]
+        );
+      }, 500);
     } finally {
-      setRequesting(false);
+      // Ensure we always reset the requesting state
+      // Use a delay to ensure any alerts have been shown
+      setTimeout(() => {
+        setRequesting(false);
+        console.log('🔄 Request state reset');
+      }, 200);
     }
   };
 
@@ -168,7 +204,10 @@ export default function NotificationSettingsScreen() {
 
           <TouchableOpacity
             style={styles.requestButton}
-            onPress={handleRequestPermissions}
+            onPress={(e) => {
+              e?.preventDefault?.();
+              handleRequestPermissions();
+            }}
             disabled={requesting || loading}
             activeOpacity={0.7}
           >

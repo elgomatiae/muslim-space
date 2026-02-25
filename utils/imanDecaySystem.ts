@@ -61,7 +61,6 @@ async function loadActivityLog(): Promise<ActivityLog> {
     },
     ilm: {
       lectures: now,
-      recitations: now,
       quizzes: now,
       reflection: now,
     },

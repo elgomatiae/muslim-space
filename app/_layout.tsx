@@ -21,6 +21,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 // NotificationProvider is lazy-loaded - don't import at top level
 import { ImanTrackerProvider } from "@/contexts/ImanTrackerContext";
 import { AchievementCelebrationProvider } from "@/contexts/AchievementCelebrationContext";
+import { I18nProvider } from "@/contexts/I18nContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Lazy NotificationProvider - only loads after React Native is fully initialized
@@ -196,31 +197,33 @@ export default function RootLayout() {
           <ThemeProvider
             value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
           >
-            <AuthProvider>
-            <AchievementCelebrationProvider>
-              {/* Lazy load NotificationProvider to prevent immediate native module crashes */}
-              <LazyNotificationProvider>
-                <ImanTrackerProvider>
-                  <WidgetProvider>
-                    <GestureHandlerRootView>
-                    <Stack>
-                    {/* Root index - handles auth routing */}
-                    <Stack.Screen name="index" options={{ headerShown: false }} />
-                    
-                    {/* Auth screens */}
-                    <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+            <I18nProvider>
+              <AuthProvider>
+              <AchievementCelebrationProvider>
+                {/* Lazy load NotificationProvider to prevent immediate native module crashes */}
+                <LazyNotificationProvider>
+                  <ImanTrackerProvider>
+                    <WidgetProvider>
+                      <GestureHandlerRootView>
+                      <Stack>
+                      {/* Root index - handles auth routing */}
+                      <Stack.Screen name="index" options={{ headerShown: false }} />
+                      
+                      {/* Auth screens */}
+                      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
 
-                    {/* Main app with tabs - protected */}
-                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                      {/* Main app with tabs - protected */}
+                      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
-                    </Stack>
-                    <SystemBars style={"auto"} />
-                    </GestureHandlerRootView>
-                  </WidgetProvider>
-                </ImanTrackerProvider>
-              </LazyNotificationProvider>
-            </AchievementCelebrationProvider>
-            </AuthProvider>
+                      </Stack>
+                      <SystemBars style={"auto"} />
+                      </GestureHandlerRootView>
+                    </WidgetProvider>
+                  </ImanTrackerProvider>
+                </LazyNotificationProvider>
+              </AchievementCelebrationProvider>
+              </AuthProvider>
+            </I18nProvider>
           </ThemeProvider>
       </SafeAreaProvider>
     </ErrorBoundary>

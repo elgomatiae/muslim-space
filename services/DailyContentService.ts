@@ -28,8 +28,9 @@ export interface DailyHadith {
 
 /**
  * Get today's daily verse - changes at midnight local time
+ * @param locale Optional locale code to filter verses by language (e.g., 'en', 'ar', 'es')
  */
-export async function getDailyVerse(): Promise<DailyVerse | null> {
+export async function getDailyVerse(locale?: string): Promise<DailyVerse | null> {
   try {
     // Get today's date in local timezone for consistent daily selection
     const today = new Date();
@@ -43,24 +44,59 @@ export async function getDailyVerse(): Promise<DailyVerse | null> {
     let data: any[] | null = null;
     let error: any = null;
 
-    // Try daily_verses table first (correct table name per migration)
-    const result1 = await supabase
+    // Build query - try with language filter if locale is provided
+    let query1 = supabase
       .from('daily_verses')
       .select('id, arabic_text, translation, reference')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false });
+      .eq('is_active', true);
+    
+    // Try to filter by language if locale is provided
+    if (locale) {
+      query1 = query1.eq('language', locale);
+    }
+    
+    const result1 = await query1.order('created_at', { ascending: false });
 
-    if (!result1.error && result1.data && result1.data.length > 0) {
+    // If error suggests language column doesn't exist, retry without language filter
+    if (result1.error && locale && result1.error.message?.includes('column') && result1.error.message?.includes('language')) {
+      console.log('Language column not found, fetching all languages');
+      const retryResult = await supabase
+        .from('daily_verses')
+        .select('id, arabic_text, translation, reference')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+      
+      if (!retryResult.error && retryResult.data && retryResult.data.length > 0) {
+        data = retryResult.data;
+      }
+    } else if (!result1.error && result1.data && result1.data.length > 0) {
       data = result1.data;
     } else {
       // Fallback to quran_verses table
-      const result2 = await supabase
+      let query2 = supabase
         .from('quran_verses')
-        .select('id, arabic, translation, reference')
-        .order('created_at', { ascending: false });
+        .select('id, arabic, translation, reference');
       
-      data = result2.data;
-      error = result2.error;
+      if (locale) {
+        query2 = query2.eq('language', locale);
+      }
+      
+      const result2 = await query2.order('created_at', { ascending: false });
+      
+      // If error suggests language column doesn't exist, retry without language filter
+      if (result2.error && locale && result2.error.message?.includes('column') && result2.error.message?.includes('language')) {
+        console.log('Language column not found in quran_verses, fetching all languages');
+        const retryResult2 = await supabase
+          .from('quran_verses')
+          .select('id, arabic, translation, reference')
+          .order('created_at', { ascending: false });
+        
+        data = retryResult2.data;
+        error = retryResult2.error;
+      } else {
+        data = result2.data;
+        error = result2.error;
+      }
     }
 
     if (error) {
@@ -97,8 +133,9 @@ export async function getDailyVerse(): Promise<DailyVerse | null> {
 
 /**
  * Get today's daily hadith - changes at midnight local time
+ * @param locale Optional locale code to filter hadiths by language (e.g., 'en', 'ar', 'es')
  */
-export async function getDailyHadith(): Promise<DailyHadith | null> {
+export async function getDailyHadith(locale?: string): Promise<DailyHadith | null> {
   try {
     // Get today's date in local timezone for consistent daily selection
     const today = new Date();
@@ -112,24 +149,59 @@ export async function getDailyHadith(): Promise<DailyHadith | null> {
     let data: any[] | null = null;
     let error: any = null;
 
-    // Try daily_hadiths table first (correct table name per migration)
-    const result1 = await supabase
+    // Build query - try with language filter if locale is provided
+    let query1 = supabase
       .from('daily_hadiths')
       .select('id, arabic_text, translation, source')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false });
+      .eq('is_active', true);
+    
+    // Try to filter by language if locale is provided
+    if (locale) {
+      query1 = query1.eq('language', locale);
+    }
+    
+    const result1 = await query1.order('created_at', { ascending: false });
 
-    if (!result1.error && result1.data && result1.data.length > 0) {
+    // If error suggests language column doesn't exist, retry without language filter
+    if (result1.error && locale && result1.error.message?.includes('column') && result1.error.message?.includes('language')) {
+      console.log('Language column not found, fetching all languages');
+      const retryResult = await supabase
+        .from('daily_hadiths')
+        .select('id, arabic_text, translation, source')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+      
+      if (!retryResult.error && retryResult.data && retryResult.data.length > 0) {
+        data = retryResult.data;
+      }
+    } else if (!result1.error && result1.data && result1.data.length > 0) {
       data = result1.data;
     } else {
       // Fallback to hadiths table
-      const result2 = await supabase
+      let query2 = supabase
         .from('hadiths')
-        .select('id, arabic, translation, reference')
-        .order('created_at', { ascending: false });
+        .select('id, arabic, translation, reference');
       
-      data = result2.data;
-      error = result2.error;
+      if (locale) {
+        query2 = query2.eq('language', locale);
+      }
+      
+      const result2 = await query2.order('created_at', { ascending: false });
+      
+      // If error suggests language column doesn't exist, retry without language filter
+      if (result2.error && locale && result2.error.message?.includes('column') && result2.error.message?.includes('language')) {
+        console.log('Language column not found in hadiths, fetching all languages');
+        const retryResult2 = await supabase
+          .from('hadiths')
+          .select('id, arabic, translation, reference')
+          .order('created_at', { ascending: false });
+        
+        data = retryResult2.data;
+        error = retryResult2.error;
+      } else {
+        data = result2.data;
+        error = result2.error;
+      }
     }
 
     if (error) {

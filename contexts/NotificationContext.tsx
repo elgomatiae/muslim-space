@@ -161,21 +161,27 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const requestPermissions = async (): Promise<void> => {
     try {
+      console.log('🔔 Starting permission request flow...');
+      
       // Request notification permissions - wrap in try-catch
       let notificationGranted = false;
       try {
+        console.log('📱 Requesting notification permissions...');
         notificationGranted = await requestNotificationPermissions();
+        console.log(`📱 Notification permission result: ${notificationGranted ? 'granted' : 'denied'}`);
       } catch (error) {
-        console.error('Error requesting notification permissions:', error);
+        console.error('❌ Error requesting notification permissions:', error);
         // Continue even if notification permission request fails
       }
       
       // Request location permissions - wrap in try-catch
       let locationGranted = false;
       try {
+        console.log('📍 Requesting location permissions...');
         locationGranted = await requestLocationPermissions();
+        console.log(`📍 Location permission result: ${locationGranted ? 'granted' : 'denied'}`);
       } catch (error) {
-        console.error('Error requesting location permissions:', error);
+        console.error('❌ Error requesting location permissions:', error);
         // Continue even if location permission request fails
       }
       
@@ -210,35 +216,54 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         locationServicesEnabled = false;
       }
       
+      console.log('🔄 Reloading settings after permission request...');
+      
       // Reload settings to get updated permissions
       try {
         await loadSettings();
+        console.log('✅ Settings reloaded successfully');
       } catch (error) {
-        console.error('Error reloading settings after permission request:', error);
+        console.error('❌ Error reloading settings after permission request:', error);
+        // Don't throw - continue with current settings
       }
       
       // Get updated settings after reload
       let updatedSettings;
       try {
         updatedSettings = await getNotificationSettings(user?.id);
+        console.log('✅ Updated settings retrieved:', {
+          notificationGranted: updatedSettings.notificationPermissionGranted,
+          locationGranted: updatedSettings.locationPermissionGranted,
+        });
       } catch (error) {
-        console.error('Error getting updated settings:', error);
+        console.error('❌ Error getting updated settings:', error);
         // Use current settings as fallback
         updatedSettings = settings;
       }
       
       // If both permissions granted and prayer notifications enabled, schedule notifications
       if (notificationGranted && locationGranted && updatedSettings.prayerNotifications) {
+        console.log('🕌 Scheduling prayer notifications...');
         try {
           await refreshPrayerTimesAndNotifications();
+          console.log('✅ Prayer notifications scheduled');
         } catch (error) {
-          console.error('Error refreshing prayer notifications after permission grant:', error);
+          console.error('❌ Error refreshing prayer notifications after permission grant:', error);
           // Don't throw - permissions were granted successfully
         }
+      } else {
+        console.log('ℹ️ Skipping prayer notification scheduling:', {
+          notificationGranted,
+          locationGranted,
+          prayerNotificationsEnabled: updatedSettings.prayerNotifications,
+        });
       }
+      
+      console.log('✅ Permission request flow completed successfully');
     } catch (error) {
-      console.error('Error requesting permissions:', error);
-      // Don't throw - return gracefully
+      console.error('❌ Error requesting permissions:', error);
+      // Re-throw the error so the caller can handle it
+      throw error;
     }
   };
 
@@ -464,7 +489,27 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 export function useNotifications() {
   const context = useContext(NotificationContext);
   if (context === undefined) {
-    throw new Error('useNotifications must be used within a NotificationProvider');
+    // Return default values instead of throwing to prevent crashes
+    // This allows components to render while NotificationProvider is still loading
+    return {
+      settings: {
+        prayerNotifications: true,
+        dailyContentNotifications: true,
+        imanScoreNotifications: true,
+        imanTrackerNotifications: true,
+        goalReminderNotifications: true,
+        achievementNotifications: true,
+        locationPermissionGranted: false,
+        notificationPermissionGranted: false,
+        locationServicesEnabled: false,
+      },
+      loading: true,
+      scheduledCount: 0,
+      requestPermissions: async () => {},
+      updateSettings: async () => {},
+      refreshPrayerTimesAndNotifications: async () => {},
+      refreshScheduledCount: async () => {},
+    };
   }
   return context;
 }

@@ -131,6 +131,11 @@ export async function trackLectureCompletion(userId: string): Promise<void> {
  */
 export async function trackQuizCompletion(userId: string): Promise<void> {
   try {
+    if (!userId || typeof userId !== 'string') {
+      console.warn('Invalid userId provided to trackQuizCompletion');
+      return;
+    }
+
     console.log(`❓ Tracking quiz completion for user ${userId}`);
     
     // Update streak (non-blocking)
@@ -140,12 +145,17 @@ export async function trackQuizCompletion(userId: string): Promise<void> {
       }
     });
     
-    // Check for new achievements
-    await checkAndUnlockAchievements(userId);
+    // Check for new achievements (non-blocking)
+    checkAndUnlockAchievements(userId).catch(err => {
+      if (__DEV__) {
+        console.log('Error checking achievements after quiz:', err);
+      }
+    });
     
     console.log(`✅ Quiz completion tracked successfully`);
   } catch (error) {
     console.log(`❌ Error tracking quiz completion:`, error);
+    // Don't throw - this is non-critical
   }
 }
 

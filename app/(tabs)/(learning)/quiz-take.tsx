@@ -6,6 +6,7 @@ import { colors, typography, spacing, borderRadius, shadows } from '@/styles/com
 import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useTranslation } from '@/contexts/I18nContext';
 import { supabase } from '@/lib/supabase';
 
 interface QuizQuestion {
@@ -24,6 +25,7 @@ interface UserAnswer {
 }
 
 export default function QuizTakeScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams();
   const quizId = params.quizId as string;
@@ -43,6 +45,13 @@ export default function QuizTakeScreen() {
 
   const loadQuestions = async () => {
     try {
+      if (!quizId) {
+        console.error('No quiz ID provided');
+        Alert.alert(t('common.error'), 'Quiz ID is missing');
+        router.back();
+        return;
+      }
+
       // Fetch all questions for this quiz
       const { data, error } = await supabase
         .from('quiz_questions')
@@ -53,22 +62,65 @@ export default function QuizTakeScreen() {
 
       if (error) {
         console.error('Error loading quiz questions:', error);
-        Alert.alert('Error', 'Failed to load quiz questions');
+        // If table doesn't exist, show appropriate message
+        if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+          Alert.alert(
+            t('common.error'),
+            'Quiz questions table not found. Please ensure the database is properly set up.'
+          );
+        } else {
+          Alert.alert(t('common.error'), t('learning.failedToLoadQuestions') || 'Failed to load questions');
+        }
         router.back();
         return;
       }
 
-      if (!data || data.length < 10) {
-        Alert.alert('Not Enough Questions', 'This quiz needs at least 10 questions to start.');
+      if (!data || data.length === 0) {
+        Alert.alert(
+          t('learning.notEnoughQuestions') || 'No Questions Available',
+          t('learning.notEnoughQuestionsMessage') || 'This quiz has no questions available.'
+        );
         router.back();
         return;
       }
 
-      // Parse options from JSON strings if needed
-      const parsedData = data.map(q => ({
-        ...q,
-        options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options,
-      }));
+      if (data.length < 10) {
+        console.warn(`Only ${data.length} questions available, using all of them`);
+      }
+
+      // Parse options from JSON strings if needed, with error handling
+      const parsedData = data.map(q => {
+        try {
+          let options = q.options;
+          if (typeof options === 'string') {
+            options = JSON.parse(options);
+          }
+          // Ensure options is an array
+          if (!Array.isArray(options)) {
+            console.warn('Invalid options format for question:', q.id);
+            options = [];
+          }
+          return {
+            ...q,
+            options,
+          };
+        } catch (parseError) {
+          console.error('Error parsing options for question:', q.id, parseError);
+          return {
+            ...q,
+            options: [],
+          };
+        }
+      }).filter(q => q.options && q.options.length >= 2); // Filter out questions with invalid options
+
+      if (parsedData.length < 1) {
+        Alert.alert(
+          t('common.error'),
+          'No valid questions found. Please check the quiz data.'
+        );
+        router.back();
+        return;
+      }
 
       // Improved random selection: Fisher-Yates shuffle for better distribution
       const shuffled = [...parsedData];
@@ -77,13 +129,16 @@ export default function QuizTakeScreen() {
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
       
-      // Select 10 random questions
-      const selected = shuffled.slice(0, 10);
+      // Select up to 10 random questions (or all if less than 10)
+      const selected = shuffled.slice(0, Math.min(10, shuffled.length));
       
       setQuestions(selected);
     } catch (error) {
       console.error('Error loading quiz questions:', error);
-      Alert.alert('Error', 'Failed to load quiz questions');
+      Alert.alert(
+        t('common.error') || 'Error',
+        'Failed to load quiz questions. Please try again later.'
+      );
       router.back();
     } finally {
       setLoading(false);
@@ -92,184 +147,240 @@ export default function QuizTakeScreen() {
 
   const handleAnswerSelect = (answer: string) => {
     if (showExplanation) return; // Prevent changing answer after submission
+    if (!answer || typeof answer !== 'string') return;
     setSelectedAnswer(answer);
   };
 
   const handleSubmitAnswer = () => {
     if (!selectedAnswer) {
-      Alert.alert('No Answer Selected', 'Please select an answer before continuing.');
+      Alert.alert(
+        t('learning.noAnswerSelected') || 'No Answer Selected',
+        t('learning.selectAnswerBeforeContinuing') || 'Please select an answer before continuing.'
+      );
       return;
     }
 
     const currentQuestion = questions[currentQuestionIndex];
-    // Convert selected answer (A/B/C/D) to index (0/1/2/3)
-    const selectedIndex = selectedAnswer.charCodeAt(0) - 65; // 'A'=0, 'B'=1, etc.
-    const isCorrect = selectedIndex === currentQuestion.correct_answer;
+    if (!currentQuestion || !currentQuestion.id) {
+      console.error('Invalid question at index:', currentQuestionIndex);
+      Alert.alert(t('common.error') || 'Error', 'Invalid question. Please try again.');
+      return;
+    }
 
-    setUserAnswers([
-      ...userAnswers,
-      {
-        questionId: currentQuestion.id,
-        answer: selectedAnswer,
-        isCorrect,
-      },
-    ]);
+    try {
+      // Convert selected answer (A/B/C/D) to index (0/1/2/3)
+      const selectedIndex = selectedAnswer.charCodeAt(0) - 65; // 'A'=0, 'B'=1, etc.
+      
+      // Validate selected index
+      if (selectedIndex < 0 || selectedIndex > 3) {
+        console.error('Invalid answer selection:', selectedAnswer);
+        Alert.alert(t('common.error') || 'Error', 'Invalid answer selection.');
+        return;
+      }
 
-    setShowExplanation(true);
+      const isCorrect = selectedIndex === currentQuestion.correct_answer;
+
+      setUserAnswers([
+        ...userAnswers,
+        {
+          questionId: currentQuestion.id,
+          answer: selectedAnswer,
+          isCorrect,
+        },
+      ]);
+
+      setShowExplanation(true);
+    } catch (error) {
+      console.error('Error submitting answer:', error);
+      Alert.alert(t('common.error') || 'Error', 'Failed to submit answer. Please try again.');
+    }
   };
 
   const handleNextQuestion = () => {
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-      setSelectedAnswer(null);
-      setShowExplanation(false);
-    } else {
-      // Quiz completed
-      finishQuiz();
+    try {
+      if (currentQuestionIndex < questions.length - 1) {
+        setCurrentQuestionIndex(currentQuestionIndex + 1);
+        setSelectedAnswer(null);
+        setShowExplanation(false);
+      } else {
+        // Quiz completed
+        finishQuiz();
+      }
+    } catch (error) {
+      console.error('Error moving to next question:', error);
+      Alert.alert(t('common.error') || 'Error', 'Failed to proceed. Please try again.');
     }
   };
 
   const finishQuiz = async () => {
-    const score = userAnswers.filter(a => a.isCorrect).length;
-    const percentage = (score / questions.length) * 100;
+    // Validate data before processing
+    if (!questions || questions.length === 0) {
+      console.error('No questions available to finish quiz');
+      Alert.alert(t('common.error') || 'Error', 'Quiz data is invalid. Please try again.');
+      router.back();
+      return;
+    }
+
+    // Safely calculate score
+    const validAnswers = (userAnswers || []).filter(a => a && typeof a.isCorrect === 'boolean');
+    const score = validAnswers.filter(a => a.isCorrect).length;
+    const totalQuestions = questions.length;
+    const percentage = totalQuestions > 0 ? (score / totalQuestions) * 100 : 0;
     const timeTaken = Math.floor((Date.now() - startTime) / 1000);
+
+    // Always navigate to results first - don't block user from seeing their score
+    const navigateToResults = () => {
+      router.push({
+        pathname: '/(tabs)/(learning)/quiz-result',
+        params: {
+          score: score.toString(),
+          total: totalQuestions.toString(),
+          percentage: percentage.toFixed(1),
+          categoryName: categoryName || 'Quiz',
+          timeTaken: timeTaken.toString(),
+        },
+      });
+    };
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        router.push({
-          pathname: '/(tabs)/(learning)/quiz-result',
-          params: {
-            score: score.toString(),
-            total: questions.length.toString(),
-            percentage: percentage.toFixed(1),
-            categoryName,
-          },
-        });
+        navigateToResults();
         return;
       }
 
-      // Save quiz attempt
-      let attemptData = null;
-      const attemptPayload: any = {
-        user_id: user.id,
-        score,
-        total_questions: questions.length,
-        percentage,
-        time_taken_seconds: timeTaken,
-      };
+      // Save quiz attempt (non-blocking - don't wait for it)
+      (async () => {
+        try {
+          const attemptPayload: any = {
+            user_id: user.id,
+            score,
+            total_questions: totalQuestions,
+            percentage: Math.round(percentage * 100) / 100, // Round to 2 decimal places
+            time_taken_seconds: timeTaken,
+            quiz_id: quizId,
+          };
 
-      // Try quiz_id first (new schema), fallback to category_id (old schema)
-      // Check if quiz_id column exists by trying to insert with it
-      attemptPayload.quiz_id = quizId;
-
-      const { data: attemptDataResult, error: attemptError } = await supabase
-        .from('user_quiz_attempts')
-        .insert(attemptPayload)
-        .select()
-        .single();
-
-      if (attemptError) {
-        console.error('Error saving quiz attempt:', attemptError);
-        
-        // If quiz_id doesn't exist, try with category_id (legacy schema)
-        if (attemptError.message?.includes('column "quiz_id"') || attemptError.code === '42703') {
-          console.log('⚠️ quiz_id column not found, trying category_id (legacy schema)');
-          // Try to find category_id from quiz_id - this is a fallback
-          // For now, just save without category_id/quiz_id
-          const { data: fallbackData, error: fallbackError } = await supabase
+          const { data: attemptDataResult, error: attemptError } = await supabase
             .from('user_quiz_attempts')
-            .insert({
-              user_id: user.id,
-              score,
-              total_questions: questions.length,
-              percentage,
-              time_taken_seconds: timeTaken,
-            })
+            .insert(attemptPayload)
             .select()
             .single();
-          
-          if (!fallbackError) {
-            attemptData = fallbackData;
-          } else {
-            console.error('Error saving quiz attempt (fallback):', fallbackError);
-          }
-        } else if (attemptError.code === 'PGRST205' || attemptError.message?.includes('Could not find the table')) {
-          console.log('⚠️ Quiz attempts table not found, continuing without saving to database');
-        } else {
-          // Other errors - log but continue
-          console.error('Quiz attempt save error (continuing anyway):', attemptError);
-        }
-      } else {
-        attemptData = attemptDataResult;
-      }
 
-      // Save individual answers (only if attempt was saved successfully)
-      if (attemptData && attemptData.id) {
-        try {
-          const answersToInsert = userAnswers.map(ua => ({
-            attempt_id: attemptData.id,
-            question_id: ua.questionId,
-            user_answer: ua.answer,
-            is_correct: ua.isCorrect,
-          }));
-
-          const { error: answersError } = await supabase
-            .from('user_quiz_answers')
-            .insert(answersToInsert);
-
-          if (answersError) {
-            console.error('Error saving quiz answers:', answersError);
-            // If table doesn't exist, that's okay - quiz still works
-            if (answersError.code === 'PGRST205' || answersError.message?.includes('Could not find the table')) {
-              console.log('⚠️ user_quiz_answers table not found - run migration 014_create_user_quiz_answers_table.sql');
+          if (attemptError) {
+            // Handle different error types gracefully
+            if (attemptError.code === 'PGRST205' || attemptError.message?.includes('Could not find the table')) {
+              console.log('⚠️ Quiz attempts table not found - continuing without database save');
+            } else if (attemptError.message?.includes('column "quiz_id"') || attemptError.code === '42703') {
+              // Try without quiz_id (legacy schema)
+              const { data: fallbackData, error: fallbackError } = await supabase
+                .from('user_quiz_attempts')
+                .insert({
+                  user_id: user.id,
+                  score,
+                  total_questions: totalQuestions,
+                  percentage: Math.round(percentage * 100) / 100,
+                  time_taken_seconds: timeTaken,
+                })
+                .select()
+                .single();
+              
+              if (!fallbackError && fallbackData) {
+                await saveQuizAnswers(fallbackData.id, user.id);
+              }
             } else {
-              // Log other errors but don't block quiz completion
-              console.error('Quiz answers save error (continuing anyway):', answersError);
+              console.error('Quiz attempt save error:', attemptError);
             }
-          } else {
-            console.log('✅ Quiz answers saved successfully');
+          } else if (attemptDataResult) {
+            await saveQuizAnswers(attemptDataResult.id, user.id);
           }
         } catch (error) {
-          console.error('Exception saving quiz answers:', error);
-          // Don't block quiz completion if answers can't be saved
+          console.error('Error in quiz save operation:', error);
         }
-      }
+      })();
 
-      // Track quiz completion for achievements
-      if (user) {
+      // Track quiz completion for achievements (non-blocking)
+      (async () => {
         try {
           const { trackQuizCompletion } = await import('@/utils/imanActivityIntegration');
           await trackQuizCompletion(user.id);
         } catch (error) {
-          console.log('Error tracking quiz:', error);
+          console.log('Error tracking quiz completion:', error);
         }
-      }
+      })();
 
-      // Navigate to results (always navigate, even if saving failed)
-      router.push({
-        pathname: '/(tabs)/(learning)/quiz-result',
-        params: {
-          score: score.toString(),
-          total: questions.length.toString(),
-          percentage: percentage.toFixed(1),
-          categoryName,
-          timeTaken: timeTaken.toString(),
-        },
-      });
+      // Navigate immediately - don't wait for saves
+      navigateToResults();
     } catch (error) {
       console.error('Error finishing quiz:', error);
-      // Still navigate to results - don't block user from seeing their score
-      router.push({
-        pathname: '/(tabs)/(learning)/quiz-result',
-        params: {
-          score: score.toString(),
-          total: questions.length.toString(),
-          percentage: percentage.toFixed(1),
-          categoryName,
-          timeTaken: timeTaken.toString(),
-        },
-      });
+      // Still try to navigate with available data
+      try {
+        const fallbackScore = (userAnswers || []).filter(a => a?.isCorrect).length;
+        const fallbackTotal = questions?.length || 0;
+        router.push({
+          pathname: '/(tabs)/(learning)/quiz-result',
+          params: {
+            score: fallbackScore.toString(),
+            total: fallbackTotal.toString(),
+            percentage: fallbackTotal > 0 ? ((fallbackScore / fallbackTotal) * 100).toFixed(1) : '0',
+            categoryName: categoryName || 'Quiz',
+            timeTaken: Math.floor((Date.now() - startTime) / 1000).toString(),
+          },
+        });
+      } catch (navError) {
+        console.error('Failed to navigate to results:', navError);
+        Alert.alert(t('common.error') || 'Error', 'Failed to complete quiz. Please try again.');
+        router.back();
+      }
+    }
+  };
+
+  const saveQuizAnswers = async (attemptId: string, userId: string) => {
+    try {
+      if (!attemptId || !userId) {
+        console.warn('Missing attemptId or userId, skipping answer save');
+        return;
+      }
+
+      if (!userAnswers || userAnswers.length === 0) {
+        console.warn('No user answers to save');
+        return;
+      }
+
+      // Validate and filter answers before inserting
+      const answersToInsert = userAnswers
+        .filter(ua => ua && ua.questionId && ua.answer)
+        .map(ua => ({
+          attempt_id: attemptId,
+          question_id: ua.questionId,
+          user_answer: ua.answer,
+          is_correct: ua.isCorrect || false,
+        }));
+
+      if (answersToInsert.length === 0) {
+        console.warn('No valid answers to insert after filtering');
+        return;
+      }
+
+      const { error: answersError } = await supabase
+        .from('user_quiz_answers')
+        .insert(answersToInsert);
+
+      if (answersError) {
+        if (answersError.code === 'PGRST205' || answersError.message?.includes('Could not find the table')) {
+          console.log('⚠️ user_quiz_answers table not found - answers not saved');
+        } else if (answersError.code === '23503') {
+          // Foreign key constraint violation
+          console.warn('Foreign key constraint violation - attempt may not exist:', answersError);
+        } else {
+          console.error('Quiz answers save error:', answersError);
+        }
+      } else {
+        console.log(`✅ ${answersToInsert.length} quiz answers saved successfully`);
+      }
+    } catch (error) {
+      console.error('Exception saving quiz answers:', error);
+      // Don't throw - this is non-critical
     }
   };
 

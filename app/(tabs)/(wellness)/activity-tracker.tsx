@@ -7,6 +7,7 @@ import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTranslation } from "@/contexts/I18nContext";
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
 import Svg, { Circle, Defs, RadialGradient as SvgRadialGradient, Stop } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
@@ -184,7 +185,7 @@ export default function ActivityTrackerScreen() {
 
   const handleQuickWorkout = (minutes: number) => {
     if (!user || minutes <= 0) {
-      Alert.alert('Error', 'Please enter a valid number of minutes.');
+      Alert.alert(t('common.error'), t('wellness.invalidMinutes'));
       return;
     }
     
@@ -211,7 +212,7 @@ export default function ActivityTrackerScreen() {
 
   const addQuickWorkout = async (minutes: number, workoutType?: string) => {
     if (!user || minutes <= 0) {
-      Alert.alert('Error', 'Please enter a valid number of minutes.');
+      Alert.alert(t('common.error'), t('wellness.invalidMinutes'));
       return;
     }
     
@@ -242,7 +243,7 @@ export default function ActivityTrackerScreen() {
           // Still update Iman Tracker even if table doesn't exist
           const newTotal = todayExerciseMinutes + minutes;
           setTodayExerciseMinutes(newTotal);
-          await updateGoalsProgress(newTotal);
+          await updateGoalsProgress(newTotal, { [selectedType]: minutes });
           await refreshData();
           
           // Log to activity_log for achievements
@@ -274,13 +275,13 @@ export default function ActivityTrackerScreen() {
           );
           return;
         }
-        Alert.alert('Error', 'Failed to save workout. Please try again.');
+        Alert.alert(t('common.error'), t('wellness.failedToSaveWorkout'));
         return;
       }
 
       const newTotal = todayExerciseMinutes + minutes;
       setTodayExerciseMinutes(newTotal);
-      await updateGoalsProgress(newTotal);
+      await updateGoalsProgress(newTotal, { [selectedType]: minutes });
       await refreshData();
       
       // Directly log workout to activity_log for achievements
@@ -324,7 +325,7 @@ export default function ActivityTrackerScreen() {
     const totalDuration = Object.values(workoutDurations).reduce((sum, duration) => sum + duration, 0);
     
     if (totalDuration === 0) {
-      Alert.alert('Error', 'Please enter at least one workout duration.');
+      Alert.alert(t('common.error'), t('wellness.enterWorkoutDuration'));
       return;
     }
     
@@ -354,7 +355,7 @@ export default function ActivityTrackerScreen() {
           // Still update Iman Tracker even if table doesn't exist
           const newTotal = todayExerciseMinutes + totalDuration;
           setTodayExerciseMinutes(newTotal);
-          await updateGoalsProgress(newTotal);
+          await updateGoalsProgress(newTotal, workoutDurations);
           await refreshData();
           
           // Log to activity_log for achievements
@@ -386,13 +387,13 @@ export default function ActivityTrackerScreen() {
           setShowWorkoutModal(false);
           return;
         }
-        Alert.alert('Error', 'Failed to log workout. Please try again.');
+        Alert.alert(t('common.error'), t('wellness.failedToLogWorkout'));
         return;
       }
       setShowWorkoutModal(false);
       const newTotal = todayExerciseMinutes + totalDuration;
       setTodayExerciseMinutes(newTotal);
-      await updateGoalsProgress(newTotal);
+      await updateGoalsProgress(newTotal, workoutDurations);
       await refreshData();
       
       // Directly log workout to activity_log for achievements
@@ -417,7 +418,7 @@ export default function ActivityTrackerScreen() {
         }
       }
       
-      Alert.alert('Success', `Logged ${totalDuration} minutes of exercise!`);
+      Alert.alert(t('common.success'), t('wellness.loggedExerciseMinutes', { minutes: totalDuration }));
       
       // Show completion modal if goal reached
       if (amanahGoals && newTotal >= amanahGoals.dailyExerciseGoal && todayExerciseMinutes < amanahGoals.dailyExerciseGoal) {
@@ -429,7 +430,7 @@ export default function ActivityTrackerScreen() {
     }
   };
 
-  const updateGoalsProgress = async (newTotal: number) => {
+  const updateGoalsProgress = async (newTotal: number, workoutDurationsByType?: { [key: string]: number }) => {
     if (!user || !amanahGoals) return;
 
     console.log('💪 Updating Iman Tracker with exercise progress:', newTotal, 'minutes');
@@ -462,10 +463,69 @@ export default function ActivityTrackerScreen() {
       }
     }
     
+    // Update workout type progress
+    const updatedWorkoutTypeCompleted = { ...amanahGoals.workoutTypeCompleted } || {};
+    const today = new Date().toISOString().split('T')[0];
+    
+    if (workoutDurationsByType) {
+      // Update daily progress for each workout type
+      Object.entries(workoutDurationsByType).forEach(([type, duration]) => {
+        if (!updatedWorkoutTypeCompleted[type as keyof typeof updatedWorkoutTypeCompleted]) {
+          updatedWorkoutTypeCompleted[type as keyof typeof updatedWorkoutTypeCompleted] = { daily: 0, weekly: 0 };
+        }
+        const typeData = updatedWorkoutTypeCompleted[type as keyof typeof updatedWorkoutTypeCompleted];
+        if (typeData) {
+          typeData.daily = (typeData.daily || 0) + duration;
+        }
+      });
+    } else {
+      // Fallback: try to get today's workouts from database
+      try {
+        const { data: todayWorkouts } = await supabase
+          .from('physical_activities')
+          .select('workout_durations, workout_type, duration_minutes')
+          .eq('user_id', user.id)
+          .eq('date', today);
+        
+        if (todayWorkouts) {
+          todayWorkouts.forEach(workout => {
+            if (workout.workout_durations && typeof workout.workout_durations === 'object') {
+              Object.entries(workout.workout_durations as { [key: string]: number }).forEach(([type, duration]) => {
+                if (!updatedWorkoutTypeCompleted[type as keyof typeof updatedWorkoutTypeCompleted]) {
+                  updatedWorkoutTypeCompleted[type as keyof typeof updatedWorkoutTypeCompleted] = { daily: 0, weekly: 0 };
+                }
+                const typeData = updatedWorkoutTypeCompleted[type as keyof typeof updatedWorkoutTypeCompleted];
+                if (typeData) {
+                  typeData.daily = (typeData.daily || 0) + duration;
+                }
+              });
+            } else if (workout.workout_type) {
+              // Single workout type
+              const type = workout.workout_type;
+              const duration = workout.duration_minutes || 0;
+              if (!updatedWorkoutTypeCompleted[type as keyof typeof updatedWorkoutTypeCompleted]) {
+                updatedWorkoutTypeCompleted[type as keyof typeof updatedWorkoutTypeCompleted] = { daily: 0, weekly: 0 };
+              }
+              const typeData = updatedWorkoutTypeCompleted[type as keyof typeof updatedWorkoutTypeCompleted];
+              if (typeData) {
+                typeData.daily = (typeData.daily || 0) + duration;
+              }
+            }
+          });
+        }
+      } catch (err) {
+        // Table might not exist - silently continue
+        if (__DEV__) {
+          console.log('Error fetching today workouts:', err);
+        }
+      }
+    }
+    
     await updateAmanahGoals({
       ...amanahGoals,
       dailyExerciseCompleted: newTotal,
-      weeklyWorkoutCompleted: weeklyWorkoutCount, // Use actual count from database
+      weeklyWorkoutCompleted: weeklyWorkoutCount,
+      workoutTypeCompleted: Object.keys(updatedWorkoutTypeCompleted).length > 0 ? updatedWorkoutTypeCompleted : undefined,
     });
   };
 
@@ -482,7 +542,7 @@ export default function ActivityTrackerScreen() {
     });
     
     setShowGoalsModal(false);
-    Alert.alert('Success', 'Your activity goal has been updated!');
+    Alert.alert(t('common.success'), t('wellness.activityGoalUpdated'));
   };
 
   // Ring configuration

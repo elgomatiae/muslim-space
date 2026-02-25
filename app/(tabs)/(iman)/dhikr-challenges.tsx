@@ -8,6 +8,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from '@/contexts/I18nContext';
 
 interface DhikrChallenge {
   id: string;
@@ -34,6 +35,7 @@ interface CustomPhrase {
 }
 
 export default function DhikrChallengesScreen() {
+  const { t } = useTranslation();
   const [challenges, setChallenges] = useState<DhikrChallenge[]>([]);
   const [customPhrases, setCustomPhrases] = useState<CustomPhrase[]>([]);
   const [showAddPhraseModal, setShowAddPhraseModal] = useState(false);
@@ -165,7 +167,7 @@ export default function DhikrChallengesScreen() {
         
         if (isCompleted && !challenge.completed) {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          Alert.alert('Challenge Completed!', `Masha'Allah! You completed the ${challenge.title}! 🎉`);
+          Alert.alert(t('iman.challengeCompleted'), t('iman.challengeCompletedMessage', { title: challenge.title }));
         }
         
         return {
@@ -181,7 +183,7 @@ export default function DhikrChallengesScreen() {
 
   const addCustomPhrase = () => {
     if (!newPhrase.arabic || !newPhrase.transliteration || !newPhrase.translation) {
-      Alert.alert('Missing Information', 'Please fill in all fields');
+      Alert.alert(t('common.error'), t('iman.fillAllFields'));
       return;
     }
 
@@ -199,7 +201,7 @@ export default function DhikrChallengesScreen() {
     setNewPhrase({ arabic: '', transliteration: '', translation: '' });
     setShowAddPhraseModal(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert('Success', 'Custom dhikr phrase added!');
+    Alert.alert(t('common.success'), t('iman.customDhikrPhraseAdded'));
   };
 
   const incrementCustomPhrase = (phraseId: string, amount: number) => {
@@ -214,12 +216,12 @@ export default function DhikrChallengesScreen() {
 
   const deleteCustomPhrase = (phraseId: string) => {
     Alert.alert(
-      'Delete Phrase',
-      'Are you sure you want to delete this custom phrase?',
+      t('iman.deletePhrase'),
+      t('iman.deletePhraseConfirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: () => {
             const updated = customPhrases.filter(phrase => phrase.id !== phraseId);
@@ -518,7 +520,7 @@ export default function DhikrChallengesScreen() {
                   style={styles.input}
                   value={newPhrase.arabic}
                   onChangeText={(text) => setNewPhrase({ ...newPhrase, arabic: text })}
-                  placeholder="Enter Arabic text"
+                  placeholder={t('iman.enterArabicText')}
                   placeholderTextColor={colors.textSecondary}
                 />
               </View>
@@ -529,7 +531,7 @@ export default function DhikrChallengesScreen() {
                   style={styles.input}
                   value={newPhrase.transliteration}
                   onChangeText={(text) => setNewPhrase({ ...newPhrase, transliteration: text })}
-                  placeholder="Enter transliteration"
+                  placeholder={t('iman.enterTransliteration')}
                   placeholderTextColor={colors.textSecondary}
                 />
               </View>
@@ -540,7 +542,7 @@ export default function DhikrChallengesScreen() {
                   style={[styles.input, styles.textArea]}
                   value={newPhrase.translation}
                   onChangeText={(text) => setNewPhrase({ ...newPhrase, translation: text })}
-                  placeholder="Enter English translation"
+                  placeholder={t('iman.enterEnglishTranslation')}
                   placeholderTextColor={colors.textSecondary}
                   multiline
                   numberOfLines={3}

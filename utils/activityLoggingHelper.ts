@@ -289,20 +289,6 @@ export async function logIlmActivity(
       });
     }
 
-    // Check for recitation completion
-    if (newGoals.weeklyRecitationsCompleted > (oldGoals.weeklyRecitationsCompleted || 0)) {
-      const increase = newGoals.weeklyRecitationsCompleted - (oldGoals.weeklyRecitationsCompleted || 0);
-      await logActivity({
-        userId,
-        activityType: 'recitation_listened',
-        activityCategory: 'ilm',
-        activityTitle: `Quran Recitation Listened`,
-        activityDescription: `Listened to ${increase} recitation(s)`,
-        activityValue: increase,
-        activityUnit: 'recitations',
-        pointsEarned: increase * 5,
-      });
-    }
 
     // Check for quiz completion
     if (newGoals.weeklyQuizzesCompleted > (oldGoals.weeklyQuizzesCompleted || 0)) {
@@ -364,15 +350,6 @@ export async function logIlmActivity(
         newGoals.weeklyLecturesGoal,
         oldGoals.weeklyLecturesCompleted || 0,
         'Weekly Lectures',
-        'ilm'
-      );
-    }
-    if (newGoals.weeklyRecitationsGoal > 0) {
-      await checkGoalCompletion(
-        newGoals.weeklyRecitationsCompleted,
-        newGoals.weeklyRecitationsGoal,
-        oldGoals.weeklyRecitationsCompleted || 0,
-        'Weekly Recitations',
         'ilm'
       );
     }

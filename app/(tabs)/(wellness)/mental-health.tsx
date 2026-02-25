@@ -8,6 +8,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTranslation } from "@/contexts/I18nContext";
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
 import * as Haptics from 'expo-haptics';
 
@@ -255,7 +256,7 @@ export default function MentalHealthHubScreen() {
       .from('journal_entries')
       .insert({
         user_id: user.id,
-        title: 'Quick Entry',
+          title: t('wellness.quickEntry'),
         content: quickJournalText,
       });
 
@@ -339,7 +340,7 @@ export default function MentalHealthHubScreen() {
         .from('journal_entries')
         .insert({
           user_id: user.id,
-          title: newEntryTitle.trim() || 'Untitled Entry',
+          title: newEntryTitle.trim() || t('wellness.untitledEntry'),
           content: newEntryContent.trim(),
           mood: selectedMood,
         });
@@ -609,7 +610,7 @@ export default function MentalHealthHubScreen() {
             <View style={styles.quickJournalCard}>
               <TextInput
                 style={styles.quickJournalInput}
-                placeholder="How are you feeling today? Express your thoughts..."
+                placeholder={t('wellness.howAreYouFeeling')}
                 placeholderTextColor={colors.textSecondary}
                 value={quickJournalText}
                 onChangeText={setQuickJournalText}
@@ -1081,7 +1082,7 @@ export default function MentalHealthHubScreen() {
                 <Text style={styles.formSectionTitle}>Title (Optional)</Text>
                 <TextInput
                   style={styles.titleInput}
-                  placeholder="Give your entry a title..."
+                  placeholder={t('wellness.giveEntryTitle')}
                   placeholderTextColor={colors.textSecondary}
                   value={newEntryTitle}
                   onChangeText={setNewEntryTitle}
@@ -1090,7 +1091,7 @@ export default function MentalHealthHubScreen() {
                 <Text style={styles.formSectionTitle}>Your Thoughts</Text>
                 <TextInput
                   style={styles.contentInput}
-                  placeholder="Write your thoughts, feelings, and reflections..."
+                  placeholder={t('wellness.writeYourThoughts')}
                   placeholderTextColor={colors.textSecondary}
                   value={newEntryContent}
                   onChangeText={setNewEntryContent}

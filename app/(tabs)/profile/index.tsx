@@ -7,6 +7,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from 'expo-haptics';
 import { useAuth } from "@/contexts/AuthContext";
+import { useTranslation } from "@/contexts/I18nContext";
 import { syncProfileFromSupabase, updateUserProfile, deleteUserAccount } from "@/utils/profileSupabaseSync";
 import { router } from "expo-router";
 
@@ -37,6 +38,7 @@ const TAP_TIMEOUT = 3000;
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
+  const { t } = useTranslation();
   const [profile, setProfile] = useState<UserProfile>({
     name: user?.user_metadata?.username || user?.email?.split('@')[0] || "User",
     email: user?.email || "user@example.com",
@@ -45,9 +47,9 @@ export default function ProfileScreen() {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [tempProfile, setTempProfile] = useState<UserProfile>(profile);
   const [stats, setStats] = useState<StatItem[]>([
-    { value: '0', label: 'Days Active', iosIcon: 'calendar', androidIcon: 'calendar-today', color: colors.primary },
-    { value: '0', label: 'Prayers', iosIcon: 'moon.stars', androidIcon: 'self-improvement', color: colors.accent },
-    { value: '0', label: 'Day Streak', iosIcon: 'flame.fill', androidIcon: 'local-fire-department', color: colors.error },
+    { value: '0', label: t('profile.daysActive'), iosIcon: 'calendar', androidIcon: 'calendar-today', color: colors.primary },
+    { value: '0', label: t('profile.prayers'), iosIcon: 'moon.stars', androidIcon: 'self-improvement', color: colors.accent },
+    { value: '0', label: t('profile.dayStreak'), iosIcon: 'flame.fill', androidIcon: 'local-fire-department', color: colors.error },
   ]);
 
   const [tapCount, setTapCount] = useState(0);
@@ -103,9 +105,9 @@ export default function ProfileScreen() {
       }
 
       setStats([
-        { value: daysActive.toString(), label: 'Days Active', iosIcon: 'calendar', androidIcon: 'calendar-today', color: colors.primary },
-        { value: totalPrayers.toString(), label: 'Prayers', iosIcon: 'moon.stars', androidIcon: 'self-improvement', color: colors.accent },
-        { value: currentStreak.toString(), label: 'Day Streak', iosIcon: 'flame.fill', androidIcon: 'local-fire-department', color: colors.error },
+        { value: daysActive.toString(), label: t('profile.daysActive'), iosIcon: 'calendar', androidIcon: 'calendar-today', color: colors.primary },
+        { value: totalPrayers.toString(), label: t('profile.prayers'), iosIcon: 'moon.stars', androidIcon: 'self-improvement', color: colors.accent },
+        { value: currentStreak.toString(), label: t('profile.dayStreak'), iosIcon: 'flame.fill', androidIcon: 'local-fire-department', color: colors.error },
       ]);
     } catch (error) {
       console.log('Error loading stats:', error);
@@ -264,7 +266,7 @@ export default function ProfileScreen() {
       console.log('Navigation command executed successfully');
     } catch (error) {
       console.error('Navigation error:', error);
-      Alert.alert('Navigation Error', 'Failed to open notification settings. Please try again.');
+      Alert.alert(t('common.error'), t('profile.navigationError'));
     }
     
     console.log('=== NOTIFICATION NAVIGATION END ===');
@@ -279,7 +281,19 @@ export default function ProfileScreen() {
       router.push('/(tabs)/profile/about');
     } catch (error) {
       console.error('Navigation error:', error);
-      Alert.alert('Navigation Error', 'Failed to open about screen. Please try again.');
+      Alert.alert(t('common.error'), t('profile.navigationError'));
+    }
+  };
+
+  const handleLanguage = () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    try {
+      router.push('/(tabs)/profile/language-settings');
+    } catch (error) {
+      console.error('Navigation error:', error);
+      Alert.alert(t('common.error'), t('profile.navigationError'));
     }
   };
 
@@ -288,12 +302,12 @@ export default function ProfileScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
+      t('profile.logout'),
+      t('profile.logoutConfirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         { 
-          text: 'Logout', 
+          text: t('profile.logout'), 
           style: 'destructive',
           onPress: async () => {
             await signOut();
@@ -308,12 +322,12 @@ export default function ProfileScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     }
     Alert.alert(
-      'Delete Account',
-      'Are you sure you want to delete your account? This action cannot be undone. All your data will be permanently deleted.',
+      t('profile.deleteAccount'),
+      t('profile.deleteAccountConfirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         { 
-          text: 'Delete', 
+          text: t('common.delete'), 
           style: 'destructive',
           onPress: async () => {
             if (!user) return;
@@ -327,22 +341,22 @@ export default function ProfileScreen() {
                 await signOut();
                 
                 Alert.alert(
-                  'Account Deleted',
-                  'Your account has been successfully deleted.',
-                  [{ text: 'OK' }]
+                  t('profile.accountDeleted'),
+                  t('profile.accountDeletedSuccess'),
+                  [{ text: t('common.ok') }]
                 );
               } else {
                 // Even if deletion fails, sign out and show message
                 await signOut();
                 Alert.alert(
-                  'Account Deletion',
-                  'Your account deletion is being processed. You have been signed out.',
-                  [{ text: 'OK' }]
+                  t('profile.accountDeletion'),
+                  t('profile.accountDeletionProcessing'),
+                  [{ text: t('common.ok') }]
                 );
               }
             } catch (error) {
               console.error('Error deleting account:', error);
-              Alert.alert('Error', 'Failed to delete account. Please try again.');
+              Alert.alert(t('common.error'), t('profile.failedToDeleteAccount'));
             }
           }
         }
@@ -352,21 +366,28 @@ export default function ProfileScreen() {
 
   const profileOptions: ProfileOption[] = [
     { 
-      title: 'Edit Profile', 
+      title: t('profile.editProfile'), 
       iosIcon: 'pencil', 
       androidIcon: 'edit', 
       color: colors.primary,
       action: handleEditProfile
     },
     { 
-      title: 'Notifications', 
+      title: t('profile.notifications'), 
       iosIcon: 'bell', 
       androidIcon: 'notifications', 
       color: colors.accent,
       action: handleNotifications
     },
     { 
-      title: 'About', 
+      title: t('profile.language'), 
+      iosIcon: 'globe', 
+      androidIcon: 'language', 
+      color: colors.secondary,
+      action: handleLanguage
+    },
+    { 
+      title: t('profile.about'), 
       iosIcon: 'info.circle', 
       androidIcon: 'info', 
       color: colors.secondary,
@@ -413,7 +434,7 @@ export default function ProfileScreen() {
               size={16}
               color={colors.primary}
             />
-            <Text style={styles.editButtonText}>Edit Profile</Text>
+            <Text style={styles.editButtonText}>{t('profile.editProfile')}</Text>
           </TouchableOpacity>
         </LinearGradient>
 
@@ -446,7 +467,7 @@ export default function ProfileScreen() {
                 color={colors.primary}
               />
             </View>
-            <Text style={styles.sectionTitle}>Contact Information</Text>
+            <Text style={styles.sectionTitle}>{t('profile.contactInformation')}</Text>
           </View>
           
           <View style={styles.infoCard}>
@@ -458,7 +479,7 @@ export default function ProfileScreen() {
                 color={colors.primary}
               />
               <View style={styles.infoTextContainer}>
-                <Text style={styles.infoLabel}>Email</Text>
+                <Text style={styles.infoLabel}>{t('profile.email')}</Text>
                 <Text style={styles.infoText}>{profile.email}</Text>
               </View>
             </View>
@@ -477,7 +498,7 @@ export default function ProfileScreen() {
                 color={colors.primary}
               />
             </View>
-            <Text style={styles.sectionTitle}>Settings</Text>
+            <Text style={styles.sectionTitle}>{t('profile.settings')}</Text>
           </View>
           {profileOptions.map((option, index) => (
             <React.Fragment key={index}>
@@ -519,7 +540,7 @@ export default function ProfileScreen() {
             size={22}
             color={colors.error}
           />
-          <Text style={styles.logoutText}>Logout</Text>
+          <Text style={styles.logoutText}>{t('profile.logout')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
@@ -533,7 +554,7 @@ export default function ProfileScreen() {
             size={20}
             color={colors.error}
           />
-          <Text style={styles.deleteAccountText}>Delete Account</Text>
+          <Text style={styles.deleteAccountText}>{t('profile.deleteAccount')}</Text>
         </TouchableOpacity>
 
         <View style={styles.bottomPadding} />
@@ -548,7 +569,7 @@ export default function ProfileScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Profile</Text>
+              <Text style={styles.modalTitle}>{t('profile.editProfile')}</Text>
               <TouchableOpacity onPress={() => setEditModalVisible(false)}>
                 <IconSymbol
                   ios_icon_name="xmark.circle.fill"
@@ -561,7 +582,7 @@ export default function ProfileScreen() {
 
             <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
               <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Name</Text>
+                <Text style={styles.inputLabel}>{t('profile.name')}</Text>
                 <TextInput
                   style={styles.input}
                   value={tempProfile.name}
@@ -570,26 +591,26 @@ export default function ProfileScreen() {
                     setTempProfile(updated);
                     autoSaveProfile(updated);
                   }}
-                  placeholder="Enter your name"
+                  placeholder={t('profile.enterYourName')}
                   placeholderTextColor={colors.textSecondary}
                 />
                 {savingProfile && (
-                  <Text style={styles.savingIndicator}>💾 Saving...</Text>
+                  <Text style={styles.savingIndicator}>💾 {t('profile.saving')}</Text>
                 )}
               </View>
 
               <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Email</Text>
+                <Text style={styles.inputLabel}>{t('profile.email')}</Text>
                 <TextInput
                   style={[styles.input, styles.inputDisabled]}
                   value={tempProfile.email}
-                  placeholder="Enter your email"
+                  placeholder={t('profile.enterYourEmail')}
                   placeholderTextColor={colors.textSecondary}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   editable={false}
                 />
-                <Text style={styles.inputHint}>Email cannot be changed</Text>
+                <Text style={styles.inputHint}>{t('profile.emailCannotBeChanged')}</Text>
               </View>
 
 
@@ -600,7 +621,7 @@ export default function ProfileScreen() {
                   size={16}
                   color={colors.success || colors.primary}
                 />
-                <Text style={styles.autoSaveNoticeText}>Changes are saved automatically</Text>
+                <Text style={styles.autoSaveNoticeText}>{t('profile.changesAreSavedAutomatically')}</Text>
               </View>
 
               <TouchableOpacity 
@@ -608,7 +629,7 @@ export default function ProfileScreen() {
                 activeOpacity={0.7}
                 onPress={() => setEditModalVisible(false)}
               >
-                <Text style={styles.cancelButtonText}>Close</Text>
+                <Text style={styles.cancelButtonText}>{t('common.close')}</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>

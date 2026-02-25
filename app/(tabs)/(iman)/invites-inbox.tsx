@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from '@/contexts/I18nContext';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import {
@@ -111,13 +112,13 @@ export default function InvitesInboxScreen() {
         await acceptLocalInvite(invite.id);
       }
       
-      Alert.alert('Success', 'You have joined the community!');
+      Alert.alert(t('common.success'), t('iman.joinedCommunity'));
       fetchInvites();
       console.log('✅ Invite accepted successfully');
     } catch (error: any) {
       console.error('❌ Error accepting invite:', error);
       const { getErrorMessage } = require('@/utils/errorHandler');
-      Alert.alert('Error', getErrorMessage(error) || 'Failed to accept invite. Please try again.');
+      Alert.alert(t('common.error'), getErrorMessage(error) || t('iman.failedToAcceptInvite'));
     } finally {
       setProcessingInviteId(null);
     }
@@ -137,13 +138,13 @@ export default function InvitesInboxScreen() {
         await declineLocalInvite(invite.id);
       }
       
-      Alert.alert('Success', 'Invite declined');
+      Alert.alert(t('common.success'), t('iman.inviteDeclined'));
       fetchInvites();
       console.log('✅ Invite declined successfully');
     } catch (error: any) {
       console.error('❌ Error declining invite:', error);
       const { getErrorMessage } = require('@/utils/errorHandler');
-      Alert.alert('Error', getErrorMessage(error) || 'Failed to decline invite. Please try again.');
+      Alert.alert(t('common.error'), getErrorMessage(error) || t('iman.failedToDeclineInvite'));
     } finally {
       setProcessingInviteId(null);
     }

@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from '@/contexts/I18nContext';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import {
@@ -28,6 +29,7 @@ import {
 import { fetchUserProfile } from '@/utils/profileSupabaseSync';
 
 export default function CommunitiesScreen() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [communities, setCommunities] = useState<LocalCommunity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -242,12 +244,12 @@ export default function CommunitiesScreen() {
 
   const handleCreateCommunity = async () => {
     if (!newCommunityName.trim()) {
-      Alert.alert('Error', 'Please enter a community name');
+      Alert.alert(t('common.error'), t('iman.enterCommunityName'));
       return;
     }
 
     if (!user) {
-      Alert.alert('Error', 'You must be logged in to create a community');
+      Alert.alert(t('common.error'), t('iman.mustBeLoggedIn'));
       return;
     }
 
@@ -258,7 +260,7 @@ export default function CommunitiesScreen() {
       // Get current user's profile from Supabase to get correct full_name
       const profile = await fetchUserProfile(user.id);
       if (!profile) {
-        Alert.alert('Error', 'User profile not found. Please update your profile first.');
+        Alert.alert(t('common.error'), t('iman.userProfileNotFound'));
         setCreating(false);
         return;
       }
@@ -277,7 +279,7 @@ export default function CommunitiesScreen() {
       // Reload communities IMMEDIATELY after creation to show the new community
       await loadCommunities();
       
-      Alert.alert('Success', 'Community created successfully!');
+      Alert.alert(t('common.success'), t('iman.communityCreated'));
       setNewCommunityName('');
       setNewCommunityDescription('');
       setShowCreateModal(false);
@@ -286,7 +288,7 @@ export default function CommunitiesScreen() {
     } catch (error: any) {
       console.error('❌ Failed to create community:', error);
       const { getErrorMessage } = require('@/utils/errorHandler');
-      Alert.alert('Error', getErrorMessage(error) || 'Failed to create community. Please try again.');
+      Alert.alert(t('common.error'), getErrorMessage(error) || t('iman.failedToCreateCommunity'));
     } finally {
       setCreating(false);
     }
@@ -404,7 +406,7 @@ export default function CommunitiesScreen() {
                 <Text style={styles.inputLabel}>Community Name *</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter community name"
+                  placeholder={t('iman.enterCommunityNamePlaceholder')}
                   placeholderTextColor={colors.textSecondary}
                   value={newCommunityName}
                   onChangeText={setNewCommunityName}
@@ -417,7 +419,7 @@ export default function CommunitiesScreen() {
                 <Text style={styles.inputLabel}>Description (Optional)</Text>
                 <TextInput
                   style={[styles.input, styles.textArea]}
-                  placeholder="Describe your community..."
+                  placeholder={t('iman.describeCommunityPlaceholder')}
                   placeholderTextColor={colors.textSecondary}
                   value={newCommunityDescription}
                   onChangeText={setNewCommunityDescription}

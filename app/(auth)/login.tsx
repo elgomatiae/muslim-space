@@ -18,8 +18,10 @@ import { colors, typography, spacing, borderRadius, shadows } from '@/styles/com
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from '@/contexts/I18nContext';
 
 export default function LoginScreen() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,8 +33,8 @@ export default function LoginScreen() {
     setErrorMessage('');
 
     if (!email || !password) {
-      setErrorMessage('Please fill in all fields');
-      Alert.alert('Error', 'Please fill in all fields');
+      setErrorMessage(t('auth.fillAllFields'));
+      Alert.alert(t('common.error'), t('auth.fillAllFields'));
       return;
     }
 
@@ -56,7 +58,7 @@ export default function LoginScreen() {
         const errorMessage = getErrorMessage(error);
         
         setErrorMessage(errorMessage);
-        Alert.alert('Login Failed', errorMessage);
+        Alert.alert(t('auth.loginFailed'), errorMessage);
         setLoading(false);
         return;
       }
@@ -75,14 +77,14 @@ export default function LoginScreen() {
       const { getErrorMessage } = require('@/utils/errorHandler');
       const errorMsg = getErrorMessage(error);
       setErrorMessage(errorMsg);
-      Alert.alert('Login Failed', errorMsg);
+      Alert.alert(t('auth.loginFailed'), errorMsg);
       setLoading(false);
     }
   };
 
   const handleForgotPassword = async () => {
     if (!email) {
-      Alert.alert('Email Required', 'Please enter your email address to reset your password');
+      Alert.alert(t('auth.emailRequired'), t('auth.enterEmailToReset'));
       return;
     }
 
@@ -99,17 +101,17 @@ export default function LoginScreen() {
 
       if (error) {
         const { getErrorMessage } = require('@/utils/errorHandler');
-        Alert.alert('Error', getErrorMessage(error));
+        Alert.alert(t('common.error'), getErrorMessage(error));
       } else {
         Alert.alert(
-          'Check Your Email',
-          'We have sent you a password reset link. Please check your email.'
+          t('auth.checkYourEmail'),
+          t('auth.passwordResetSent')
         );
       }
     } catch (error: any) {
       console.error('Password reset error:', error);
       const { getErrorMessage } = require('@/utils/errorHandler');
-      Alert.alert('Error', getErrorMessage(error) || 'Failed to send password reset email. Please try again.');
+      Alert.alert(t('common.error'), getErrorMessage(error) || t('common.tryAgain'));
     } finally {
       setLoading(false);
     }
@@ -139,8 +141,8 @@ export default function LoginScreen() {
               color={colors.card}
             />
           </LinearGradient>
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Sign in to continue your spiritual journey</Text>
+          <Text style={styles.title}>{t('auth.welcomeBack')}</Text>
+          <Text style={styles.subtitle}>{t('auth.signInToContinue')}</Text>
         </View>
 
         <View style={styles.form}>
@@ -167,7 +169,7 @@ export default function LoginScreen() {
             </View>
             <TextInput
               style={styles.input}
-              placeholder="Email"
+              placeholder={t('auth.email')}
               placeholderTextColor={colors.textSecondary}
               value={email}
               onChangeText={(text) => {
@@ -192,7 +194,7 @@ export default function LoginScreen() {
             </View>
             <TextInput
               style={styles.input}
-              placeholder="Password"
+              placeholder={t('auth.password')}
               placeholderTextColor={colors.textSecondary}
               value={password}
               onChangeText={(text) => {
@@ -223,7 +225,7 @@ export default function LoginScreen() {
             onPress={handleForgotPassword}
             disabled={loading}
           >
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            <Text style={styles.forgotPasswordText}>{t('auth.forgotPassword')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -241,14 +243,14 @@ export default function LoginScreen() {
               {loading ? (
                 <ActivityIndicator color={colors.card} />
               ) : (
-                <Text style={styles.loginButtonText}>Sign In</Text>
+                <Text style={styles.loginButtonText}>{t('auth.signIn')}</Text>
               )}
             </LinearGradient>
           </TouchableOpacity>
 
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
+            <Text style={styles.dividerText}>{t('common.or')}</Text>
             <View style={styles.dividerLine} />
           </View>
 
@@ -264,7 +266,7 @@ export default function LoginScreen() {
             activeOpacity={0.7}
           >
             <Text style={styles.signupButtonText}>
-              Don&apos;t have an account? <Text style={styles.signupButtonTextBold}>Sign Up</Text>
+              {t('auth.dontHaveAccount')} <Text style={styles.signupButtonTextBold}>{t('auth.signUp')}</Text>
             </Text>
           </TouchableOpacity>
         </View>

@@ -7,6 +7,7 @@ import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
+import { useTranslation } from '@/contexts/I18nContext';
 import { DailyVerse } from '@/services/DailyContentService';
 
 interface DailyVerseWidgetProps {
@@ -15,12 +16,14 @@ interface DailyVerseWidgetProps {
 }
 
 export default function DailyVerseWidget({ verse, loading }: DailyVerseWidgetProps) {
+  const { t } = useTranslation();
+  
   if (loading) {
     return (
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color={colors.card} />
-          <Text style={styles.loadingText}>Loading verse...</Text>
+          <Text style={styles.loadingText}>{t('home.loadingVerse')}</Text>
         </View>
       </View>
     );
@@ -36,7 +39,7 @@ export default function DailyVerseWidget({ verse, loading }: DailyVerseWidgetPro
             size={32}
             color={colors.textSecondary}
           />
-          <Text style={styles.emptyText}>No verse available</Text>
+          <Text style={styles.emptyText}>{t('home.noVerseAvailable')}</Text>
         </View>
       </View>
     );
@@ -60,7 +63,7 @@ export default function DailyVerseWidget({ verse, loading }: DailyVerseWidgetPro
               color={colors.card}
             />
           </View>
-          <Text style={styles.headerTitle}>Daily Verse</Text>
+          <Text style={styles.headerTitle}>{t('home.dailyVerse')}</Text>
         </View>
 
         {/* Arabic Text */}

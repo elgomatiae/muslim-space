@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from '@/contexts/I18nContext';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import {
@@ -25,6 +26,7 @@ import {
 import { fetchUserProfile } from '@/utils/profileSupabaseSync';
 
 export default function InviteUserScreen() {
+  const { t } = useTranslation();
   const { communityId, communityName } = useLocalSearchParams<{
     communityId: string;
     communityName: string;
@@ -35,7 +37,7 @@ export default function InviteUserScreen() {
 
   const handleInvite = async () => {
     if (!username.trim()) {
-      Alert.alert('Error', 'Please enter a full name or email address');
+      Alert.alert(t('common.error'), t('iman.enterFullNameOrEmail'));
       return;
     }
 
@@ -46,7 +48,7 @@ export default function InviteUserScreen() {
       // Get current user's profile from Supabase
       const currentUserProfile = await fetchUserProfile(user.id);
       if (!currentUserProfile || !currentUserProfile.full_name) {
-        Alert.alert('Error', 'User profile not found. Please update your profile first.');
+        Alert.alert(t('common.error'), t('iman.userProfileNotFound'));
         setLoading(false);
         return;
       }
@@ -75,14 +77,14 @@ export default function InviteUserScreen() {
         }
         
         const { getErrorMessage } = require('@/utils/errorHandler');
-        Alert.alert('User Not Found', getErrorMessage(error) || errorMessage);
+        Alert.alert(t('iman.userNotFound'), getErrorMessage(error) || errorMessage);
         setLoading(false);
         return;
       }
 
       // Don't allow inviting yourself
       if (invitedUser.id === user.id) {
-        Alert.alert('Error', 'You cannot invite yourself to a community');
+        Alert.alert(t('common.error'), t('iman.cannotInviteYourself'));
         setLoading(false);
         return;
       }
@@ -92,7 +94,7 @@ export default function InviteUserScreen() {
       if (community) {
         const existingMember = community.members.find(m => m.userId === invitedUser.id);
         if (existingMember) {
-          Alert.alert('Error', 'User is already a member of this community');
+          Alert.alert(t('common.error'), t('iman.userAlreadyMember'));
           setLoading(false);
           return;
         }
@@ -117,10 +119,10 @@ export default function InviteUserScreen() {
     } catch (error: any) {
       console.error('Error sending invite:', error);
       if (error.message?.includes('already exists')) {
-        Alert.alert('Error', 'An invite has already been sent to this user');
+        Alert.alert(t('common.error'), t('iman.inviteAlreadySent'));
       } else {
         const { getErrorMessage } = require('@/utils/errorHandler');
-        Alert.alert('Error', getErrorMessage(error) || 'Failed to send invite. Please try again.');
+        Alert.alert(t('common.error'), getErrorMessage(error) || t('iman.failedToSendInvite'));
       }
     } finally {
       setLoading(false);
@@ -168,7 +170,7 @@ export default function InviteUserScreen() {
           <Text style={styles.inputLabel}>Full Name or Email</Text>
           <TextInput
             style={styles.input}
-            placeholder="Enter full name or email"
+            placeholder={t('iman.enterFullNameOrEmailPlaceholder')}
             placeholderTextColor={colors.textSecondary}
             value={username}
             onChangeText={setUsername}

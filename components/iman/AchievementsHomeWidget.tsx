@@ -19,6 +19,7 @@ import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { LOCAL_ACHIEVEMENTS } from '@/data/localAchievements';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from '@/contexts/I18nContext';
 import { supabase } from '@/lib/supabase';
 
 interface Achievement {
@@ -31,6 +32,7 @@ interface Achievement {
 }
 
 export default function AchievementsHomeWidget() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -145,7 +147,7 @@ export default function AchievementsHomeWidget() {
                 color="#FFFFFF"
               />
             </LinearGradient>
-            <Text style={styles.title}>Achievements</Text>
+            <Text style={styles.title}>{t('home.achievements')}</Text>
           </View>
         </View>
         <ActivityIndicator size="small" color={colors.primary} style={styles.loading} />
@@ -176,9 +178,9 @@ export default function AchievementsHomeWidget() {
               />
             </LinearGradient>
             <View>
-              <Text style={styles.title}>Achievements</Text>
+              <Text style={styles.title}>{t('home.achievements')}</Text>
               <Text style={styles.subtitle}>
-                {unlockedCount} unlocked • {achievements.length} shown
+                {t('home.achievementsSubtitle', { unlocked: unlockedCount, shown: achievements.length })}
               </Text>
             </View>
           </View>
@@ -269,7 +271,7 @@ export default function AchievementsHomeWidget() {
         ) : (
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>
-              Complete activities to unlock achievements!
+              {t('home.completeActivitiesForAchievements')}
             </Text>
           </View>
         )}

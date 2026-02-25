@@ -3,41 +3,44 @@ import React from 'react';
 import { Stack } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { useTranslation } from '@/contexts/I18nContext';
 
 export default function TabLayout() {
+  const { t } = useTranslation();
+  
   // Define the tabs configuration with Iman Tracker in the middle
   const tabs: TabBarItem[] = [
     {
       name: '(home)',
       route: '/(tabs)/(home)/',
       icon: 'home',
-      label: 'Home',
+      label: t('tabs.home'),
     },
     {
       name: '(learning)',
       route: '/(tabs)/(learning)/',
       icon: 'school',
-      label: 'Learning',
+      label: t('tabs.learning'),
     },
     {
       name: '(iman)',
       route: '/(tabs)/(iman)/',
       icon: 'target',
       iosIcon: 'target',
-      label: 'Iman',
+      label: t('tabs.iman'),
       isMainFeature: true,
     },
     {
       name: '(wellness)',
       route: '/(tabs)/(wellness)/',
       icon: 'spa',
-      label: 'Wellness',
+      label: t('tabs.wellness'),
     },
     {
       name: 'profile',
       route: '/(tabs)/profile',
       icon: 'person',
-      label: 'Profile',
+      label: t('tabs.profile'),
     },
   ];
 

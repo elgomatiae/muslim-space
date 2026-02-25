@@ -7,6 +7,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTranslation } from "@/contexts/I18nContext";
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
 import * as Haptics from 'expo-haptics';
 
@@ -355,7 +356,7 @@ export default function PhysicalHealthScreen() {
           return; // Exit early - Iman Tracker updated, no need to continue
         }
         // For other errors, show alert but don't block
-        Alert.alert('Error', 'Failed to save workout to database, but Iman Tracker was updated.');
+        Alert.alert(t('common.error'), t('wellness.failedToSaveWorkout'));
         return;
       }
       await loadTodayStats();
@@ -386,7 +387,7 @@ export default function PhysicalHealthScreen() {
       }
     } catch (error) {
       console.error('Exception in addSingleExerciseSession:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      Alert.alert(t('common.error'), t('wellness.unexpectedError'));
     }
   };
 
@@ -397,7 +398,7 @@ export default function PhysicalHealthScreen() {
     const totalDuration = Object.values(workoutDurations).reduce((sum, duration) => sum + duration, 0);
     
     if (totalDuration === 0) {
-      Alert.alert('Error', 'Please enter at least one workout duration.');
+      Alert.alert(t('common.error'), t('wellness.enterWorkoutDuration'));
       return;
     }
     
@@ -458,7 +459,7 @@ export default function PhysicalHealthScreen() {
           );
           return;
         }
-        Alert.alert('Error', 'Failed to log workout. Please try again.');
+        Alert.alert(t('common.error'), t('wellness.failedToLogWorkout'));
         return;
       }
       setShowWorkoutModal(false);
@@ -488,10 +489,10 @@ export default function PhysicalHealthScreen() {
         }
       }
       
-      Alert.alert('Success', `Logged ${totalDuration} minutes of exercise!`);
+      Alert.alert(t('common.success'), t('wellness.loggedExerciseMinutes', { minutes: totalDuration }));
     } catch (error) {
       console.error('Exception in saveMultiWorkoutSession:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      Alert.alert(t('common.error'), t('wellness.unexpectedError'));
     }
   };
 
@@ -580,7 +581,7 @@ export default function PhysicalHealthScreen() {
       if (prev.includes(type)) {
         // Don't allow removing the last type
         if (prev.length === 1) {
-          Alert.alert('Notice', 'You must have at least one workout type selected.');
+          Alert.alert(t('common.error'), t('wellness.mustSelectWorkoutType'));
           return prev;
         }
         return prev.filter(t => t !== type);
@@ -594,7 +595,7 @@ export default function PhysicalHealthScreen() {
     if (!user) return;
     
     if (tempWorkoutTypes.length === 0) {
-      Alert.alert('Error', 'Please select at least one workout type.');
+      Alert.alert(t('common.error'), t('wellness.selectWorkoutType'));
       return;
     }
     
@@ -635,10 +636,10 @@ export default function PhysicalHealthScreen() {
       setEditingGoals(false);
       await loadGoals();
       await refreshScores();
-      Alert.alert('Success', 'Your physical wellness goals have been updated!');
+      Alert.alert(t('common.success'), t('wellness.goalsUpdated'));
     } else {
       const { getErrorMessage } = require('@/utils/errorHandler');
-      Alert.alert('Error', getErrorMessage(error) || 'Failed to save goals. Please try again.');
+      Alert.alert(t('common.error'), getErrorMessage(error) || t('wellness.failedToSaveGoals'));
     }
   };
 

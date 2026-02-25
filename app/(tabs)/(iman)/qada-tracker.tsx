@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from '@/contexts/I18nContext';
 import { supabase } from '@/lib/supabase';
 
 interface QadaPrayer {
@@ -19,6 +20,7 @@ interface QadaPrayer {
 }
 
 export default function QadaTrackerScreen() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [qadaPrayers, setQadaPrayers] = useState<QadaPrayer[]>([
     { id: 'fajr', prayerName: 'Fajr', count: 0, dateAdded: new Date().toISOString() },
@@ -196,7 +198,7 @@ export default function QadaTrackerScreen() {
                     value={addingCount[prayer.id] || ''}
                     onChangeText={(text) => setAddingCount({ ...addingCount, [prayer.id]: text })}
                     keyboardType="number-pad"
-                    placeholder="Custom"
+                    placeholder={t('iman.custom')}
                     placeholderTextColor={colors.textSecondary}
                     maxLength={4}
                   />

@@ -13,13 +13,22 @@ export default function IbadahSection() {
 
   if (!ibadahGoals) return null;
 
-  const toggleFardPrayer = async (prayer: keyof typeof ibadahGoals.fardPrayers) => {
+  // Ensure fardPrayers exists with default values
+  const fardPrayersData = ibadahGoals.fardPrayers || {
+    fajr: false,
+    dhuhr: false,
+    asr: false,
+    maghrib: false,
+    isha: false,
+  };
+
+  const toggleFardPrayer = async (prayer: keyof typeof fardPrayersData) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const updatedGoals = {
       ...ibadahGoals,
       fardPrayers: {
-        ...ibadahGoals.fardPrayers,
-        [prayer]: !ibadahGoals.fardPrayers[prayer],
+        ...fardPrayersData,
+        [prayer]: !fardPrayersData[prayer],
       },
     };
     await updateIbadahGoals(updatedGoals);
@@ -27,8 +36,8 @@ export default function IbadahSection() {
 
   const incrementCounter = async (field: string, amount: number, maxField: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const currentValue = ibadahGoals[field as keyof typeof ibadahGoals] as number;
-    const maxValue = ibadahGoals[maxField as keyof typeof ibadahGoals] as number;
+    const currentValue = (ibadahGoals[field as keyof typeof ibadahGoals] as number) || 0;
+    const maxValue = (ibadahGoals[maxField as keyof typeof ibadahGoals] as number) || 0;
     const updatedGoals = {
       ...ibadahGoals,
       [field]: Math.min(currentValue + amount, maxValue),
@@ -44,7 +53,7 @@ export default function IbadahSection() {
     { key: 'isha' as const, name: 'Isha', icon: 'moon.stars.fill' },
   ];
 
-  const fardCompleted = Object.values(ibadahGoals.fardPrayers).filter(Boolean).length;
+  const fardCompleted = Object.values(fardPrayersData).filter(Boolean).length;
 
   return (
     <View style={styles.container}>
@@ -112,16 +121,16 @@ export default function IbadahSection() {
                 <TouchableOpacity
                   style={[
                     styles.prayerCard,
-                    ibadahGoals.fardPrayers[prayer.key] && styles.prayerCardCompleted
+                    fardPrayersData[prayer.key] && styles.prayerCardCompleted
                   ]}
                   onPress={() => toggleFardPrayer(prayer.key)}
                   activeOpacity={0.7}
                 >
                   <View style={[
                     styles.checkCircle,
-                    ibadahGoals.fardPrayers[prayer.key] && styles.checkCircleCompleted
+                    fardPrayersData[prayer.key] && styles.checkCircleCompleted
                   ]}>
-                    {ibadahGoals.fardPrayers[prayer.key] && (
+                    {fardPrayersData[prayer.key] && (
                       <IconSymbol
                         ios_icon_name="checkmark"
                         android_material_icon_name="check"
@@ -132,7 +141,7 @@ export default function IbadahSection() {
                   </View>
                   <Text style={[
                     styles.prayerName,
-                    ibadahGoals.fardPrayers[prayer.key] && styles.prayerNameCompleted
+                    fardPrayersData[prayer.key] && styles.prayerNameCompleted
                   ]}>
                     {prayer.name}
                   </Text>
@@ -141,17 +150,17 @@ export default function IbadahSection() {
             ))}
           </View>
 
-          {ibadahGoals.sunnahDailyGoal > 0 && (
+          {(ibadahGoals.sunnahDailyGoal || 0) > 0 && (
             <View style={styles.goalItem}>
               <Text style={styles.goalLabel}>
-                Sunnah Prayers ({ibadahGoals.sunnahCompleted}/{ibadahGoals.sunnahDailyGoal} today)
+                Sunnah Prayers ({ibadahGoals.sunnahCompleted || 0}/{ibadahGoals.sunnahDailyGoal || 0} today)
               </Text>
               <View style={styles.progressBar}>
                 <View 
                   style={[
                     styles.progressFill,
                     { 
-                      width: `${ibadahGoals.sunnahDailyGoal > 0 ? (ibadahGoals.sunnahCompleted / ibadahGoals.sunnahDailyGoal) * 100 : 0}%`,
+                      width: `${(ibadahGoals.sunnahDailyGoal || 0) > 0 ? ((ibadahGoals.sunnahCompleted || 0) / (ibadahGoals.sunnahDailyGoal || 1)) * 100 : 0}%`,
                       backgroundColor: '#10B981',
                     }
                   ]} 
@@ -180,17 +189,17 @@ export default function IbadahSection() {
             </View>
           )}
 
-          {ibadahGoals.tahajjudWeeklyGoal > 0 && (
+          {(ibadahGoals.tahajjudWeeklyGoal || 0) > 0 && (
             <View style={styles.goalItem}>
               <Text style={styles.goalLabel}>
-                Tahajjud ({ibadahGoals.tahajjudCompleted}/{ibadahGoals.tahajjudWeeklyGoal} this week)
+                Tahajjud ({ibadahGoals.tahajjudCompleted || 0}/{ibadahGoals.tahajjudWeeklyGoal || 0} this week)
               </Text>
               <View style={styles.progressBar}>
                 <View 
                   style={[
                     styles.progressFill,
                     { 
-                      width: `${ibadahGoals.tahajjudWeeklyGoal > 0 ? (ibadahGoals.tahajjudCompleted / ibadahGoals.tahajjudWeeklyGoal) * 100 : 0}%`,
+                      width: `${(ibadahGoals.tahajjudWeeklyGoal || 0) > 0 ? ((ibadahGoals.tahajjudCompleted || 0) / (ibadahGoals.tahajjudWeeklyGoal || 1)) * 100 : 0}%`,
                       backgroundColor: '#10B981',
                     }
                   ]} 
@@ -222,7 +231,7 @@ export default function IbadahSection() {
       </View>
 
       {/* Quran Section */}
-      {(ibadahGoals.quranDailyPagesGoal > 0 || ibadahGoals.quranDailyVersesGoal > 0 || ibadahGoals.quranWeeklyMemorizationGoal > 0) && (
+      {((ibadahGoals.quranDailyPagesGoal || 0) > 0 || (ibadahGoals.quranDailyVersesGoal || 0) > 0 || (ibadahGoals.quranWeeklyMemorizationGoal || 0) > 0) && (
         <View style={styles.subsection}>
           <View style={styles.subsectionHeader}>
             <IconSymbol
@@ -235,17 +244,17 @@ export default function IbadahSection() {
           </View>
 
           <View style={styles.subsectionContent}>
-            {ibadahGoals.quranDailyPagesGoal > 0 && (
+            {(ibadahGoals.quranDailyPagesGoal || 0) > 0 && (
               <View style={styles.goalItem}>
                 <Text style={styles.goalLabel}>
-                  Daily Pages ({ibadahGoals.quranDailyPagesCompleted}/{ibadahGoals.quranDailyPagesGoal})
+                  Daily Pages ({ibadahGoals.quranDailyPagesCompleted || 0}/{ibadahGoals.quranDailyPagesGoal || 0})
                 </Text>
                 <View style={styles.progressBar}>
                   <View 
                     style={[
                       styles.progressFill,
                       { 
-                        width: `${ibadahGoals.quranDailyPagesGoal > 0 ? (ibadahGoals.quranDailyPagesCompleted / ibadahGoals.quranDailyPagesGoal) * 100 : 0}%`,
+                        width: `${(ibadahGoals.quranDailyPagesGoal || 0) > 0 ? ((ibadahGoals.quranDailyPagesCompleted || 0) / (ibadahGoals.quranDailyPagesGoal || 1)) * 100 : 0}%`,
                         backgroundColor: '#10B981',
                       }
                     ]} 
@@ -284,17 +293,17 @@ export default function IbadahSection() {
               </View>
             )}
 
-            {ibadahGoals.quranDailyVersesGoal > 0 && (
+            {(ibadahGoals.quranDailyVersesGoal || 0) > 0 && (
               <View style={styles.goalItem}>
                 <Text style={styles.goalLabel}>
-                  Daily Verses ({ibadahGoals.quranDailyVersesCompleted}/{ibadahGoals.quranDailyVersesGoal})
+                  Daily Verses ({ibadahGoals.quranDailyVersesCompleted || 0}/{ibadahGoals.quranDailyVersesGoal || 0})
                 </Text>
                 <View style={styles.progressBar}>
                   <View 
                     style={[
                       styles.progressFill,
                       { 
-                        width: `${ibadahGoals.quranDailyVersesGoal > 0 ? (ibadahGoals.quranDailyVersesCompleted / ibadahGoals.quranDailyVersesGoal) * 100 : 0}%`,
+                        width: `${(ibadahGoals.quranDailyVersesGoal || 0) > 0 ? ((ibadahGoals.quranDailyVersesCompleted || 0) / (ibadahGoals.quranDailyVersesGoal || 1)) * 100 : 0}%`,
                         backgroundColor: '#10B981',
                       }
                     ]} 
@@ -347,17 +356,17 @@ export default function IbadahSection() {
               </View>
             )}
 
-            {ibadahGoals.quranWeeklyMemorizationGoal > 0 && (
+            {(ibadahGoals.quranWeeklyMemorizationGoal || 0) > 0 && (
               <View style={styles.goalItem}>
                 <Text style={styles.goalLabel}>
-                  Weekly Memorization ({ibadahGoals.quranWeeklyMemorizationCompleted}/{ibadahGoals.quranWeeklyMemorizationGoal} verses)
+                  Weekly Memorization ({ibadahGoals.quranWeeklyMemorizationCompleted || 0}/{ibadahGoals.quranWeeklyMemorizationGoal || 0} verses)
                 </Text>
                 <View style={styles.progressBar}>
                   <View 
                     style={[
                       styles.progressFill,
                       { 
-                        width: `${ibadahGoals.quranWeeklyMemorizationGoal > 0 ? (ibadahGoals.quranWeeklyMemorizationCompleted / ibadahGoals.quranWeeklyMemorizationGoal) * 100 : 0}%`,
+                        width: `${(ibadahGoals.quranWeeklyMemorizationGoal || 0) > 0 ? ((ibadahGoals.quranWeeklyMemorizationCompleted || 0) / (ibadahGoals.quranWeeklyMemorizationGoal || 1)) * 100 : 0}%`,
                         backgroundColor: '#10B981',
                       }
                     ]} 
@@ -400,7 +409,7 @@ export default function IbadahSection() {
       )}
 
       {/* Dhikr & Dua Section */}
-      {(ibadahGoals.dhikrDailyGoal > 0 || ibadahGoals.duaDailyGoal > 0) && (
+      {((ibadahGoals.dhikrDailyGoal || 0) > 0 || (ibadahGoals.duaDailyGoal || 0) > 0) && (
         <View style={styles.subsection}>
           <View style={styles.subsectionHeader}>
             <IconSymbol
@@ -413,17 +422,17 @@ export default function IbadahSection() {
           </View>
 
           <View style={styles.subsectionContent}>
-            {ibadahGoals.dhikrDailyGoal > 0 && (
+            {(ibadahGoals.dhikrDailyGoal || 0) > 0 && (
               <View style={styles.goalItem}>
                 <Text style={styles.goalLabel}>
-                  Daily Dhikr ({ibadahGoals.dhikrDailyCompleted}/{ibadahGoals.dhikrDailyGoal})
+                  Daily Dhikr ({ibadahGoals.dhikrDailyCompleted || 0}/{ibadahGoals.dhikrDailyGoal || 0})
                 </Text>
                 <View style={styles.progressBar}>
                   <View 
                     style={[
                       styles.progressFill,
                       { 
-                        width: `${ibadahGoals.dhikrDailyGoal > 0 ? Math.min(100, (ibadahGoals.dhikrDailyCompleted / ibadahGoals.dhikrDailyGoal) * 100) : 0}%`,
+                        width: `${(ibadahGoals.dhikrDailyGoal || 0) > 0 ? Math.min(100, ((ibadahGoals.dhikrDailyCompleted || 0) / (ibadahGoals.dhikrDailyGoal || 1)) * 100) : 0}%`,
                         backgroundColor: '#10B981',
                       }
                     ]} 
@@ -468,8 +477,8 @@ export default function IbadahSection() {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       const updatedGoals = {
                         ...ibadahGoals,
-                        dhikrDailyCompleted: ibadahGoals.dhikrDailyCompleted + 10,
-                        dhikrWeeklyCompleted: ibadahGoals.dhikrWeeklyCompleted + 10,
+                        dhikrDailyCompleted: (ibadahGoals.dhikrDailyCompleted || 0) + 10,
+                        dhikrWeeklyCompleted: (ibadahGoals.dhikrWeeklyCompleted || 0) + 10,
                       };
                       updateIbadahGoals(updatedGoals);
                     }}
@@ -490,8 +499,8 @@ export default function IbadahSection() {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       const updatedGoals = {
                         ...ibadahGoals,
-                        dhikrDailyCompleted: ibadahGoals.dhikrDailyCompleted + 33,
-                        dhikrWeeklyCompleted: ibadahGoals.dhikrWeeklyCompleted + 33,
+                        dhikrDailyCompleted: (ibadahGoals.dhikrDailyCompleted || 0) + 33,
+                        dhikrWeeklyCompleted: (ibadahGoals.dhikrWeeklyCompleted || 0) + 33,
                       };
                       updateIbadahGoals(updatedGoals);
                     }}
@@ -512,8 +521,8 @@ export default function IbadahSection() {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       const updatedGoals = {
                         ...ibadahGoals,
-                        dhikrDailyCompleted: ibadahGoals.dhikrDailyCompleted + 100,
-                        dhikrWeeklyCompleted: ibadahGoals.dhikrWeeklyCompleted + 100,
+                        dhikrDailyCompleted: (ibadahGoals.dhikrDailyCompleted || 0) + 100,
+                        dhikrWeeklyCompleted: (ibadahGoals.dhikrWeeklyCompleted || 0) + 100,
                       };
                       updateIbadahGoals(updatedGoals);
                     }}
@@ -532,17 +541,17 @@ export default function IbadahSection() {
               </View>
             )}
 
-            {ibadahGoals.duaDailyGoal > 0 && (
+            {(ibadahGoals.duaDailyGoal || 0) > 0 && (
               <View style={styles.goalItem}>
                 <Text style={styles.goalLabel}>
-                  Daily Duʿāʾ ({ibadahGoals.duaDailyCompleted}/{ibadahGoals.duaDailyGoal})
+                  Daily Duʿāʾ ({ibadahGoals.duaDailyCompleted || 0}/{ibadahGoals.duaDailyGoal || 0})
                 </Text>
                 <View style={styles.progressBar}>
                   <View 
                     style={[
                       styles.progressFill,
                       { 
-                        width: `${ibadahGoals.duaDailyGoal > 0 ? (ibadahGoals.duaDailyCompleted / ibadahGoals.duaDailyGoal) * 100 : 0}%`,
+                        width: `${(ibadahGoals.duaDailyGoal || 0) > 0 ? ((ibadahGoals.duaDailyCompleted || 0) / (ibadahGoals.duaDailyGoal || 1)) * 100 : 0}%`,
                         backgroundColor: '#10B981',
                       }
                     ]} 
@@ -575,7 +584,7 @@ export default function IbadahSection() {
       )}
 
       {/* Fasting Section */}
-      {ibadahGoals.fastingWeeklyGoal > 0 && (
+      {(ibadahGoals.fastingWeeklyGoal || 0) > 0 && (
         <View style={styles.subsection}>
           <View style={styles.subsectionHeader}>
             <IconSymbol
@@ -590,14 +599,14 @@ export default function IbadahSection() {
           <View style={styles.subsectionContent}>
             <View style={styles.goalItem}>
               <Text style={styles.goalLabel}>
-                Weekly Fasting ({ibadahGoals.fastingWeeklyCompleted}/{ibadahGoals.fastingWeeklyGoal} days)
+                Weekly Fasting ({ibadahGoals.fastingWeeklyCompleted || 0}/{ibadahGoals.fastingWeeklyGoal || 0} days)
               </Text>
               <View style={styles.progressBar}>
                 <View 
                   style={[
                     styles.progressFill,
                     { 
-                      width: `${ibadahGoals.fastingWeeklyGoal > 0 ? (ibadahGoals.fastingWeeklyCompleted / ibadahGoals.fastingWeeklyGoal) * 100 : 0}%`,
+                      width: `${(ibadahGoals.fastingWeeklyGoal || 0) > 0 ? ((ibadahGoals.fastingWeeklyCompleted || 0) / (ibadahGoals.fastingWeeklyGoal || 1)) * 100 : 0}%`,
                       backgroundColor: '#10B981',
                     }
                   ]} 

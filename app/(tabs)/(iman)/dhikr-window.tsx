@@ -7,6 +7,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
+import { useTranslation } from '@/contexts/I18nContext';
 import { useImanTracker } from '@/contexts/ImanTrackerContext';
 import Svg, { Circle } from 'react-native-svg';
 
@@ -146,12 +147,12 @@ export default function DhikrWindowScreen() {
   const handleResetSession = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Alert.alert(
-      'Reset Session Counter',
-      'This will reset your session counter to 0. Your total daily count will remain unchanged.',
+      t('dhikr.resetSessionCounter'),
+      t('dhikr.resetSessionMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Reset',
+          text: t('dhikr.reset'),
           style: 'destructive',
           onPress: () => {
             setSessionCount(0);

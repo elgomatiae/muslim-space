@@ -7,6 +7,7 @@ import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
+import { useTranslation } from '@/contexts/I18nContext';
 import { DailyHadith } from '@/services/DailyContentService';
 
 interface DailyHadithWidgetProps {
@@ -15,12 +16,14 @@ interface DailyHadithWidgetProps {
 }
 
 export default function DailyHadithWidget({ hadith, loading }: DailyHadithWidgetProps) {
+  const { t } = useTranslation();
+  
   if (loading) {
     return (
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color={colors.accent} />
-          <Text style={styles.loadingText}>Loading hadith...</Text>
+          <Text style={styles.loadingText}>{t('home.loadingHadith')}</Text>
         </View>
       </View>
     );
@@ -36,7 +39,7 @@ export default function DailyHadithWidget({ hadith, loading }: DailyHadithWidget
             size={32}
             color={colors.textSecondary}
           />
-          <Text style={styles.emptyText}>No hadith available</Text>
+          <Text style={styles.emptyText}>{t('home.noHadithAvailable')}</Text>
         </View>
       </View>
     );
@@ -60,7 +63,7 @@ export default function DailyHadithWidget({ hadith, loading }: DailyHadithWidget
               color={colors.card}
             />
           </View>
-          <Text style={styles.headerTitle}>Daily Hadith</Text>
+          <Text style={styles.headerTitle}>{t('home.dailyHadith')}</Text>
         </View>
 
         {/* Arabic Text (if available) */}

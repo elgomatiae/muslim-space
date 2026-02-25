@@ -516,10 +516,10 @@ export default function AchievementsBadges() {
         router.push('/(tabs)/(iman)' as any);
         break;
       case 'lectures_watched':
-        router.push('/(tabs)/(ilm)' as any);
+        router.push('/(tabs)/(learning)/lectures' as any);
         break;
       case 'quizzes_completed':
-        router.push('/(tabs)/(ilm)' as any);
+        router.push('/(tabs)/(learning)/quizzes' as any);
         break;
       case 'workouts_completed':
         router.push('/(tabs)/(wellness)/physical-health' as any);

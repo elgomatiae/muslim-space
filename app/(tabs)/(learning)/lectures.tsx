@@ -14,6 +14,7 @@ import {
 } from '@/services/LectureService';
 import { supabase } from '@/app/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from '@/contexts/I18nContext';
 import { useImanTracker } from '@/contexts/ImanTrackerContext';
 import * as Haptics from 'expo-haptics';
 import * as WebBrowser from 'expo-web-browser';
@@ -153,7 +154,7 @@ export default function LecturesScreen() {
       console.log(`✅ Loaded: ${allLectures.length} lectures, ${uniqueCategories.length} categories`);
     } catch (error) {
       console.error('❌ Error loading lectures:', error);
-      Alert.alert('Error', 'Failed to load lectures. Please check your connection.');
+      Alert.alert(t('common.error'), t('learning.failedToLoadLectures'));
     } finally {
       setLoading(false);
     }
@@ -253,7 +254,7 @@ export default function LecturesScreen() {
       }
     } catch (error) {
       console.error('Error opening video:', error);
-      Alert.alert('Error', 'Could not open video. Please try again.');
+      Alert.alert(t('common.error'), t('learning.couldNotOpenVideo'));
     }
   };
 
@@ -420,7 +421,7 @@ export default function LecturesScreen() {
                   <IconSymbol ios_icon_name="magnifyingglass" android_material_icon_name="search" size={20} color={colors.card} />
                   <TextInput
                     style={styles.searchInputHero}
-                    placeholder="Search lectures, scholars..."
+                    placeholder={t('learning.searchLectures')}
                     placeholderTextColor="rgba(255, 255, 255, 0.7)"
                     value={searchQuery}
                     onChangeText={setSearchQuery}

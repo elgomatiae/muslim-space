@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, RefreshControl, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,12 +18,14 @@ import {
 } from '@/services/PrayerTimeService';
 import { getCurrentLocation, requestLocationPermission, hasLocationPermission } from '@/services/LocationService';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from '@/contexts/I18nContext';
 import { useImanTracker } from '@/contexts/ImanTrackerContext';
 import * as Haptics from 'expo-haptics';
 import { logActivity } from '@/utils/activityLogger';
 import { schedulePrayerNotifications } from '@/utils/notificationService';
 
 export default function PrayerTimesWidget() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { ibadahGoals, updateIbadahGoals } = useImanTracker();
   
@@ -54,11 +56,11 @@ export default function PrayerTimesWidget() {
         const granted = await requestLocationPermission();
         if (!granted) {
           Alert.alert(
-            'Location Required',
-            'We need your location to calculate accurate prayer times for your city. Please enable location permissions in settings.',
+            t('prayer.locationRequired'),
+            t('prayer.locationRequiredMessage'),
             [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Enable', onPress: async () => {
+              { text: t('common.cancel'), style: 'cancel' },
+              { text: t('prayer.enable'), onPress: async () => {
                 await requestLocationPermission();
                 await checkLocationPermission();
                 await loadPrayerTimes();
@@ -114,7 +116,7 @@ export default function PrayerTimesWidget() {
     } catch (error: any) {
       console.error('Error loading prayer times:', error);
       const { getErrorMessage } = require('@/utils/errorHandler');
-      Alert.alert('Error', getErrorMessage(error) || 'Failed to load prayer times. Please check your location settings.');
+      Alert.alert(t('common.error'), getErrorMessage(error) || t('prayer.failedToLoadPrayerTimes'));
     } finally {
       setLoading(false);
     }
@@ -137,22 +139,22 @@ export default function PrayerTimesWidget() {
 
   const handlePrayerPress = async (prayer: PrayerTime) => {
     if (!user) {
-      Alert.alert('Please Log In', 'You must be logged in to track prayers');
+      Alert.alert(t('prayer.pleaseLogIn'), t('prayer.mustBeLoggedIn'));
       return;
     }
 
     if (prayer.completed) {
-      Alert.alert('Already Completed', `${prayer.name} has already been marked as completed today.`);
+      Alert.alert(t('prayer.alreadyCompleted'), t('prayer.alreadyCompletedMessage', { prayerName: prayer.name }));
       return;
     }
 
     Alert.alert(
-      `Mark ${prayer.name} as Completed?`,
-      `Did you complete ${prayer.name} prayer at ${prayer.time}?`,
+      t('prayer.markAsCompleted', { prayerName: prayer.name }),
+      t('prayer.confirmCompletion', { prayerName: prayer.name, time: prayer.time }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Mark Complete',
+          text: t('prayer.markComplete'),
           onPress: async () => {
             try {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -203,10 +205,10 @@ export default function PrayerTimesWidget() {
                 });
               }
 
-              Alert.alert('Success', `${prayer.name} marked as completed!`);
+              Alert.alert(t('prayer.success'), t('prayer.markedAsCompleted', { prayerName: prayer.name }));
             } catch (error) {
               console.error('Error marking prayer:', error);
-              Alert.alert('Error', 'Failed to mark prayer as completed');
+              Alert.alert(t('common.error'), t('prayer.failedToMarkCompleted'));
             }
           },
         },
@@ -225,11 +227,11 @@ export default function PrayerTimesWidget() {
       <View style={styles.container}>
         <View style={styles.header}>
           <IconSymbol ios_icon_name="moon.fill" android_material_icon_name="nightlight" size={18} color={colors.primary} />
-          <Text style={styles.title}>Prayer Times</Text>
+          <Text style={styles.title}>{t('prayer.prayerTimes')}</Text>
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={styles.loadingText}>Getting your location...</Text>
+          <Text style={styles.loadingText}>{t('prayer.gettingLocation')}</Text>
         </View>
       </View>
     );
@@ -240,12 +242,12 @@ export default function PrayerTimesWidget() {
       <View style={styles.container}>
         <View style={styles.header}>
           <IconSymbol ios_icon_name="moon.fill" android_material_icon_name="nightlight" size={18} color={colors.primary} />
-          <Text style={styles.title}>Prayer Times</Text>
+          <Text style={styles.title}>{t('prayer.prayerTimes')}</Text>
         </View>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Unable to load prayer times</Text>
+          <Text style={styles.errorText}>{t('prayer.unableToLoadPrayerTimes')}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={loadPrayerTimes}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>{t('prayer.retry')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -258,7 +260,7 @@ export default function PrayerTimesWidget() {
         <View style={styles.headerLeft}>
           <IconSymbol ios_icon_name="moon.fill" android_material_icon_name="nightlight" size={18} color={colors.primary} />
           <View>
-            <Text style={styles.title}>Prayer Times</Text>
+            <Text style={styles.title}>{t('prayer.prayerTimes')}</Text>
             <Text style={styles.subtitle}>{prayerTimes.city}</Text>
           </View>
         </View>
@@ -275,19 +277,15 @@ export default function PrayerTimesWidget() {
             end={{ x: 1, y: 1 }}
             style={styles.nextPrayerGradient}
           >
-            <Text style={styles.nextPrayerLabel}>Next Prayer</Text>
+            <Text style={styles.nextPrayerLabel}>{t('prayer.nextPrayer')}</Text>
             <Text style={styles.nextPrayerName}>{nextPrayer.name} ({nextPrayer.arabicName})</Text>
             <Text style={styles.nextPrayerTime}>{nextPrayer.time}</Text>
-            <Text style={styles.nextPrayerCountdown}>in {timeUntilNext}</Text>
+            <Text style={styles.nextPrayerCountdown}>{t('prayer.in')} {timeUntilNext}</Text>
           </LinearGradient>
         </View>
       )}
 
-      <ScrollView
-        style={styles.prayersList}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
+      <View style={styles.prayersList}>
         {prayerTimes.prayers.map((prayer) => (
           <TouchableOpacity
             key={prayer.name}
@@ -308,7 +306,7 @@ export default function PrayerTimesWidget() {
                   <IconSymbol
                     ios_icon_name="checkmark.circle.fill"
                     android_material_icon_name="check-circle"
-                    size={16}
+                    size={14}
                     color={colors.success}
                   />
                 )}
@@ -316,7 +314,7 @@ export default function PrayerTimesWidget() {
             </View>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -389,11 +387,12 @@ const styles = StyleSheet.create({
   nextPrayerCard: {
     borderRadius: borderRadius.md,
     overflow: 'hidden',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
     ...shadows.small,
   },
   nextPrayerGradient: {
-    padding: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
   },
   nextPrayerLabel: {
@@ -422,13 +421,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   prayersList: {
-    maxHeight: 280,
+    // Removed maxHeight to allow all prayers to be visible
   },
   prayerCard: {
     backgroundColor: colors.background,
     borderRadius: borderRadius.sm,
-    padding: spacing.sm,
-    marginBottom: spacing.xs,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    marginBottom: spacing.xs / 2,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -447,24 +447,24 @@ const styles = StyleSheet.create({
   prayerName: {
     ...typography.body,
     color: colors.text,
-    marginBottom: 1,
-    fontSize: 14,
+    marginBottom: 0,
+    fontSize: 13,
     fontWeight: '600',
   },
   prayerArabic: {
     ...typography.caption,
     color: colors.textSecondary,
-    fontSize: 11,
+    fontSize: 10,
   },
   prayerTimeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.xs / 2,
   },
   prayerTime: {
     ...typography.body,
     color: colors.text,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
   },
   prayerTimeCompleted: {

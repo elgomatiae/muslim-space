@@ -13,10 +13,12 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { getAllStreaks, AllStreaksData, loadStreaksFromSupabase } from '@/utils/multiStreakTracker';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from '@/contexts/I18nContext';
 import ShareButton from '@/components/share/ShareButton';
 import { generatePrayerStreakCard, generateWorkoutStreakCard, generateQuranStreakCard } from '@/utils/shareCardGenerator';
 
 export default function AllStreaksDisplay() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [streaks, setStreaks] = useState<AllStreaksData>({
     general: { currentStreak: 0, longestStreak: 0, totalDays: 0, lastActiveDate: '' },
@@ -79,13 +81,13 @@ export default function AllStreaksDisplay() {
   const getStreakTitle = (streakType: string): string => {
     switch (streakType) {
       case 'prayer':
-        return 'Prayer Streak';
+        return t('home.prayerStreak');
       case 'workout':
-        return 'Workout Streak';
+        return t('home.workoutStreak');
       case 'quran':
-        return 'Quran Streak';
+        return t('home.quranStreak');
       default:
-        return 'Activity Streak';
+        return t('home.activityStreak');
     }
   };
 
@@ -106,12 +108,12 @@ export default function AllStreaksDisplay() {
       // For general streak, use a generic milestone card
       shareCardData = {
         type: 'milestone' as const,
-        title: `${data.currentStreak || 0} Days Active`,
-        subtitle: 'Activity Streak',
+        title: t('home.daysActive', { days: data.currentStreak || 0 }),
+        subtitle: t('home.activityStreak'),
         value: data.currentStreak || 0,
         description: data.currentStreak === 0 
-          ? 'Start your journey today!'
-          : `Keep up the amazing work!`,
+          ? t('home.startJourneyToday')
+          : t('home.keepUpAmazingWork'),
         gradient: ['#FF6B6B', '#FF5252', '#FF1744'],
       };
     }
@@ -142,7 +144,7 @@ export default function AllStreaksDisplay() {
         <View style={styles.cardContent}>
           <View style={styles.mainStat}>
             <Text style={styles.streakNumber}>{data.currentStreak}</Text>
-            <Text style={styles.streakLabel}>Day{data.currentStreak !== 1 ? 's' : ''}</Text>
+            <Text style={styles.streakLabel}>{t('home.days', { count: data.currentStreak })}</Text>
           </View>
           
           <View style={styles.statsRow}>
@@ -154,7 +156,7 @@ export default function AllStreaksDisplay() {
                 color={colors.card + 'CC'}
               />
               <Text style={styles.statText}>{data.longestStreak}</Text>
-              <Text style={styles.statLabel}>Best</Text>
+              <Text style={styles.statLabel}>{t('home.best')}</Text>
             </View>
             <View style={styles.statItem}>
               <IconSymbol
@@ -164,7 +166,7 @@ export default function AllStreaksDisplay() {
                 color={colors.card + 'CC'}
               />
               <Text style={styles.statText}>{data.totalDays}</Text>
-              <Text style={styles.statLabel}>Total</Text>
+              <Text style={styles.statLabel}>{t('home.total')}</Text>
             </View>
           </View>
         </View>
