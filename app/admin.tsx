@@ -7,7 +7,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { supabase } from '@/app/integrations/supabase/client';
+import { supabase } from '@/lib/integrations/supabase/client';
 
 interface VideoFormData {
   title: string;

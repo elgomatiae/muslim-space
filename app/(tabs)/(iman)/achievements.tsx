@@ -9,7 +9,11 @@ import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { checkAndUnlockAchievements } from '@/utils/achievementService';
+import {
+  checkAndUnlockAchievements,
+  calculateUserStats,
+  getCurrentValueForRequirement,
+} from '@/utils/achievementService';
 
 interface Achievement {
   id: string;
@@ -69,21 +73,16 @@ export default function AchievementsScreen() {
 
       setLoading(true);
 
-      // Load all data in parallel for better performance
-      const [achievementsResult, userAchievementsResult, progressResult] = await Promise.all([
-          supabase
-            .from('achievements')
-            .select('id, title, description, icon_name, requirement_type, requirement_value, points, tier, category, order_index, is_active, unlock_message, next_steps')
-            .eq('is_active', true)
-            .order('order_index', { ascending: true }),
+      const [achievementsResult, userAchievementsResult] = await Promise.all([
+        supabase
+          .from('achievements')
+          .select('id, title, description, icon_name, requirement_type, requirement_value, points, tier, category, order_index, is_active, unlock_message, next_steps')
+          .eq('is_active', true)
+          .order('order_index', { ascending: true }),
         supabase
           .from('user_achievements')
           .select('achievement_id, unlocked_at')
           .eq('user_id', user.id),
-        supabase
-          .from('achievement_progress')
-          .select('achievement_id, current_value')
-          .eq('user_id', user.id)
       ]);
 
       if (achievementsResult.error) {
@@ -93,21 +92,18 @@ export default function AchievementsScreen() {
 
       const allAchievements = achievementsResult.data || [];
       const userAchievements = userAchievementsResult.data || [];
-      const progressData = progressResult.data || [];
+      const stats = await calculateUserStats(user.id);
 
       // Create lookup maps for O(1) access
       const unlockedMap = new Map(
         userAchievements.map(ua => [ua.achievement_id, ua.unlocked_at])
-      );
-      const progressMap = new Map(
-        progressData.map(p => [p.achievement_id, p.current_value])
       );
 
       // Merge data synchronously (no async operations in map)
       const mergedAchievements = allAchievements.map((achievement) => {
         const unlockedAt = unlockedMap.get(achievement.id);
         const unlocked = !!unlockedAt;
-        const currentValue = progressMap.get(achievement.id) || 0;
+        const currentValue = getCurrentValueForRequirement(achievement.requirement_type, stats);
         const progress = unlocked ? 100 : Math.min(100, (currentValue / achievement.requirement_value) * 100);
 
         return {
@@ -249,7 +245,7 @@ export default function AchievementsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['bottom']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading achievements...</Text>
@@ -259,27 +255,7 @@ export default function AchievementsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.back();
-          }}
-          activeOpacity={0.7}
-        >
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow-back"
-            size={24}
-            color={colors.text}
-          />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Achievements</Text>
-        <View style={styles.placeholder} />
-      </View>
-
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}

@@ -5,7 +5,6 @@ import { colors, typography, spacing, borderRadius, shadows } from "@/styles/com
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from '@/contexts/AuthContext';
-import { useImanTracker } from '@/contexts/ImanTrackerContext';
 import { useAchievementCelebration } from '@/contexts/AchievementCelebrationContext';
 import { supabase } from '@/lib/supabase';
 import * as Haptics from 'expo-haptics';
@@ -13,7 +12,12 @@ import { useFocusEffect, router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LOCAL_ACHIEVEMENTS } from '@/data/localAchievements';
 import { sendAchievementUnlocked } from '@/utils/notificationService';
-import { checkAndUnlockAchievements } from '@/utils/achievementService';
+import {
+  checkAndUnlockAchievements,
+  calculateUserStats,
+  getCurrentValueForRequirement,
+  syncLocalAchievementHistoryCache,
+} from '@/utils/achievementService';
 
 interface Achievement {
   id: string;
@@ -35,7 +39,6 @@ interface Achievement {
 
 export default function AchievementsBadges() {
   const { user } = useAuth();
-  const { ibadahGoals } = useImanTracker();
   const { celebrateAchievement } = useAchievementCelebration();
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [recentAchievements, setRecentAchievements] = useState<Achievement[]>([]);
@@ -136,12 +139,11 @@ export default function AchievementsBadges() {
 
       let allAchievements: any[] = [];
       let userAchievements: any[] = [];
-      let progressData: any[] = [];
       let useLocalFallback = false;
 
       // Try to load from Supabase first
       try {
-        const [achievementsResult, userAchievementsResult, progressResult] = await Promise.all([
+        const [achievementsResult, userAchievementsResult] = await Promise.all([
           supabase
             .from('achievements')
             .select('id, title, description, icon_name, requirement_type, requirement_value, points, tier, category, order_index, is_active, unlock_message, next_steps')
@@ -151,10 +153,6 @@ export default function AchievementsBadges() {
             .from('user_achievements')
             .select('achievement_id, unlocked_at')
             .eq('user_id', user.id),
-          supabase
-            .from('achievement_progress')
-            .select('achievement_id, current_value')
-            .eq('user_id', user.id)
         ]);
 
         if (achievementsResult.error || !achievementsResult.data || achievementsResult.data.length === 0) {
@@ -163,7 +161,6 @@ export default function AchievementsBadges() {
         } else {
           allAchievements = achievementsResult.data;
           userAchievements = userAchievementsResult.data || [];
-          progressData = progressResult.data || [];
           console.log('✅ Loaded from Supabase:', allAchievements.length, 'achievements');
         }
       } catch (error) {
@@ -183,27 +180,18 @@ export default function AchievementsBadges() {
             userAchievements = JSON.parse(unlockedData);
           }
 
-          // Load user's progress from AsyncStorage
-          const progressDataStr = await AsyncStorage.getItem(`achievement_progress_${user.id}`);
-          if (progressDataStr) {
-            progressData = JSON.parse(progressDataStr);
-          }
         } catch (error) {
           console.log('Error loading local achievement data:', error);
         }
       }
 
-      // Calculate progress from Iman Tracker data (for local achievements)
-      if (useLocalFallback) {
-        progressData = await calculateProgressFromImanTracker(allAchievements, user.id, ibadahGoals);
-      }
+      // Single source of truth: same stats as checkAndUnlockAchievements / Supabase achievements
+      const stats = await calculateUserStats(user.id);
+      await syncLocalAchievementHistoryCache(user.id, stats);
 
       // Create lookup maps
       const unlockedMap = new Map(
         userAchievements.map((ua: any) => [ua.achievement_id || ua.id, ua.unlocked_at])
-      );
-      const progressMap = new Map(
-        progressData.map((p: any) => [p.achievement_id || p.id, p.current_value || p.current])
       );
 
       // Merge data and check for auto-unlock
@@ -212,7 +200,7 @@ export default function AchievementsBadges() {
         const achievementId = achievement.id;
         const unlockedAt = unlockedMap.get(achievementId);
         let unlocked = !!unlockedAt;
-        const currentValue = progressMap.get(achievementId) || 0;
+        const currentValue = getCurrentValueForRequirement(achievement.requirement_type, stats);
         const progress = unlocked ? 100 : Math.min(100, (currentValue / achievement.requirement_value) * 100);
 
         // Auto-unlock if progress reaches 100% and not already unlocked
@@ -354,81 +342,6 @@ export default function AchievementsBadges() {
     }
   };
 
-  // Calculate achievement progress from Iman Tracker data
-  const calculateProgressFromImanTracker = async (achievements: any[], userId: string, ibadahGoals: any): Promise<any[]> => {
-    try {
-      // Load historical totals from AsyncStorage (these are accumulated over time)
-      const historyKey = `iman_tracker_history_${userId}`;
-      const historyData = await AsyncStorage.getItem(historyKey);
-      const history = historyData ? JSON.parse(historyData) : {};
-
-      // Calculate current values from ibadah goals and history
-      // Count completed prayers today
-      const todayPrayers = ibadahGoals?.fardPrayers 
-        ? Object.values(ibadahGoals.fardPrayers).filter((p: any) => p === true).length 
-        : 0;
-      
-      // Get totals from history (lifetime totals)
-      const totalPrayers = (history.totalPrayers || 0) + todayPrayers;
-      const totalDhikr = history.totalDhikr || ibadahGoals?.dhikrCount || 0;
-      const totalQuranPages = history.totalQuranPages || ibadahGoals?.quranPagesRead || 0;
-      const currentStreak = history.currentStreak || history.streak || 0;
-      const daysActive = history.daysActive || (history.activeDays?.length || 0);
-      
-      // These would come from other sources, but default to 0 for now
-      const lecturesWatched = history.lecturesWatched || 0;
-      const quizzesCompleted = history.quizzesCompleted || 0;
-      const workoutsCompleted = history.workoutsCompleted || 0;
-      const meditationSessions = history.meditationSessions || 0;
-
-      // Calculate progress for each achievement
-      return achievements.map(achievement => {
-        let currentValue = 0;
-        switch (achievement.requirement_type) {
-          case 'total_prayers':
-            currentValue = totalPrayers;
-            break;
-          case 'total_dhikr':
-            currentValue = totalDhikr;
-            break;
-          case 'total_quran_pages':
-            currentValue = totalQuranPages;
-            break;
-          case 'streak':
-            currentValue = currentStreak;
-            break;
-          case 'days_active':
-            currentValue = daysActive;
-            break;
-          case 'lectures_watched':
-            currentValue = lecturesWatched;
-            break;
-          case 'quizzes_completed':
-            currentValue = quizzesCompleted;
-            break;
-          case 'workouts_completed':
-            currentValue = workoutsCompleted;
-            break;
-          case 'meditation_sessions':
-            currentValue = meditationSessions;
-            break;
-          default:
-            currentValue = 0;
-        }
-
-        return {
-          id: achievement.id,
-          achievement_id: achievement.id,
-          current_value: currentValue,
-          current: currentValue,
-        };
-      });
-    } catch (error) {
-      console.log('Error calculating progress:', error);
-      return [];
-    }
-  };
-
   const updateRecentAchievements = (allAchievements: Achievement[]) => {
     // Get recent achievements (unlocked in the last 7 days)
     const sevenDaysAgo = new Date();
@@ -469,30 +382,7 @@ export default function AchievementsBadges() {
   const totalPoints = achievements
     .filter(a => a.unlocked)
     .reduce((sum, a) => sum + a.points, 0);
-
-  // Earned achievements (unlocked)
-  const earnedAchievements = achievements
-    .filter(a => a.unlocked)
-    .sort((a, b) => {
-      const dateA = a.unlocked_at ? new Date(a.unlocked_at).getTime() : 0;
-      const dateB = b.unlocked_at ? new Date(b.unlocked_at).getTime() : 0;
-      return dateB - dateA; // Most recent first
-    })
-    .slice(0, 6); // Show top 6
-
-  // Close to accomplishing (high progress but not unlocked)
-  const closeAchievements = achievements
-    .filter(a => !a.unlocked && a.progress > 0)
-    .sort((a, b) => b.progress - a.progress)
-    .slice(0, 6); // Show top 6
-
-  // Category-based achievements
-  const categoryAchievements = {
-    ibadah: achievements.filter(a => a.category === 'ibadah'),
-    ilm: achievements.filter(a => a.category === 'ilm'),
-    amanah: achievements.filter(a => a.category === 'amanah'),
-    general: achievements.filter(a => a.category === 'general'),
-  };
+  const inProgressCount = achievements.filter(a => !a.unlocked && a.progress > 0).length;
 
   // Filter achievements based on current filters
   const filteredAchievements = achievements.filter(achievement => {
@@ -545,6 +435,19 @@ export default function AchievementsBadges() {
     }
   };
 
+  const getAchievementIcon = (achievement: Achievement) => {
+    const ios = achievement.unlocked ? (achievement.icon_name || 'star.fill') : 'lock.fill';
+    const androidMap: Record<string, string> = {
+      'moon.fill': 'nightlight', 'moon.stars.fill': 'nightlight', 'sun.max.fill': 'wb-sunny',
+      'star.fill': 'star', 'book.fill': 'menu-book', 'flame.fill': 'local-fire-department',
+      'heart.fill': 'favorite', 'trophy.fill': 'emoji-events', 'crown.fill': 'workspace-premium',
+      'lock.fill': 'lock', 'checkmark.circle.fill': 'check-circle', 'sparkles': 'auto-awesome',
+      'leaf.fill': 'eco', 'play.circle.fill': 'play-circle', 'target': 'track-changes',
+    };
+    const android = (achievement.unlocked ? androidMap[achievement.icon_name || ''] : 'lock') || 'star';
+    return { ios, android };
+  };
+
   const openAchievementDetails = (achievement: Achievement) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSelectedAchievement(achievement);
@@ -559,87 +462,48 @@ export default function AchievementsBadges() {
 
   const renderAchievementCard = (achievement: Achievement, index: number) => {
     const tierColor = getTierColor(achievement.tier);
-    
+
     return (
-      <React.Fragment key={index}>
-        <TouchableOpacity
+      <TouchableOpacity
+        style={[
+          styles.achievementCard,
+          !achievement.unlocked && styles.achievementCardLocked,
+        ]}
+        onPress={() => openAchievementDetails(achievement)}
+        activeOpacity={0.7}
+      >
+        <View
           style={[
-            styles.achievementCard,
-            !achievement.unlocked && styles.achievementCardLocked
+            styles.achievementIconWrap,
+            { backgroundColor: achievement.unlocked ? tierColor + '22' : colors.highlight },
           ]}
-          onPress={() => openAchievementDetails(achievement)}
-          activeOpacity={0.7}
         >
-          <LinearGradient
-            colors={achievement.unlocked 
-              ? [tierColor + '80', tierColor + '60']
-              : [colors.card, colors.cardAlt]
-            }
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.achievementCardGradient}
-          >
-            <View style={[
-              styles.achievementIconContainer,
-              !achievement.unlocked && styles.achievementIconContainerLocked
-            ]}>
-              <IconSymbol
-                ios_icon_name={achievement.unlocked ? 'star.fill' : 'lock.fill'}
-                android_material_icon_name={achievement.unlocked ? 'star' : 'lock'}
-                size={32}
-                color={achievement.unlocked ? colors.card : colors.textSecondary}
-              />
-            </View>
-            
-            <View style={[styles.tierBadge, { backgroundColor: tierColor }]}>
-              <Text style={styles.tierBadgeText}>{achievement.tier}</Text>
-            </View>
-            
-            <Text style={[
-              styles.achievementTitle,
-              achievement.unlocked && styles.achievementTitleUnlocked
-            ]}>
-              {achievement.title}
-            </Text>
-            
-            <Text style={[
-              styles.achievementDescription,
-              achievement.unlocked && styles.achievementDescriptionUnlocked
-            ]} numberOfLines={2}>
-              {achievement.description}
-            </Text>
-            
-            {achievement.unlocked ? (
-              <View style={styles.unlockedBadge}>
-                <IconSymbol
-                  ios_icon_name="checkmark.seal.fill"
-                  android_material_icon_name="verified"
-                  size={16}
-                  color={colors.card}
-                />
-                <Text style={styles.unlockedText}>Unlocked</Text>
-              </View>
-            ) : (
-              <View style={styles.progressContainer}>
-                <View style={styles.progressBar}>
-                  <View 
-                    style={[
-                      styles.progressFill, 
-                      { 
-                        width: `${achievement.progress}%`,
-                        backgroundColor: tierColor
-                      }
-                    ]} 
-                  />
-                </View>
-                <Text style={styles.progressText}>
-                  {Math.round(achievement.progress)}%
-                </Text>
-              </View>
-            )}
-          </LinearGradient>
-        </TouchableOpacity>
-      </React.Fragment>
+          <IconSymbol
+            ios_icon_name={getAchievementIcon(achievement).ios}
+            android_material_icon_name={getAchievementIcon(achievement).android as any}
+            size={28}
+            color={achievement.unlocked ? tierColor : colors.textSecondary}
+          />
+        </View>
+        <Text style={styles.achievementTitle} numberOfLines={2}>
+          {achievement.title}
+        </Text>
+        <View style={styles.achievementFooter}>
+          <View style={[styles.tierChip, { backgroundColor: tierColor + '25' }]}>
+            <Text style={[styles.tierChipText, { color: tierColor }]}>{achievement.tier}</Text>
+          </View>
+          {achievement.unlocked ? (
+            <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check-circle" size={16} color={colors.success} />
+          ) : (
+            <Text style={styles.progressPct}>{Math.round(achievement.progress)}%</Text>
+          )}
+        </View>
+        {!achievement.unlocked && achievement.progress > 0 ? (
+          <View style={styles.miniProgress}>
+            <View style={[styles.miniProgressFill, { width: `${achievement.progress}%`, backgroundColor: tierColor }]} />
+          </View>
+        ) : null}
+      </TouchableOpacity>
     );
   };
 
@@ -647,22 +511,12 @@ export default function AchievementsBadges() {
     return (
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <LinearGradient
-            colors={colors.gradientPurple}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.sectionIconContainer}
-          >
-            <IconSymbol
-              ios_icon_name="rosette"
-              android_material_icon_name="workspace-premium"
-              size={20}
-              color={colors.card}
-            />
-          </LinearGradient>
+          <View style={styles.sectionIconContainer}>
+            <IconSymbol ios_icon_name="trophy.fill" android_material_icon_name="emoji-events" size={22} color={colors.primary} />
+          </View>
           <View style={styles.sectionTitleContainer}>
             <Text style={styles.sectionTitle}>Achievements</Text>
-            <Text style={styles.sectionSubtitle}>Loading...</Text>
+            <Text style={styles.sectionSubtitle}>Loading…</Text>
           </View>
         </View>
         <View style={styles.loadingContainer}>
@@ -676,19 +530,9 @@ export default function AchievementsBadges() {
     return (
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <LinearGradient
-            colors={colors.gradientPurple}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.sectionIconContainer}
-          >
-            <IconSymbol
-              ios_icon_name="rosette"
-              android_material_icon_name="workspace-premium"
-              size={20}
-              color={colors.card}
-            />
-          </LinearGradient>
+          <View style={styles.sectionIconContainer}>
+            <IconSymbol ios_icon_name="trophy.fill" android_material_icon_name="emoji-events" size={22} color={colors.primary} />
+          </View>
           <View style={styles.sectionTitleContainer}>
             <Text style={styles.sectionTitle}>Achievements</Text>
             <Text style={styles.sectionSubtitle}>No achievements available</Text>
@@ -701,428 +545,100 @@ export default function AchievementsBadges() {
     );
   }
 
+  const categoryPill = (cat: typeof categoryFilter, label: string) => (
+    <TouchableOpacity
+      key={cat}
+      style={[styles.filterPill, categoryFilter === cat && styles.categoryPillActive]}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        setCategoryFilter(cat);
+      }}
+      activeOpacity={0.7}
+    >
+      <Text style={[styles.filterPillText, categoryFilter === cat && styles.filterPillTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <LinearGradient
-          colors={colors.gradientPurple}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.sectionIconContainer}
-        >
+        <View style={styles.sectionIconContainer}>
           <IconSymbol
-            ios_icon_name="rosette"
-            android_material_icon_name="workspace-premium"
-            size={20}
-            color={colors.card}
+            ios_icon_name="trophy.fill"
+            android_material_icon_name="emoji-events"
+            size={22}
+            color={colors.primary}
           />
-        </LinearGradient>
+        </View>
         <View style={styles.sectionTitleContainer}>
           <Text style={styles.sectionTitle}>Achievements</Text>
-          <Text style={styles.sectionSubtitle}>{unlockedCount}/{achievements.length} unlocked</Text>
-        </View>
-      </View>
-
-      {/* Overview Stats Grid */}
-      <View style={styles.statsGrid}>
-        <TouchableOpacity
-          style={styles.statCard}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setFilter('unlocked');
-            setCategoryFilter('all');
-          }}
-          activeOpacity={0.7}
-        >
-          <LinearGradient
-            colors={[colors.success + '20', colors.success + '10']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.statCardGradient}
-          >
-            <IconSymbol
-              ios_icon_name="trophy.fill"
-              android_material_icon_name="emoji-events"
-              size={28}
-              color={colors.success}
-            />
-            <Text style={styles.statCardValue}>{unlockedCount}</Text>
-            <Text style={styles.statCardLabel}>Unlocked</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.statCard}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setFilter('locked');
-            setCategoryFilter('all');
-          }}
-          activeOpacity={0.7}
-        >
-          <LinearGradient
-            colors={[colors.warning + '20', colors.warning + '10']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.statCardGradient}
-          >
-            <IconSymbol
-              ios_icon_name="target"
-              android_material_icon_name="flag"
-              size={28}
-              color={colors.warning}
-            />
-            <Text style={styles.statCardValue}>{closeAchievements.length}</Text>
-            <Text style={styles.statCardLabel}>In Progress</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.statCard}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setFilter('all');
-            setCategoryFilter('all');
-          }}
-          activeOpacity={0.7}
-        >
-          <LinearGradient
-            colors={[colors.primary + '20', colors.primary + '10']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.statCardGradient}
-          >
-            <IconSymbol
-              ios_icon_name="star.fill"
-              android_material_icon_name="star"
-              size={28}
-              color={colors.primary}
-            />
-            <Text style={styles.statCardValue}>{totalPoints}</Text>
-            <Text style={styles.statCardLabel}>Total Points</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
-
-      {/* Featured Sections */}
-      <View style={styles.featuredSection}>
-        {/* Earned Achievements */}
-        <View style={styles.featuredCard}>
-          <View style={styles.featuredHeader}>
-            <View style={styles.featuredHeaderLeft}>
-              <View style={[styles.featuredIconContainer, { backgroundColor: colors.success + '20' }]}>
-                <IconSymbol
-                  ios_icon_name="trophy.fill"
-                  android_material_icon_name="emoji-events"
-                  size={20}
-                  color={colors.success}
-                />
-              </View>
-              <View>
-                <Text style={styles.featuredTitle}>Earned</Text>
-                <Text style={styles.featuredSubtitle}>{earnedAchievements.length} achievements</Text>
-              </View>
-            </View>
-            {earnedAchievements.length > 0 && (
-              <TouchableOpacity
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setFilter('unlocked');
-                  setCategoryFilter('all');
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.featuredViewAll}>View All →</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          {earnedAchievements.length > 0 ? (
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.featuredScroll}
-              contentContainerStyle={styles.featuredScrollContent}
-            >
-              {earnedAchievements.map((achievement, index) => (
-                <TouchableOpacity
-                  key={achievement.id || index}
-                  style={styles.featuredItem}
-                  onPress={() => openAchievementDetails(achievement)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.featuredItemIcon, { backgroundColor: getTierColor(achievement.tier) }]}>
-                    <IconSymbol
-                      ios_icon_name={achievement.icon_name || 'star.fill'}
-                      android_material_icon_name="star"
-                      size={24}
-                      color={colors.card}
-                    />
-                  </View>
-                  <Text style={styles.featuredItemTitle} numberOfLines={1}>
-                    {achievement.title}
-                  </Text>
-                  <View style={styles.featuredItemBadge}>
-                    <Text style={styles.featuredItemBadgeText}>{achievement.tier}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          ) : (
-            <View style={styles.featuredEmpty}>
-              <Text style={styles.featuredEmptyText}>Complete activities to unlock achievements</Text>
-            </View>
-          )}
-        </View>
-
-        {/* In Progress Achievements */}
-        <View style={styles.featuredCard}>
-          <View style={styles.featuredHeader}>
-            <View style={styles.featuredHeaderLeft}>
-              <View style={[styles.featuredIconContainer, { backgroundColor: colors.warning + '20' }]}>
-                <IconSymbol
-                  ios_icon_name="target"
-                  android_material_icon_name="flag"
-                  size={20}
-                  color={colors.warning}
-                />
-              </View>
-              <View>
-                <Text style={styles.featuredTitle}>In Progress</Text>
-                <Text style={styles.featuredSubtitle}>{closeAchievements.length} achievements</Text>
-              </View>
-            </View>
-            {closeAchievements.length > 0 && (
-              <TouchableOpacity
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setFilter('locked');
-                  setCategoryFilter('all');
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.featuredViewAll}>View All →</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          {closeAchievements.length > 0 ? (
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.featuredScroll}
-              contentContainerStyle={styles.featuredScrollContent}
-            >
-              {closeAchievements.map((achievement, index) => (
-                <TouchableOpacity
-                  key={achievement.id || index}
-                  style={styles.featuredItem}
-                  onPress={() => openAchievementDetails(achievement)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.featuredItemIcon, { backgroundColor: getTierColor(achievement.tier) + '60' }]}>
-                    <IconSymbol
-                      ios_icon_name="lock.fill"
-                      android_material_icon_name="lock"
-                      size={24}
-                      color={colors.card}
-                    />
-                  </View>
-                  <Text style={styles.featuredItemTitle} numberOfLines={1}>
-                    {achievement.title}
-                  </Text>
-                  <View style={styles.progressBarContainer}>
-                    <View style={styles.progressBarBackground}>
-                      <View 
-                        style={[
-                          styles.progressBarFill, 
-                          { 
-                            width: `${achievement.progress}%`,
-                            backgroundColor: getTierColor(achievement.tier)
-                          }
-                        ]} 
-                      />
-                    </View>
-                  </View>
-                  <Text style={styles.featuredItemProgress}>{Math.round(achievement.progress)}%</Text>
-                  <TouchableOpacity
-                    style={styles.featuredActionButton}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      navigateToAction(achievement.requirement_type);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.featuredActionButtonText}>Action</Text>
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          ) : (
-            <View style={styles.featuredEmpty}>
-              <Text style={styles.featuredEmptyText}>Start activities to see progress</Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      {/* Category Quick Access */}
-      <View style={styles.categorySection}>
-        <Text style={styles.sectionTitle}>Browse by Category</Text>
-        <View style={styles.categoryGrid}>
-          <TouchableOpacity
-            style={[styles.categoryCard, categoryFilter === 'ibadah' && styles.categoryCardActive]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setCategoryFilter('ibadah');
-              setFilter('all');
-            }}
-            activeOpacity={0.7}
-          >
-            <LinearGradient
-              colors={categoryFilter === 'ibadah' 
-                ? [getCategoryColor('ibadah'), getCategoryColor('ibadah') + 'DD']
-                : [getCategoryColor('ibadah') + '20', getCategoryColor('ibadah') + '10']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.categoryCardGradient}
-            >
-              <View style={[styles.categoryCardIcon, { backgroundColor: categoryFilter === 'ibadah' ? colors.card + '30' : getCategoryColor('ibadah') + '30' }]}>
-                <IconSymbol
-                  ios_icon_name={getCategoryIcon('ibadah').ios}
-                  android_material_icon_name={getCategoryIcon('ibadah').android}
-                  size={28}
-                  color={categoryFilter === 'ibadah' ? colors.card : getCategoryColor('ibadah')}
-                />
-              </View>
-              <Text style={[styles.categoryCardTitle, categoryFilter === 'ibadah' && styles.categoryCardTitleActive]}>
-                ʿIbādah
-              </Text>
-              <Text style={[styles.categoryCardCount, categoryFilter === 'ibadah' && styles.categoryCardCountActive]}>
-                {categoryAchievements.ibadah.filter(a => a.unlocked).length}/{categoryAchievements.ibadah.length}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.categoryCard, categoryFilter === 'ilm' && styles.categoryCardActive]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setCategoryFilter('ilm');
-              setFilter('all');
-            }}
-            activeOpacity={0.7}
-          >
-            <LinearGradient
-              colors={categoryFilter === 'ilm' 
-                ? [getCategoryColor('ilm'), getCategoryColor('ilm') + 'DD']
-                : [getCategoryColor('ilm') + '20', getCategoryColor('ilm') + '10']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.categoryCardGradient}
-            >
-              <View style={[styles.categoryCardIcon, { backgroundColor: categoryFilter === 'ilm' ? colors.card + '30' : getCategoryColor('ilm') + '30' }]}>
-                <IconSymbol
-                  ios_icon_name={getCategoryIcon('ilm').ios}
-                  android_material_icon_name={getCategoryIcon('ilm').android}
-                  size={28}
-                  color={categoryFilter === 'ilm' ? colors.card : getCategoryColor('ilm')}
-                />
-              </View>
-              <Text style={[styles.categoryCardTitle, categoryFilter === 'ilm' && styles.categoryCardTitleActive]}>
-                ʿIlm
-              </Text>
-              <Text style={[styles.categoryCardCount, categoryFilter === 'ilm' && styles.categoryCardCountActive]}>
-                {categoryAchievements.ilm.filter(a => a.unlocked).length}/{categoryAchievements.ilm.length}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.categoryCard, categoryFilter === 'amanah' && styles.categoryCardActive]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setCategoryFilter('amanah');
-              setFilter('all');
-            }}
-            activeOpacity={0.7}
-          >
-            <LinearGradient
-              colors={categoryFilter === 'amanah' 
-                ? [getCategoryColor('amanah'), getCategoryColor('amanah') + 'DD']
-                : [getCategoryColor('amanah') + '20', getCategoryColor('amanah') + '10']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.categoryCardGradient}
-            >
-              <View style={[styles.categoryCardIcon, { backgroundColor: categoryFilter === 'amanah' ? colors.card + '30' : getCategoryColor('amanah') + '30' }]}>
-                <IconSymbol
-                  ios_icon_name={getCategoryIcon('amanah').ios}
-                  android_material_icon_name={getCategoryIcon('amanah').android}
-                  size={28}
-                  color={categoryFilter === 'amanah' ? colors.card : getCategoryColor('amanah')}
-                />
-              </View>
-              <Text style={[styles.categoryCardTitle, categoryFilter === 'amanah' && styles.categoryCardTitleActive]}>
-                Amanah
-              </Text>
-              <Text style={[styles.categoryCardCount, categoryFilter === 'amanah' && styles.categoryCardCountActive]}>
-                {categoryAchievements.amanah.filter(a => a.unlocked).length}/{categoryAchievements.amanah.length}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.categoryCard, categoryFilter === 'general' && styles.categoryCardActive]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setCategoryFilter('general');
-              setFilter('all');
-            }}
-            activeOpacity={0.7}
-          >
-            <LinearGradient
-              colors={categoryFilter === 'general' 
-                ? [getCategoryColor('general'), getCategoryColor('general') + 'DD']
-                : [getCategoryColor('general') + '20', getCategoryColor('general') + '10']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.categoryCardGradient}
-            >
-              <View style={[styles.categoryCardIcon, { backgroundColor: categoryFilter === 'general' ? colors.card + '30' : getCategoryColor('general') + '30' }]}>
-                <IconSymbol
-                  ios_icon_name={getCategoryIcon('general').ios}
-                  android_material_icon_name={getCategoryIcon('general').android}
-                  size={28}
-                  color={categoryFilter === 'general' ? colors.card : getCategoryColor('general')}
-                />
-              </View>
-              <Text style={[styles.categoryCardTitle, categoryFilter === 'general' && styles.categoryCardTitleActive]}>
-                General
-              </Text>
-              <Text style={[styles.categoryCardCount, categoryFilter === 'general' && styles.categoryCardCountActive]}>
-                {categoryAchievements.general.filter(a => a.unlocked).length}/{categoryAchievements.general.length}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* All Achievements Section */}
-      <View style={styles.allAchievementsSection}>
-        <View style={styles.allAchievementsHeader}>
-          <Text style={styles.allAchievementsTitle}>All Achievements</Text>
-          <Text style={styles.allAchievementsSubtitle}>
-            {filteredAchievements.length} shown
+          <Text style={styles.sectionSubtitle}>
+            {unlockedCount} of {achievements.length} unlocked · {totalPoints} pts
           </Text>
         </View>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
-          style={styles.achievementsScroll}
-          contentContainerStyle={styles.achievementsScrollContent}
-        >
-          {filteredAchievements.map((achievement, index) => renderAchievementCard(achievement, index))}
-        </ScrollView>
       </View>
+
+      <View style={styles.statsRow}>
+        <TouchableOpacity
+          style={[styles.statPill, filter === 'unlocked' && styles.statPillActive]}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setFilter('unlocked'); setCategoryFilter('all'); }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.statPillValue, filter === 'unlocked' && styles.statPillValueActive]}>{unlockedCount}</Text>
+          <Text style={[styles.statPillLabel, filter === 'unlocked' && styles.statPillLabelActive]}>Unlocked</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.statPill, filter === 'locked' && styles.statPillActive]}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setFilter('locked'); setCategoryFilter('all'); }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.statPillValue, filter === 'locked' && styles.statPillValueActive]}>{inProgressCount}</Text>
+          <Text style={[styles.statPillLabel, filter === 'locked' && styles.statPillLabelActive]}>In progress</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.statPill, filter === 'all' && styles.statPillActive]}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setFilter('all'); setCategoryFilter('all'); }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.statPillValue, filter === 'all' && styles.statPillValueActive]}>{totalPoints}</Text>
+          <Text style={[styles.statPillLabel, filter === 'all' && styles.statPillLabelActive]}>Points</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.categoryPillsRow}
+        contentContainerStyle={styles.categoryPillsContent}
+      >
+        {categoryPill('all', 'All')}
+        {categoryPill('ibadah', 'ʿIbādah')}
+        {categoryPill('ilm', 'ʿIlm')}
+        {categoryPill('amanah', 'Amanah')}
+        {categoryPill('general', 'General')}
+      </ScrollView>
+
+      {filteredAchievements.length > 0 ? (
+        <View style={styles.achievementsGrid}>
+          {filteredAchievements.map((achievement, index) => (
+            <View key={achievement.id || index} style={styles.gridCell}>
+              {renderAchievementCard(achievement, index)}
+            </View>
+          ))}
+        </View>
+      ) : (
+        <View style={styles.emptyState}>
+          <IconSymbol
+            ios_icon_name="tray"
+            android_material_icon_name="inbox"
+            size={40}
+            color={colors.textSecondary}
+          />
+          <Text style={styles.emptyStateText}>
+            {filter === 'unlocked' ? 'No achievements unlocked yet' : filter === 'locked' ? 'No achievements in progress' : 'No achievements match this filter'}
+          </Text>
+        </View>
+      )}
 
       {/* Achievement Details Modal */}
       <Modal
@@ -1366,7 +882,8 @@ export default function AchievementsBadges() {
 
 const styles = StyleSheet.create({
   section: {
-    marginTop: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
     width: '100%',
   },
   sectionHeader: {
@@ -1376,9 +893,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   sectionIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.sm,
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.highlightPurple,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1408,139 +926,153 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
-  recentSection: {
-    marginBottom: spacing.xl,
-  },
-  recentHeader: {
+  statsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
     marginBottom: spacing.md,
+  },
+  statPill: {
+    flex: 1,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.xs,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
   },
-  recentTitle: {
-    ...typography.bodyBold,
+  statPillActive: {
+    backgroundColor: colors.highlightPurple,
+    borderColor: colors.primary + '40',
+  },
+  statPillValue: {
+    ...typography.h4,
     color: colors.text,
-    fontSize: 15,
+    fontWeight: '800',
   },
-  allAchievementsSection: {
-    marginTop: spacing.md,
+  statPillValueActive: {
+    color: colors.primaryDark,
   },
-  allAchievementsHeader: {
+  statPillLabel: {
+    ...typography.small,
+    color: colors.textSecondary,
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  statPillLabelActive: {
+    color: colors.primary,
+    opacity: 0.9,
+  },
+  categoryPillsRow: {
+    marginHorizontal: -spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  categoryPillsContent: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingRight: spacing.xxl,
+    gap: spacing.sm,
   },
-  allAchievementsTitle: {
-    ...typography.bodyBold,
+  filterPill: {
+    paddingVertical: 8,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.round,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  filterPillActive: {},
+  categoryPillActive: {
+    backgroundColor: colors.primary + '18',
+    borderColor: colors.primary + '40',
+  },
+  filterPillText: {
+    ...typography.caption,
+    fontWeight: '600',
     color: colors.text,
-    fontSize: 15,
   },
-  achievementsScroll: {
-    marginHorizontal: -spacing.xl,
-    paddingHorizontal: spacing.xl,
+  filterPillTextActive: {
+    color: colors.primaryDark,
   },
-  achievementsScrollContent: {
-    paddingRight: spacing.xl,
+  achievementsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -spacing.xs,
+    paddingBottom: spacing.xl,
+  },
+  gridCell: {
+    width: '50%',
+    padding: spacing.xs,
   },
   achievementCard: {
-    width: 140,
-    marginRight: spacing.md,
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-    ...shadows.medium,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minHeight: 140,
+    justifyContent: 'space-between',
   },
   achievementCardLocked: {
-    opacity: 0.7,
+    opacity: 0.9,
   },
-  achievementCardGradient: {
-    padding: spacing.lg,
-    alignItems: 'center',
-    minHeight: 200,
-  },
-  achievementIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  achievementIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
   },
-  achievementIconContainerLocked: {
-    backgroundColor: colors.highlight,
-  },
-  tierBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: borderRadius.sm,
-    marginBottom: spacing.sm,
-  },
-  tierBadgeText: {
-    ...typography.small,
-    color: colors.card,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    fontSize: 9,
-  },
   achievementTitle: {
-    ...typography.caption,
+    ...typography.captionBold,
     color: colors.text,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: spacing.xs,
+    fontSize: 13,
+    flex: 1,
+    minHeight: 36,
   },
-  achievementTitleUnlocked: {
-    color: colors.card,
-  },
-  achievementDescription: {
-    ...typography.small,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  achievementDescriptionUnlocked: {
-    color: colors.card,
-    opacity: 0.9,
-  },
-  unlockedBadge: {
+  achievementFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: borderRadius.sm,
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
   },
-  unlockedText: {
-    ...typography.small,
-    color: colors.card,
-    fontWeight: '600',
+  tierChip: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
-  progressContainer: {
-    width: '100%',
-    marginTop: spacing.xs,
-  },
-  progressBar: {
-    height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: borderRadius.sm,
-    overflow: 'hidden',
-    marginBottom: spacing.xs,
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: borderRadius.sm,
-  },
-  progressText: {
-    ...typography.small,
-    color: colors.card,
-    textAlign: 'center',
-    fontWeight: '600',
+  tierChipText: {
     fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  progressPct: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  miniProgress: {
+    height: 3,
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginTop: spacing.sm,
+  },
+  miniProgressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xxl,
+    gap: spacing.md,
+  },
+  emptyStateText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
@@ -1731,222 +1263,6 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text,
     lineHeight: 18,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.xl,
-    marginTop: spacing.md,
-  },
-  statCard: {
-    flex: 1,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    ...shadows.medium,
-  },
-  statCardGradient: {
-    padding: spacing.md,
-    alignItems: 'center',
-    minHeight: 100,
-    justifyContent: 'center',
-  },
-  statCardValue: {
-    ...typography.h2,
-    color: colors.text,
-    fontWeight: '800',
-    marginTop: spacing.xs,
-  },
-  statCardLabel: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    fontWeight: '600',
-  },
-  featuredSection: {
-    marginBottom: spacing.xl,
-    gap: spacing.md,
-  },
-  featuredCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.small,
-  },
-  featuredHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  featuredHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  featuredIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  featuredTitle: {
-    ...typography.bodyBold,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  featuredSubtitle: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  featuredViewAll: {
-    ...typography.caption,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  featuredScroll: {
-    marginHorizontal: -spacing.md,
-    paddingHorizontal: spacing.md,
-  },
-  featuredScrollContent: {
-    gap: spacing.sm,
-  },
-  featuredItem: {
-    width: 120,
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-    padding: spacing.sm,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  featuredItemIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xs,
-  },
-  featuredItemTitle: {
-    ...typography.caption,
-    color: colors.text,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: spacing.xs,
-    fontSize: 11,
-  },
-  featuredItemBadge: {
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.border,
-  },
-  featuredItemBadgeText: {
-    ...typography.small,
-    color: colors.text,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    fontSize: 9,
-  },
-  featuredItemProgress: {
-    ...typography.small,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    fontSize: 10,
-  },
-  featuredActionButton: {
-    marginTop: spacing.xs,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.primary + '20',
-  },
-  featuredActionButtonText: {
-    ...typography.small,
-    color: colors.primary,
-    fontWeight: '600',
-    fontSize: 10,
-  },
-  featuredEmpty: {
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  featuredEmptyText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  categorySection: {
-    marginBottom: spacing.xl,
-  },
-  categoryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
-  categoryCard: {
-    width: '47%',
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    ...shadows.small,
-  },
-  categoryCardActive: {
-    ...shadows.medium,
-  },
-  categoryCardGradient: {
-    padding: spacing.md,
-    alignItems: 'center',
-    minHeight: 120,
-    justifyContent: 'center',
-  },
-  categoryCardIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  categoryCardTitle: {
-    ...typography.bodyBold,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: spacing.xs,
-  },
-  categoryCardTitleActive: {
-    color: colors.card,
-  },
-  categoryCardCount: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  categoryCardCountActive: {
-    color: colors.card + 'DD',
-  },
-  progressBarContainer: {
-    width: '100%',
-    marginBottom: spacing.xs,
-  },
-  progressBarBackground: {
-    height: 4,
-    backgroundColor: colors.border,
-    borderRadius: borderRadius.sm,
-    overflow: 'hidden',
-    marginBottom: spacing.xs,
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: borderRadius.sm,
-  },
-  allAchievementsSubtitle: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontSize: 12,
   },
   modalActionButton: {
     flexDirection: 'row',

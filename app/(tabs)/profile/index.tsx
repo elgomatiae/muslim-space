@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity, TextInput, Modal, Alert, KeyboardAvoidingView, Keyboard } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
@@ -10,6 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTranslation } from "@/contexts/I18nContext";
 import { syncProfileFromSupabase, updateUserProfile, deleteUserAccount } from "@/utils/profileSupabaseSync";
 import { router } from "expo-router";
+import { TabHubHeader, TabHubHeaderIconDecoration } from "@/components/navigation/TabHubHeader";
 
 interface ProfileOption {
   title: string;
@@ -17,14 +19,6 @@ interface ProfileOption {
   androidIcon: string;
   color: string;
   action: () => void;
-}
-
-interface StatItem {
-  value: string;
-  label: string;
-  iosIcon: string;
-  androidIcon: string;
-  color: string;
 }
 
 interface UserProfile {
@@ -46,12 +40,6 @@ export default function ProfileScreen() {
 
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [tempProfile, setTempProfile] = useState<UserProfile>(profile);
-  const [stats, setStats] = useState<StatItem[]>([
-    { value: '0', label: t('profile.daysActive'), iosIcon: 'calendar', androidIcon: 'calendar-today', color: colors.primary },
-    { value: '0', label: t('profile.prayers'), iosIcon: 'moon.stars', androidIcon: 'self-improvement', color: colors.accent },
-    { value: '0', label: t('profile.dayStreak'), iosIcon: 'flame.fill', androidIcon: 'local-fire-department', color: colors.error },
-  ]);
-
   const [tapCount, setTapCount] = useState(0);
   const [lastTapTime, setLastTapTime] = useState(0);
   const [pinModalVisible, setPinModalVisible] = useState(false);
@@ -84,40 +72,9 @@ export default function ProfileScreen() {
     }
   }, [user]);
 
-  const loadStats = useCallback(async () => {
-    try {
-      const prayerData = await AsyncStorage.getItem('prayerData');
-      const imanData = await AsyncStorage.getItem('imanTrackerData');
-      
-      let totalPrayers = 0;
-      let daysActive = 0;
-      let currentStreak = 0;
-
-      if (prayerData) {
-        const prayers = JSON.parse(prayerData);
-        totalPrayers = prayers.filter((p: any) => p.completed).length;
-      }
-
-      if (imanData) {
-        const iman = JSON.parse(imanData);
-        daysActive = iman.daysActive || 0;
-        currentStreak = iman.currentStreak || 0;
-      }
-
-      setStats([
-        { value: daysActive.toString(), label: t('profile.daysActive'), iosIcon: 'calendar', androidIcon: 'calendar-today', color: colors.primary },
-        { value: totalPrayers.toString(), label: t('profile.prayers'), iosIcon: 'moon.stars', androidIcon: 'self-improvement', color: colors.accent },
-        { value: currentStreak.toString(), label: t('profile.dayStreak'), iosIcon: 'flame.fill', androidIcon: 'local-fire-department', color: colors.error },
-      ]);
-    } catch (error) {
-      console.log('Error loading stats:', error);
-    }
-  }, []);
-
   useEffect(() => {
     loadProfile();
-    loadStats();
-  }, [loadProfile, loadStats]);
+  }, [loadProfile]);
 
   // Auto-save profile changes to Supabase (debounced)
   const autoSaveProfile = useCallback(async (updatedProfile: UserProfile) => {
@@ -141,6 +98,7 @@ export default function ProfileScreen() {
         // Save to Supabase - use full_name (your schema column)
         await updateUserProfile(user.id, {
           full_name: updatedProfile.name,
+          email: updatedProfile.email?.trim(),
         });
         
         console.log('✅ Profile auto-saved successfully');
@@ -170,6 +128,7 @@ export default function ProfileScreen() {
         setSavingProfile(true);
         await updateUserProfile(user.id, {
           full_name: tempProfile.name, // Use full_name from your schema
+          email: tempProfile.email?.trim(),
         });
         setSavingProfile(false);
       }
@@ -396,12 +355,22 @@ export default function ProfileScreen() {
   ];
 
   return (
-    <View style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <View style={{ flex: 1, paddingBottom: 32 }}>
+        <TabHubHeader
+          title={t("profile.title")}
+          subtitle={t("profile.settings")}
+          left={
+            <TabHubHeaderIconDecoration>
+              <IconSymbol ios_icon_name="person.circle.fill" android_material_icon_name="account-circle" size={22} color={colors.primary} />
+            </TabHubHeaderIconDecoration>
+          }
+        />
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
         <LinearGradient
           colors={colors.gradientPrimary}
           start={{ x: 0, y: 0 }}
@@ -437,25 +406,6 @@ export default function ProfileScreen() {
             <Text style={styles.editButtonText}>{t('profile.editProfile')}</Text>
           </TouchableOpacity>
         </LinearGradient>
-
-        <View style={styles.statsContainer}>
-          {stats.map((stat, index) => (
-            <React.Fragment key={index}>
-              <View style={styles.statCard}>
-                <View style={[styles.statIconContainer, { backgroundColor: stat.color }]}>
-                  <IconSymbol
-                    ios_icon_name={stat.iosIcon}
-                    android_material_icon_name={stat.androidIcon}
-                    size={26}
-                    color={colors.card}
-                  />
-                </View>
-                <Text style={styles.statValue}>{stat.value}</Text>
-                <Text style={styles.statLabel}>{stat.label}</Text>
-              </View>
-            </React.Fragment>
-          ))}
-        </View>
 
         <View style={styles.infoContainer}>
           <View style={styles.sectionHeader}>
@@ -557,8 +507,9 @@ export default function ProfileScreen() {
           <Text style={styles.deleteAccountText}>{t('profile.deleteAccount')}</Text>
         </TouchableOpacity>
 
-        <View style={styles.bottomPadding} />
-      </ScrollView>
+          <View style={styles.bottomPadding} />
+        </ScrollView>
+      </View>
 
       <Modal
         visible={editModalVisible}
@@ -602,15 +553,19 @@ export default function ProfileScreen() {
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>{t('profile.email')}</Text>
                 <TextInput
-                  style={[styles.input, styles.inputDisabled]}
+                  style={styles.input}
                   value={tempProfile.email}
                   placeholder={t('profile.enterYourEmail')}
                   placeholderTextColor={colors.textSecondary}
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  editable={false}
+                  editable={true}
+                  onChangeText={(text) => {
+                    const updated = { ...tempProfile, email: text };
+                    setTempProfile(updated);
+                    autoSaveProfile(updated);
+                  }}
                 />
-                <Text style={styles.inputHint}>{t('profile.emailCannotBeChanged')}</Text>
               </View>
 
 
@@ -733,7 +688,7 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </KeyboardAvoidingView>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -746,7 +701,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingTop: Platform.OS === 'android' ? 56 : 20,
+    paddingTop: spacing.md,
     paddingHorizontal: spacing.xl,
   },
   profileHeader: {
@@ -782,41 +737,6 @@ const styles = StyleSheet.create({
   editButtonText: {
     ...typography.captionBold,
     color: colors.primary,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xxxl,
-    gap: spacing.md,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    alignItems: 'center',
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  statIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: borderRadius.round,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  statValue: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  statLabel: {
-    ...typography.small,
-    color: colors.textSecondary,
-    textAlign: 'center',
   },
   infoContainer: {
     marginBottom: spacing.xxxl,

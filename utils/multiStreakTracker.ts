@@ -11,7 +11,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '@/app/integrations/supabase/client';
+import { supabase } from '@/lib/integrations/supabase/client';
 
 // ============================================================================
 // INTERFACES

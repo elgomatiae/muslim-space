@@ -9,12 +9,17 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
-  Animated,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from '@/contexts/I18nContext';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
+import {
+  MiniImanRings,
+  PillarBreakdownChips,
+  PillarBreakdownBars,
+  type SectionScoresInput,
+} from '@/components/iman/CommunityLeaderboardRings';
 import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -24,7 +29,6 @@ import {
   LocalCommunity,
 } from '@/utils/localCommunityStorage';
 import MemberAchievements from '@/components/iman/MemberAchievements';
-import Svg, { Circle } from 'react-native-svg';
 
 export default function CommunityDetailScreen() {
   const { t } = useTranslation();
@@ -155,7 +159,7 @@ export default function CommunityDetailScreen() {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
             <IconSymbol
               ios_icon_name="chevron.left"
               android_material_icon_name="arrow-back"
@@ -177,14 +181,6 @@ export default function CommunityDetailScreen() {
   // Sort members by score (highest first)
   const sortedMembers = [...community.members].sort((a, b) => b.imanScore - a.imanScore);
 
-  // Get medal colors for top 3
-  const getMedalGradient = (rank: number) => {
-    if (rank === 1) return ['#FFD700', '#FFA500']; // Gold
-    if (rank === 2) return ['#C0C0C0', '#A8A8A8']; // Silver
-    if (rank === 3) return ['#CD7F32', '#B87333']; // Bronze
-    return colors.gradientPrimary;
-  };
-
   const getMedalIcon = (rank: number) => {
     if (rank === 1) return '🥇';
     if (rank === 2) return '🥈';
@@ -192,132 +188,13 @@ export default function CommunityDetailScreen() {
     return '';
   };
 
-  // Render small Iman rings for leaderboard
-  const renderMemberRings = (
-    sectionScores?: { ibadah: number; ilm: number; amanah: number },
-    size: 'small' | 'medium' = 'small'
-  ) => {
-    if (!sectionScores) {
-      return null;
-    }
-
-    const isSmall = size === 'small';
-    const centerX = isSmall ? 40 : 50;
-    const centerY = isSmall ? 40 : 50;
-    const svgSize = isSmall ? 80 : 100;
-    
-    // Ibadah ring (outer) - Green
-    const ibadahRadius = isSmall ? 34 : 42;
-    const ibadahStroke = isSmall ? 6 : 8;
-    const ibadahProgress = (sectionScores.ibadah || 0) / 100;
-    const ibadahCircumference = 2 * Math.PI * ibadahRadius;
-    const ibadahOffset = ibadahCircumference * (1 - ibadahProgress);
-    
-    // Ilm ring (middle) - Blue
-    const ilmRadius = isSmall ? 25 : 31;
-    const ilmStroke = isSmall ? 5 : 7;
-    const ilmProgress = (sectionScores.ilm || 0) / 100;
-    const ilmCircumference = 2 * Math.PI * ilmRadius;
-    const ilmOffset = ilmCircumference * (1 - ilmProgress);
-    
-    // Amanah ring (inner) - Amber/Gold
-    const amanahRadius = isSmall ? 16 : 20;
-    const amanahStroke = isSmall ? 4 : 6;
-    const amanahProgress = (sectionScores.amanah || 0) / 100;
-    const amanahCircumference = 2 * Math.PI * amanahRadius;
-    const amanahOffset = amanahCircumference * (1 - amanahProgress);
-
-    const ibadahColor = '#10B981';
-    const ilmColor = '#3B82F6';
-    const amanahColor = '#F59E0B';
-
-    return (
-      <View style={[styles.memberRingsContainer, isSmall && styles.memberRingsContainerSmall]}>
-        <Svg width={svgSize} height={svgSize} style={styles.memberRingsSvg}>
-          {/* Background circles */}
-          <Circle
-            cx={centerX}
-            cy={centerY}
-            r={ibadahRadius}
-            stroke={colors.border}
-            strokeWidth={ibadahStroke}
-            fill="none"
-            opacity={0.2}
-          />
-          <Circle
-            cx={centerX}
-            cy={centerY}
-            r={ilmRadius}
-            stroke={colors.border}
-            strokeWidth={ilmStroke}
-            fill="none"
-            opacity={0.2}
-          />
-          <Circle
-            cx={centerX}
-            cy={centerY}
-            r={amanahRadius}
-            stroke={colors.border}
-            strokeWidth={amanahStroke}
-            fill="none"
-            opacity={0.2}
-          />
-          
-          {/* Progress circles */}
-          <Circle
-            cx={centerX}
-            cy={centerY}
-            r={ibadahRadius}
-            stroke={ibadahColor}
-            strokeWidth={ibadahStroke}
-            fill="none"
-            strokeDasharray={ibadahCircumference}
-            strokeDashoffset={ibadahOffset}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${centerX} ${centerY})`}
-          />
-          <Circle
-            cx={centerX}
-            cy={centerY}
-            r={ilmRadius}
-            stroke={ilmColor}
-            strokeWidth={ilmStroke}
-            fill="none"
-            strokeDasharray={ilmCircumference}
-            strokeDashoffset={ilmOffset}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${centerX} ${centerY})`}
-          />
-          <Circle
-            cx={centerX}
-            cy={centerY}
-            r={amanahRadius}
-            stroke={amanahColor}
-            strokeWidth={amanahStroke}
-            fill="none"
-            strokeDasharray={amanahCircumference}
-            strokeDashoffset={amanahOffset}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${centerX} ${centerY})`}
-          />
-        </Svg>
-        <View style={[styles.memberRingsCenter, isSmall && styles.memberRingsCenterSmall]}>
-          <Text style={[styles.memberRingsCenterText, isSmall && styles.memberRingsCenterTextSmall]}>
-            {Math.round(
-              (sectionScores.ibadah * 0.6) + 
-              (sectionScores.ilm * 0.25) + 
-              (sectionScores.amanah * 0.15)
-            )}%
-          </Text>
-        </View>
-      </View>
-    );
-  };
+  const sectionOrDefault = (m: { sectionScores?: SectionScoresInput; imanScore: number }): SectionScoresInput =>
+    m.sectionScores ?? { ibadah: 0, ilm: 0, amanah: 0 };
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
           <IconSymbol
             ios_icon_name="chevron.left"
             android_material_icon_name="arrow-back"
@@ -397,14 +274,14 @@ export default function CommunityDetailScreen() {
           // LEADERBOARD VIEW
           <View style={styles.leaderboardContainer}>
             <LinearGradient
-              colors={['#667eea', '#764ba2', '#f093fb']}
+              colors={colors.gradientPrimary as [string, string, string]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.leaderboardHeader}
             >
               <View style={styles.leaderboardHeaderIconContainer}>
                 <LinearGradient
-                  colors={['#FFD700', '#FFA500']}
+                  colors={colors.gradientGold as [string, string, string]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.leaderboardHeaderIcon}
@@ -412,14 +289,14 @@ export default function CommunityDetailScreen() {
                   <IconSymbol
                     ios_icon_name="trophy.fill"
                     android_material_icon_name="emoji-events"
-                    size={48}
+                    size={44}
                     color="#fff"
                   />
                 </LinearGradient>
               </View>
-              <Text style={styles.leaderboardTitle}>🏆 Leaderboard 🏆</Text>
+              <Text style={styles.leaderboardTitle}>Leaderboard</Text>
               <Text style={styles.leaderboardSubtitle}>
-                {community.members.length} {community.members.length === 1 ? 'Member' : 'Members'} Competing
+                Iman score and ʿIbādah · ʿIlm · Amanah breakdown
               </Text>
               <View style={styles.leaderboardStats}>
                 <View style={styles.leaderboardStatItem}>
@@ -460,13 +337,24 @@ export default function CommunityDetailScreen() {
                       {sortedMembers[1].username}
                     </Text>
                     <View style={styles.podiumScoreContainer}>
-                      <Text style={styles.podiumScore}>{sortedMembers[1].imanScore}</Text>
+                      <Text style={styles.podiumScore}>
+                        {!sortedMembers[1].hideScore || sortedMembers[1].userId === user?.id
+                          ? sortedMembers[1].imanScore
+                          : '—'}
+                      </Text>
                       <Text style={styles.podiumScoreLabel}>Iman Score</Text>
                     </View>
-                    {sortedMembers[1].sectionScores && (
-                      <View style={styles.podiumRingsContainer}>
-                        {renderMemberRings(sortedMembers[1].sectionScores, 'medium')}
+                    {!sortedMembers[1].hideScore || sortedMembers[1].userId === user?.id ? (
+                      <View style={styles.podiumRingsBlock}>
+                        <MiniImanRings
+                          sectionScores={sectionOrDefault(sortedMembers[1])}
+                          size="md"
+                          overallOverride={sortedMembers[1].imanScore}
+                        />
+                        <PillarBreakdownChips sectionScores={sectionOrDefault(sortedMembers[1])} center />
                       </View>
+                    ) : (
+                      <Text style={styles.podiumPrivate}>Score hidden</Text>
                     )}
                   </View>
                   <LinearGradient
@@ -511,14 +399,23 @@ export default function CommunityDetailScreen() {
                     </Text>
                     <View style={styles.podiumScoreContainer}>
                       <Text style={[styles.podiumScore, styles.podiumScoreFirst]}>
-                        {sortedMembers[0].imanScore}
+                        {!sortedMembers[0].hideScore || sortedMembers[0].userId === user?.id
+                          ? sortedMembers[0].imanScore
+                          : '—'}
                       </Text>
                       <Text style={styles.podiumScoreLabel}>Iman Score</Text>
                     </View>
-                    {sortedMembers[0].sectionScores && (
-                      <View style={styles.podiumRingsContainer}>
-                        {renderMemberRings(sortedMembers[0].sectionScores, 'medium')}
+                    {!sortedMembers[0].hideScore || sortedMembers[0].userId === user?.id ? (
+                      <View style={styles.podiumRingsBlock}>
+                        <MiniImanRings
+                          sectionScores={sectionOrDefault(sortedMembers[0])}
+                          size="md"
+                          overallOverride={sortedMembers[0].imanScore}
+                        />
+                        <PillarBreakdownChips sectionScores={sectionOrDefault(sortedMembers[0])} center />
                       </View>
+                    ) : (
+                      <Text style={styles.podiumPrivate}>Score hidden</Text>
                     )}
                   </View>
                   <LinearGradient
@@ -552,13 +449,24 @@ export default function CommunityDetailScreen() {
                       {sortedMembers[2].username}
                     </Text>
                     <View style={styles.podiumScoreContainer}>
-                      <Text style={styles.podiumScore}>{sortedMembers[2].imanScore}</Text>
+                      <Text style={styles.podiumScore}>
+                        {!sortedMembers[2].hideScore || sortedMembers[2].userId === user?.id
+                          ? sortedMembers[2].imanScore
+                          : '—'}
+                      </Text>
                       <Text style={styles.podiumScoreLabel}>Iman Score</Text>
                     </View>
-                    {sortedMembers[2].sectionScores && (
-                      <View style={styles.podiumRingsContainer}>
-                        {renderMemberRings(sortedMembers[2].sectionScores, 'medium')}
+                    {!sortedMembers[2].hideScore || sortedMembers[2].userId === user?.id ? (
+                      <View style={styles.podiumRingsBlock}>
+                        <MiniImanRings
+                          sectionScores={sectionOrDefault(sortedMembers[2])}
+                          size="md"
+                          overallOverride={sortedMembers[2].imanScore}
+                        />
+                        <PillarBreakdownChips sectionScores={sectionOrDefault(sortedMembers[2])} center />
                       </View>
+                    ) : (
+                      <Text style={styles.podiumPrivate}>Score hidden</Text>
                     )}
                   </View>
                   <LinearGradient
@@ -585,133 +493,104 @@ export default function CommunityDetailScreen() {
                 if (isTopThree && sortedMembers.length >= 3) return null;
 
                 return (
-                  <React.Fragment key={index}>
-                    <LinearGradient
-                      colors={isCurrentUser 
-                        ? ['#667eea', '#764ba2', '#f093fb'] 
-                        : [colors.card, colors.card]
-                      }
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
+                  <View
+                    key={member.userId}
+                    style={[
+                      styles.leaderboardCard,
+                      isCurrentUser && styles.leaderboardCardYou,
+                    ]}
+                  >
+                    <View style={styles.leaderboardRankContainer}>
+                      <View
+                        style={[
+                          styles.leaderboardRank,
+                          isCurrentUser && styles.leaderboardRankYou,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.leaderboardRankText,
+                            isCurrentUser && styles.leaderboardRankTextYou,
+                          ]}
+                        >
+                          {rank}
+                        </Text>
+                      </View>
+                    </View>
+                    <View
                       style={[
-                        styles.leaderboardCard,
-                        isCurrentUser && styles.leaderboardCardHighlight,
+                        styles.leaderboardAvatar,
+                        isCurrentUser && styles.leaderboardAvatarYou,
                       ]}
                     >
-                      <View style={styles.leaderboardRankContainer}>
-                        <LinearGradient
-                          colors={isCurrentUser 
-                            ? ['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']
-                            : [colors.highlight, colors.highlight]
-                          }
-                          style={styles.leaderboardRank}
+                      <IconSymbol
+                        ios_icon_name="person.fill"
+                        android_material_icon_name="person"
+                        size={26}
+                        color={colors.primary}
+                      />
+                    </View>
+                    <View style={styles.leaderboardInfo}>
+                      <View style={styles.leaderboardNameRow}>
+                        <Text
+                          style={[styles.leaderboardName, isCurrentUser && styles.leaderboardNameYou]}
+                          numberOfLines={1}
                         >
-                          <Text style={[styles.leaderboardRankText, isCurrentUser && styles.leaderboardRankTextHighlight]}>
-                            {rank}
-                          </Text>
-                        </LinearGradient>
-                      </View>
-                      <LinearGradient
-                        colors={isCurrentUser
-                          ? ['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']
-                          : [colors.highlight, colors.highlight + '80']
-                        }
-                        style={[styles.leaderboardAvatar, isCurrentUser && styles.leaderboardAvatarHighlight]}
-                      >
-                        <IconSymbol
-                          ios_icon_name="person.fill"
-                          android_material_icon_name="person"
-                          size={28}
-                          color={isCurrentUser ? '#fff' : colors.primary}
-                        />
-                      </LinearGradient>
-                      <View style={styles.leaderboardInfo}>
-                        <View style={styles.leaderboardNameRow}>
-                          <Text style={[styles.leaderboardName, isCurrentUser && styles.leaderboardNameHighlight]}>
-                            {member.username}
-                          </Text>
-                          {member.role === 'admin' && (
-                            <LinearGradient
-                              colors={isCurrentUser 
-                                ? ['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)'] as const
-                                : colors.gradientPrimary as any
-                              }
-                              style={[styles.adminBadge, isCurrentUser && styles.adminBadgeHighlight]}
-                            >
-                              <Text style={styles.adminBadgeText}>👑 Admin</Text>
-                            </LinearGradient>
-                          )}
-                          {isCurrentUser && (
-                            <LinearGradient
-                              colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']}
-                              style={styles.youBadge}
-                            >
-                              <Text style={styles.youBadgeText}>⭐ You</Text>
-                            </LinearGradient>
-                          )}
-                        </View>
-                        {showScore ? (
-                          <>
-                            <View style={styles.leaderboardScoreRow}>
-                              <IconSymbol
-                                ios_icon_name="star.fill"
-                                android_material_icon_name="star"
-                                size={18}
-                                color={isCurrentUser ? '#FFD700' : colors.warning}
-                              />
-                              <Text style={[styles.leaderboardScore, isCurrentUser && styles.leaderboardScoreHighlight]}>
-                                {member.imanScore}% Iman Score
-                              </Text>
-                            </View>
-                            {member.sectionScores && (
-                              <View style={styles.leaderboardRingsRow}>
-                                <View style={styles.leaderboardRingsContainer}>
-                                  {renderMemberRings(member.sectionScores, 'small')}
-                                </View>
-                                <View style={styles.leaderboardRingScores}>
-                                  <View style={styles.leaderboardRingScoreItem}>
-                                    <View style={[styles.leaderboardRingDot, { backgroundColor: '#10B981' }]} />
-                                    <Text style={[styles.leaderboardRingScoreText, isCurrentUser && styles.leaderboardRingScoreTextHighlight]}>
-                                      ʿIbādah: {Math.round(member.sectionScores.ibadah)}%
-                                    </Text>
-                                  </View>
-                                  <View style={styles.leaderboardRingScoreItem}>
-                                    <View style={[styles.leaderboardRingDot, { backgroundColor: '#3B82F6' }]} />
-                                    <Text style={[styles.leaderboardRingScoreText, isCurrentUser && styles.leaderboardRingScoreTextHighlight]}>
-                                      ʿIlm: {Math.round(member.sectionScores.ilm)}%
-                                    </Text>
-                                  </View>
-                                  <View style={styles.leaderboardRingScoreItem}>
-                                    <View style={[styles.leaderboardRingDot, { backgroundColor: '#F59E0B' }]} />
-                                    <Text style={[styles.leaderboardRingScoreText, isCurrentUser && styles.leaderboardRingScoreTextHighlight]}>
-                                      Amanah: {Math.round(member.sectionScores.amanah)}%
-                                    </Text>
-                                  </View>
-                                </View>
-                              </View>
-                            )}
-                          </>
-                        ) : (
-                          <Text style={[styles.leaderboardScoreHidden, isCurrentUser && styles.leaderboardScoreHighlight]}>
-                            Score Hidden
-                          </Text>
+                          {member.username}
+                        </Text>
+                        {member.role === 'admin' && (
+                          <View style={[styles.adminBadgeFlat, isCurrentUser && styles.adminBadgeFlatYou]}>
+                            <Text style={styles.adminBadgeTextDark}>Admin</Text>
+                          </View>
+                        )}
+                        {isCurrentUser && (
+                          <View style={styles.youBadgeFlat}>
+                            <Text style={styles.youBadgeTextDark}>You</Text>
+                          </View>
                         )}
                       </View>
-                      {userRole === 'admin' && !isCurrentUser && (
-                        <TouchableOpacity
-                          style={styles.removeButton}
-                          onPress={() => handleRemoveMember(member.userId, member.username)}
-                        >
-                          <IconSymbol
-                            ios_icon_name="xmark.circle.fill"
-                            android_material_icon_name="cancel"
-                            size={28}
-                            color={isCurrentUser ? '#fff' : colors.error}
-                          />
-                        </TouchableOpacity>
+                      {showScore ? (
+                        <>
+                          <View style={styles.leaderboardScoreRow}>
+                            <IconSymbol
+                              ios_icon_name="star.fill"
+                              android_material_icon_name="star"
+                              size={16}
+                              color={colors.warning}
+                            />
+                            <Text style={styles.leaderboardScoreStrong}>
+                              {member.imanScore}% <Text style={styles.leaderboardScoreMuted}>Iman</Text>
+                            </Text>
+                          </View>
+                          <View style={styles.leaderboardBreakdownRow}>
+                            <MiniImanRings
+                              sectionScores={sectionOrDefault(member)}
+                              size="sm"
+                              overallOverride={member.imanScore}
+                            />
+                            <View style={styles.leaderboardBarsWrap}>
+                              <PillarBreakdownBars sectionScores={sectionOrDefault(member)} />
+                            </View>
+                          </View>
+                        </>
+                      ) : (
+                        <Text style={styles.leaderboardScoreHidden}>Score hidden</Text>
                       )}
-                    </LinearGradient>
-                  </React.Fragment>
+                    </View>
+                    {userRole === 'admin' && !isCurrentUser && (
+                      <TouchableOpacity
+                        style={styles.removeButton}
+                        onPress={() => handleRemoveMember(member.userId, member.username)}
+                      >
+                        <IconSymbol
+                          ios_icon_name="xmark.circle.fill"
+                          android_material_icon_name="cancel"
+                          size={26}
+                          color={colors.error}
+                        />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 );
               })}
             </View>
@@ -726,7 +605,7 @@ export default function CommunityDetailScreen() {
               const rank = index + 1;
 
               return (
-                <React.Fragment key={index}>
+                <React.Fragment key={member.userId}>
                   <View style={styles.memberCard}>
                     <View style={styles.rankContainer}>
                       <Text style={styles.rankText}>{rank}</Text>
@@ -754,11 +633,15 @@ export default function CommunityDetailScreen() {
                         )}
                       </View>
                       {showScore ? (
-                        <Text style={styles.memberScore}>Iman Score: {member.imanScore}</Text>
+                        <>
+                          <Text style={styles.memberScore}>Iman: {member.imanScore}%</Text>
+                          <View style={styles.memberPillarChips}>
+                            <PillarBreakdownChips sectionScores={sectionOrDefault(member)} />
+                          </View>
+                        </>
                       ) : (
-                        <Text style={styles.memberScoreHidden}>Score Hidden</Text>
+                        <Text style={styles.memberScoreHidden}>Score hidden</Text>
                       )}
-                      {/* Member Achievements */}
                       <MemberAchievements userId={member.userId} limit={3} showTitle={false} />
                     </View>
                     {userRole === 'admin' && !isCurrentUser && (
@@ -905,18 +788,22 @@ const styles = StyleSheet.create({
     ...typography.h1,
     color: '#fff',
     marginTop: spacing.md,
-    fontWeight: '900',
-    fontSize: 32,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    fontWeight: '800',
+    fontSize: 28,
+    letterSpacing: 0.3,
+    textShadowColor: 'rgba(0, 0, 0, 0.25)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   leaderboardSubtitle: {
     ...typography.body,
-    color: 'rgba(255, 255, 255, 0.95)',
+    color: 'rgba(255, 255, 255, 0.92)',
     marginTop: spacing.sm,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
+    textAlign: 'center',
+    paddingHorizontal: spacing.md,
+    lineHeight: 20,
   },
   leaderboardStats: {
     flexDirection: 'row',
@@ -1138,59 +1025,62 @@ const styles = StyleSheet.create({
   },
   leaderboardCard: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     backgroundColor: colors.card,
-    padding: spacing.xl,
+    padding: spacing.lg,
     borderRadius: borderRadius.xl,
-    ...shadows.large,
-    gap: spacing.lg,
+    ...shadows.medium,
+    gap: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
-    minHeight: 80,
   },
-  leaderboardCardHighlight: {
-    borderWidth: 3,
-    borderColor: '#fff',
-    ...shadows.colored,
-    transform: [{ scale: 1.02 }],
+  leaderboardCardYou: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+    backgroundColor: colors.highlightPurple,
   },
   leaderboardRankContainer: {
     alignItems: 'center',
+    paddingTop: 2,
   },
   leaderboardRank: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: borderRadius.round,
     justifyContent: 'center',
     alignItems: 'center',
-    ...shadows.small,
+    backgroundColor: colors.highlight,
+  },
+  leaderboardRankYou: {
+    backgroundColor: colors.primary,
   },
   leaderboardRankText: {
     ...typography.h3,
     color: colors.text,
     fontWeight: '900',
-    fontSize: 20,
+    fontSize: 18,
   },
-  leaderboardRankTextHighlight: {
+  leaderboardRankTextYou: {
     color: '#fff',
   },
   leaderboardAvatar: {
-    width: 64,
-    height: 64,
+    width: 52,
+    height: 52,
     borderRadius: borderRadius.round,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: colors.border,
-    ...shadows.medium,
+    backgroundColor: colors.highlight,
   },
-  leaderboardAvatarHighlight: {
-    borderColor: '#fff',
-    borderWidth: 3,
+  leaderboardAvatarYou: {
+    borderColor: colors.primary,
+    backgroundColor: colors.card,
   },
   leaderboardInfo: {
     flex: 1,
     gap: spacing.xs,
+    minWidth: 0,
   },
   leaderboardNameRow: {
     flexDirection: 'row',
@@ -1202,103 +1092,80 @@ const styles = StyleSheet.create({
     ...typography.h4,
     color: colors.text,
     fontWeight: '700',
-    fontSize: 18,
+    fontSize: 17,
+    flexShrink: 1,
   },
-  leaderboardNameHighlight: {
-    color: '#fff',
-    fontWeight: '900',
+  leaderboardNameYou: {
+    color: colors.primaryDark,
   },
   leaderboardScoreRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
+    marginTop: 2,
   },
-  leaderboardScore: {
+  leaderboardScoreStrong: {
     ...typography.bodyBold,
-    color: colors.textSecondary,
-    fontWeight: '700',
+    color: colors.text,
+    fontWeight: '800',
     fontSize: 16,
   },
-  leaderboardScoreHighlight: {
-    color: '#fff',
-    fontWeight: '900',
+  leaderboardScoreMuted: {
+    fontWeight: '600',
+    color: colors.textSecondary,
+    fontSize: 14,
   },
   leaderboardScoreHidden: {
     ...typography.caption,
     color: colors.textSecondary,
     fontStyle: 'italic',
   },
-  // MEMBER RINGS STYLES
-  memberRingsContainer: {
-    width: 100,
-    height: 100,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  memberRingsContainerSmall: {
-    width: 80,
-    height: 80,
-  },
-  memberRingsSvg: {
-    position: 'absolute',
-  },
-  memberRingsCenter: {
-    position: 'absolute',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 40,
-    height: 40,
-  },
-  memberRingsCenterSmall: {
-    width: 32,
-    height: 32,
-  },
-  memberRingsCenterText: {
-    ...typography.h4,
-    fontWeight: '900',
-    color: colors.text,
-    fontSize: 14,
-  },
-  memberRingsCenterTextSmall: {
-    fontSize: 12,
-  },
-  podiumRingsContainer: {
-    marginTop: spacing.sm,
-    alignItems: 'center',
-  },
-  leaderboardRingsRow: {
+  leaderboardBreakdownRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.md,
     marginTop: spacing.sm,
   },
-  leaderboardRingsContainer: {
-    width: 80,
-    height: 80,
-  },
-  leaderboardRingScores: {
+  leaderboardBarsWrap: {
     flex: 1,
-    gap: spacing.xs,
+    minWidth: 0,
   },
-  leaderboardRingScoreItem: {
-    flexDirection: 'row',
+  adminBadgeFlat: {
+    backgroundColor: colors.highlight,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  adminBadgeFlatYou: {
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+  },
+  adminBadgeTextDark: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primaryDark,
+  },
+  youBadgeFlat: {
+    backgroundColor: colors.secondaryLight + '55',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  youBadgeTextDark: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.secondaryDark,
+  },
+  podiumRingsBlock: {
+    marginTop: spacing.sm,
     alignItems: 'center',
-    gap: spacing.xs,
+    width: '100%',
   },
-  leaderboardRingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: borderRadius.round,
-  },
-  leaderboardRingScoreText: {
+  podiumPrivate: {
     ...typography.caption,
     color: colors.textSecondary,
-    fontWeight: '600',
-    fontSize: 12,
-  },
-  leaderboardRingScoreTextHighlight: {
-    color: 'rgba(255, 255, 255, 0.9)',
+    fontStyle: 'italic',
+    marginTop: spacing.xs,
+    textAlign: 'center',
   },
   // MEMBERS LIST STYLES
   sectionTitle: {
@@ -1376,6 +1243,11 @@ const styles = StyleSheet.create({
   memberScore: {
     ...typography.caption,
     color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  memberPillarChips: {
+    marginTop: spacing.xs,
+    alignSelf: 'flex-start',
   },
   memberScoreHidden: {
     ...typography.caption,

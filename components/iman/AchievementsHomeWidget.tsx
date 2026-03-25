@@ -1,26 +1,19 @@
 /**
- * Achievements Home Widget
- * Displays achievements preview on the home screen
+ * Achievements preview on the home screen — compact list + open full achievements.
  */
 
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  ActivityIndicator,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { IconSymbol } from '@/components/IconSymbol';
-import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
-import { router } from 'expo-router';
-import { useAuth } from '@/contexts/AuthContext';
-import { LOCAL_ACHIEVEMENTS } from '@/data/localAchievements';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTranslation } from '@/contexts/I18nContext';
-import { supabase } from '@/lib/supabase';
+import React, { useState, useEffect, useCallback } from "react";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import { IconSymbol } from "@/components/IconSymbol";
+import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
+import { router } from "expo-router";
+import { useAuth } from "@/contexts/AuthContext";
+import { LOCAL_ACHIEVEMENTS } from "@/data/localAchievements";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useTranslation } from "@/contexts/I18nContext";
+import { supabase } from "@/lib/supabase";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import * as Haptics from "expo-haptics";
 
 interface Achievement {
   id: string;
@@ -31,78 +24,96 @@ interface Achievement {
   progress: number;
 }
 
+function androidIconForAchievement(iosName: string | undefined, unlocked: boolean): keyof typeof MaterialIcons.glyphMap {
+  if (!unlocked) return "lock";
+  const m: Record<string, keyof typeof MaterialIcons.glyphMap> = {
+    "star.fill": "star",
+    "trophy.fill": "emoji-events",
+    "flame.fill": "local-fire-department",
+    "moon.fill": "nightlight",
+    "book.fill": "menu-book",
+    "heart.fill": "favorite",
+    "checkmark.circle.fill": "check-circle",
+    "calendar": "calendar-today",
+    "target": "track-changes",
+    "sparkles": "auto-awesome",
+    "leaf.fill": "eco",
+    "hands.sparkles.fill": "self-improvement",
+  };
+  return (iosName && m[iosName]) || "stars";
+}
+
+function tierAccent(tier: string): string {
+  switch (tier) {
+    case "platinum":
+      return "#A78BFA";
+    case "gold":
+      return "#FBBF24";
+    case "silver":
+      return "#9CA3AF";
+    case "bronze":
+      return "#CD7F32";
+    default:
+      return colors.primary;
+  }
+}
+
 export default function AchievementsHomeWidget() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const [achievements, setAchievements] = useState<Achievement[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
   const [unlockedCount, setUnlockedCount] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) {
-      loadAchievements();
-    }
-  }, [user]);
+  const openAchievements = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push("/(tabs)/(iman)/achievements" as any);
+  }, []);
 
   const loadAchievements = async () => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     try {
       setLoading(true);
 
-      // Try Supabase first, fallback to local
       let allAchievements: any[] = [];
       let userAchievements: any[] = [];
-      let progressData: any[] = [];
 
       try {
         const [achievementsResult, userAchievementsResult] = await Promise.all([
-          supabase
-            .from('achievements')
-            .select('*')
-            .eq('is_active', true)
-            .order('order_index', { ascending: true })
-            .limit(10),
-          supabase
-            .from('user_achievements')
-            .select('achievement_id, unlocked_at')
-            .eq('user_id', user.id),
+          supabase.from("achievements").select("*").eq("is_active", true).order("order_index", { ascending: true }).limit(50),
+          supabase.from("user_achievements").select("achievement_id, unlocked_at").eq("user_id", user.id),
         ]);
 
         if (!achievementsResult.error && achievementsResult.data && achievementsResult.data.length > 0) {
           allAchievements = achievementsResult.data;
           userAchievements = userAchievementsResult.data || [];
         } else {
-          // Use local fallback
-          allAchievements = LOCAL_ACHIEVEMENTS.filter(a => a.is_active).slice(0, 10);
+          allAchievements = LOCAL_ACHIEVEMENTS.filter((a) => a.is_active);
           const unlockedData = await AsyncStorage.getItem(`user_achievements_${user.id}`);
-          if (unlockedData) {
-            userAchievements = JSON.parse(unlockedData);
-          }
+          if (unlockedData) userAchievements = JSON.parse(unlockedData);
         }
-      } catch (error) {
-        // Use local fallback
-        allAchievements = LOCAL_ACHIEVEMENTS.filter(a => a.is_active).slice(0, 10);
+      } catch {
+        allAchievements = LOCAL_ACHIEVEMENTS.filter((a) => a.is_active);
         const unlockedData = await AsyncStorage.getItem(`user_achievements_${user.id}`);
-        if (unlockedData) {
-          userAchievements = JSON.parse(unlockedData);
-        }
+        if (unlockedData) userAchievements = JSON.parse(unlockedData);
       }
 
-      const unlockedMap = new Map(
-        userAchievements.map((ua: any) => [ua.achievement_id || ua.id, true])
-      );
+      const unlockedMap = new Map(userAchievements.map((ua: any) => [ua.achievement_id || ua.id, true]));
 
-      const merged = allAchievements.map((achievement) => ({
+      const merged: Achievement[] = allAchievements.map((achievement) => ({
         ...achievement,
         unlocked: !!unlockedMap.get(achievement.id),
         progress: unlockedMap.get(achievement.id) ? 100 : 0,
       }));
 
-      const unlocked = merged.filter(a => a.unlocked).length;
+      const unlocked = merged.filter((a) => a.unlocked).length;
 
-      // Get recent achievements (last 3 unlocked or top 3 in progress)
-      const sorted = merged
+      const preview = [...merged]
         .sort((a, b) => {
           if (a.unlocked && !b.unlocked) return -1;
           if (!a.unlocked && b.unlocked) return 1;
@@ -110,281 +121,208 @@ export default function AchievementsHomeWidget() {
         })
         .slice(0, 3);
 
-      setAchievements(sorted);
+      setAchievements(preview);
+      setTotalCount(merged.length);
       setUnlockedCount(unlocked);
-    } catch (error) {
-      console.log('Error loading achievements widget:', error);
+    } catch (e) {
+      console.log("AchievementsHomeWidget load error:", e);
     } finally {
       setLoading(false);
     }
   };
 
-  const getTierColor = (tier: string) => {
-    switch (tier) {
-      case 'platinum': return '#A78BFA';
-      case 'gold': return '#FBBF24';
-      case 'silver': return '#9CA3AF';
-      case 'bronze': return '#CD7F32';
-      default: return colors.primary;
-    }
-  };
+  useEffect(() => {
+    if (user) loadAchievements();
+    else setLoading(false);
+  }, [user]);
+
+  if (!user) {
+    return null;
+  }
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <LinearGradient
-              colors={colors.gradientPurple}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.iconContainer}
-            >
-              <IconSymbol
-                ios_icon_name="trophy.fill"
-                android_material_icon_name="emoji-events"
-                size={24}
-                color="#FFFFFF"
-              />
-            </LinearGradient>
-            <Text style={styles.title}>{t('home.achievements')}</Text>
+      <View style={styles.card}>
+        <View style={styles.headRow}>
+          <View style={styles.headLeft}>
+            <View style={styles.headIcon}>
+              <IconSymbol ios_icon_name="trophy.fill" android_material_icon_name="emoji-events" size={20} color={colors.primaryDark} />
+            </View>
+            <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: spacing.sm }} />
           </View>
         </View>
-        <ActivityIndicator size="small" color={colors.primary} style={styles.loading} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity
-        onPress={() => router.push('/(tabs)/(iman)')}
-        activeOpacity={0.9}
-        style={styles.touchable}
+    <View style={styles.card}>
+      <Pressable
+        onPress={openAchievements}
+        style={({ pressed }) => [styles.headRow, pressed && { opacity: 0.92 }]}
+        android_ripple={{ color: "rgba(139,92,246,0.1)" }}
       >
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <LinearGradient
-              colors={colors.gradientPurple}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.iconContainer}
-            >
-              <IconSymbol
-                ios_icon_name="trophy.fill"
-                android_material_icon_name="emoji-events"
-                size={24}
-                color="#FFFFFF"
-              />
-            </LinearGradient>
-            <View>
-              <Text style={styles.title}>{t('home.achievements')}</Text>
-              <Text style={styles.subtitle}>
-                {t('home.achievementsSubtitle', { unlocked: unlockedCount, shown: achievements.length })}
-              </Text>
-            </View>
+        <View style={styles.headLeft}>
+          <View style={styles.headIcon}>
+            <IconSymbol ios_icon_name="trophy.fill" android_material_icon_name="emoji-events" size={20} color={colors.primaryDark} />
           </View>
-          <IconSymbol
-            ios_icon_name="chevron.right"
-            android_material_icon_name="chevron-right"
-            size={20}
-            color={colors.textSecondary}
-          />
+          <Text style={styles.headSummary} numberOfLines={1}>
+            {totalCount > 0
+              ? t("home.achievementsProgressShort", { unlocked: unlockedCount, total: totalCount })
+              : t("home.completeActivitiesForAchievements")}
+          </Text>
         </View>
+        <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={20} color={colors.textSecondary} />
+      </Pressable>
 
         {achievements.length > 0 ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.achievementsScroll}
-            contentContainerStyle={styles.achievementsScrollContent}
-          >
-            {achievements.map((achievement, index) => (
-              <View
-                key={achievement.id || index}
-                style={[
-                  styles.achievementCard,
-                  achievement.unlocked && styles.achievementCardUnlocked,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.achievementIcon,
-                    {
-                      backgroundColor: achievement.unlocked
-                        ? getTierColor(achievement.tier) + '20'
-                        : colors.highlight,
-                    },
-                  ]}
-                >
-                  <IconSymbol
-                    ios_icon_name={
-                      achievement.unlocked
-                        ? achievement.icon_name || 'star.fill'
-                        : 'lock.fill'
-                    }
-                    android_material_icon_name={
-                      achievement.unlocked ? 'star' : 'lock'
-                    }
-                    size={24}
-                    color={
-                      achievement.unlocked
-                        ? getTierColor(achievement.tier)
-                        : colors.textSecondary
-                    }
-                  />
+          <View style={styles.list}>
+            {achievements.map((a, index) => {
+              const accent = tierAccent(a.tier);
+              const ios = a.unlocked ? a.icon_name || "star.fill" : "lock.fill";
+              const android = androidIconForAchievement(a.icon_name, a.unlocked);
+              return (
+                <View key={a.id || String(index)}>
+                  {index > 0 ? <View style={styles.divider} /> : null}
+                  <Pressable
+                    onPress={openAchievements}
+                    style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.highlight }]}
+                    android_ripple={{ color: "rgba(139,92,246,0.06)" }}
+                  >
+                    <View style={[styles.rowIcon, { backgroundColor: (a.unlocked ? accent : colors.textSecondary) + "18" }]}>
+                      <IconSymbol ios_icon_name={ios} android_material_icon_name={android} size={22} color={a.unlocked ? accent : colors.textSecondary} />
+                    </View>
+                    <View style={styles.rowBody}>
+                      <Text style={[styles.rowTitle, !a.unlocked && styles.rowTitleMuted]} numberOfLines={1}>
+                        {a.title}
+                      </Text>
+                      <Text style={styles.rowStatus}>{a.unlocked ? t("home.achievementUnlocked") : t("home.achievementLocked")}</Text>
+                    </View>
+                    {a.unlocked ? (
+                      <View style={styles.checkWrap}>
+                        <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check-circle" size={22} color={colors.success} />
+                      </View>
+                    ) : null}
+                  </Pressable>
                 </View>
-                <Text
-                  style={[
-                    styles.achievementTitle,
-                    !achievement.unlocked && styles.achievementTitleLocked,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {achievement.title}
-                </Text>
-                {achievement.unlocked ? (
-                  <View style={styles.unlockedBadge}>
-                    <IconSymbol
-                      ios_icon_name="checkmark.seal.fill"
-                      android_material_icon_name="verified"
-                      size={12}
-                      color={colors.success}
-                    />
-                  </View>
-                ) : (
-                  <View style={styles.progressBar}>
-                    <View
-                      style={[
-                        styles.progressFill,
-                        {
-                          width: `${achievement.progress}%`,
-                          backgroundColor: getTierColor(achievement.tier),
-                        },
-                      ]}
-                    />
-                  </View>
-                )}
-              </View>
-            ))}
-          </ScrollView>
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>
-              {t('home.completeActivitiesForAchievements')}
-            </Text>
+              );
+            })}
           </View>
+        ) : (
+          <Text style={styles.empty}>{t("home.completeActivitiesForAchievements")}</Text>
         )}
-      </TouchableOpacity>
+
+        <Pressable onPress={openAchievements} style={({ pressed }) => [styles.cta, pressed && { opacity: 0.85 }]} android_ripple={{ color: "rgba(139,92,246,0.12)" }}>
+          <Text style={styles.ctaText}>{t("home.achievementsViewAll")}</Text>
+          <IconSymbol ios_icon_name="arrow.right.circle.fill" android_material_icon_name="arrow-forward" size={20} color={colors.primary} />
+        </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  card: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.xl,
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.lg,
-    ...shadows.medium,
-    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: "hidden",
+    ...shadows.card,
   },
-  touchable: {
-    padding: spacing.lg,
+  headRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  headLeft: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.md,
     flex: 1,
+    minWidth: 0,
   },
-  iconContainer: {
-    width: 48,
-    height: 48,
+  headIcon: {
+    width: 40,
+    height: 40,
     borderRadius: borderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    ...typography.h4,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  subtitle: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  loading: {
-    paddingVertical: spacing.xl,
-  },
-  achievementsScroll: {
-    marginHorizontal: -spacing.lg,
-  },
-  achievementsScrollContent: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.md,
-  },
-  achievementCard: {
-    width: 120,
-    alignItems: 'center',
-    padding: spacing.md,
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.lg,
+    backgroundColor: colors.highlightPurple,
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
     borderColor: colors.border,
   },
-  achievementCardUnlocked: {
-    borderColor: colors.primary + '40',
-    backgroundColor: colors.card,
-  },
-  achievementIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: borderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  achievementTitle: {
-    ...typography.caption,
+  headSummary: {
+    flex: 1,
+    ...typography.bodyBold,
+    fontSize: 15,
     color: colors.text,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: spacing.xs,
-    fontSize: 11,
+    minWidth: 0,
   },
-  achievementTitleLocked: {
-    color: colors.textSecondary,
+  list: {
+    paddingBottom: spacing.xs,
   },
-  unlockedBadge: {
-    marginTop: spacing.xs,
-  },
-  progressBar: {
-    width: '100%',
-    height: 3,
+  divider: {
+    height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    borderRadius: borderRadius.sm,
-    overflow: 'hidden',
-    marginTop: spacing.xs,
+    marginLeft: spacing.md + 44 + spacing.md,
   },
-  progressFill: {
-    height: '100%',
-    borderRadius: borderRadius.sm,
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    gap: spacing.md,
   },
-  emptyState: {
-    paddingVertical: spacing.lg,
-    alignItems: 'center',
+  rowIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  emptyText: {
+  rowBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  rowTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  rowTitleMuted: {
+    color: colors.textSecondary,
+    fontWeight: "600",
+  },
+  rowStatus: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  checkWrap: {
+    marginLeft: spacing.xs,
+  },
+  empty: {
     ...typography.body,
     color: colors.textSecondary,
-    textAlign: 'center',
+    textAlign: "center",
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  cta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    backgroundColor: colors.backgroundAlt,
+  },
+  ctaText: {
+    ...typography.bodyBold,
+    fontSize: 15,
+    color: colors.primary,
   },
 });

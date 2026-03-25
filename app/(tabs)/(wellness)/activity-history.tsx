@@ -8,7 +8,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
-import { supabase } from "@/app/integrations/supabase/client";
+import { supabase } from "@/lib/integrations/supabase/client";
 import * as Haptics from 'expo-haptics';
 
 import { getScreenWidth } from '@/utils/screenDimensions';
@@ -746,17 +746,10 @@ export default function ActivityHistoryScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      {/* Header — stack provides back to Wellness tab root */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow-back"
-            size={24}
-            color={colors.text}
-          />
-        </TouchableOpacity>
+        <View style={styles.backButton} />
         <Text style={styles.headerTitle}>Amanah History</Text>
         <View style={styles.placeholder} />
       </View>

@@ -1,391 +1,566 @@
-
-import React, { useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity, Dimensions, Animated } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import React from "react";
+import { View, Text, StyleSheet, Pressable, ScrollView, I18nManager } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import * as Haptics from 'expo-haptics';
-
-import { getScreenWidth } from '@/utils/screenDimensions';
-
-const SCREEN_WIDTH = getScreenWidth();
-const CARD_WIDTH = (SCREEN_WIDTH - spacing.xl * 2 - spacing.md) / 2;
-
-// Header animation constants (matching Iman Tracker)
-const HEADER_MAX_HEIGHT = 150;
-const HEADER_MIN_HEIGHT = 70;
-const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
+import * as Haptics from "expo-haptics";
+import { useAccessGate } from "@/hooks/useAccessGate";
+import { AccessGate } from "@/components/access/AccessGate";
+import { useTranslation } from "@/contexts/I18nContext";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { TabHubHeader, TabHubHeaderIconDecoration } from "@/components/navigation/TabHubHeader";
 
 interface LearningSection {
-  title: string;
-  description: string;
+  titleKey: string;
+  descKey: string;
   iosIcon: string;
   androidIcon: string;
   gradientColors: string[];
   route: string;
+  accent: string;
+  /** larger featured card */
+  featured?: boolean;
 }
-
-interface LearningCardProps {
-  title: string;
-  description: string;
-  icon: string;
-  androidIcon: string;
-  gradient: string[];
-  onPress: () => void;
-}
-
-const LearningCard: React.FC<LearningCardProps> = ({ title, description, icon, androidIcon, gradient, onPress }) => (
-  <TouchableOpacity
-    style={styles.learningCard}
-    activeOpacity={0.85}
-    onPress={onPress}
-  >
-    <LinearGradient
-      colors={gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.cardGradient}
-    >
-      <View style={styles.cardIconWrapper}>
-        <IconSymbol
-          ios_icon_name={icon}
-          android_material_icon_name={androidIcon}
-          size={32}
-          color={colors.card}
-        />
-      </View>
-      <View style={styles.cardContent}>
-        <Text style={styles.cardTitle}>{title}</Text>
-        <Text style={styles.cardSubtitle}>{description}</Text>
-      </View>
-      <View style={styles.cardArrow}>
-        <IconSymbol
-          ios_icon_name="chevron.right"
-          android_material_icon_name="chevron-right"
-          size={18}
-          color={colors.card}
-        />
-      </View>
-    </LinearGradient>
-  </TouchableOpacity>
-);
 
 export default function LearningScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const { t, locale } = useTranslation();
+  const { checkAccess, showGate, gateVisible, onGateClose, onGateGranted } = useAccessGate();
+  const isRTL = I18nManager.isRTL || locale === "ar" || locale === "ur";
 
-  // Header height animation
-  const headerHeight = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
-    extrapolate: 'clamp',
-  });
-
-  // Header content opacity
-  const headerContentOpacity = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE / 2, HEADER_SCROLL_DISTANCE],
-    outputRange: [1, 0.5, 0],
-    extrapolate: 'clamp',
-  });
-
-  // Header title scale for collapsed state
-  const headerTitleScale = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [1, 0.8],
-    extrapolate: 'clamp',
-  });
+  const scrollBottomSpacer = Math.max(120, insets.bottom + 150);
 
   const sections: LearningSection[] = [
     {
-      title: 'Islamic Lectures',
-      description: 'Watch inspiring lectures from scholars',
-      iosIcon: 'play.rectangle.fill',
-      androidIcon: 'play-circle',
+      titleKey: "learning.lecturesTitle",
+      descKey: "learning.lecturesDesc",
+      iosIcon: "play.rectangle.fill",
+      androidIcon: "play-circle",
       gradientColors: colors.gradientPrimary,
-      route: '/(tabs)/(learning)/lectures',
+      route: "/(tabs)/(learning)/lectures",
+      accent: colors.primary,
+      featured: true,
     },
     {
-      title: 'Islamic Quizzes',
-      description: 'Test your Islamic knowledge',
-      iosIcon: 'questionmark.circle.fill',
-      androidIcon: 'quiz',
+      titleKey: "learning.quizzesTitle",
+      descKey: "learning.quizzesDesc",
+      iosIcon: "questionmark.circle.fill",
+      androidIcon: "quiz",
       gradientColors: colors.gradientInfo,
-      route: '/(tabs)/(learning)/quizzes',
+      route: "/(tabs)/(learning)/quizzes",
+      accent: colors.info,
     },
     {
-      title: 'Daily Duas',
-      description: 'Learn daily supplications',
-      iosIcon: 'book.pages.fill',
-      androidIcon: 'auto-stories',
-      gradientColors: colors.gradientPurple,
-      route: '/(tabs)/(wellness)/mental-duas',
+      titleKey: "learning.duasTitle",
+      descKey: "learning.duasDesc",
+      iosIcon: "book.pages.fill",
+      androidIcon: "auto-stories",
+      gradientColors: colors.gradientSecondary,
+      route: "/(tabs)/(wellness)/mental-duas",
+      accent: colors.secondary,
     },
   ];
 
-  const handleSectionPress = (section: LearningSection) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
-    if (!section.route) {
-      console.log(`${section.title} - Coming soon`);
-      return;
+  const featured = sections.find((s) => s.featured)!;
+  const compact = sections.filter((s) => !s.featured);
+
+  const handleSectionPress = async (section: LearningSection) => {
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {
+      /* optional */
     }
 
-    // Navigate directly - no access gates
+    if (!section.route) return;
+
+    if (section.route === "/(tabs)/(learning)/lectures") {
+      const hasAccess = await checkAccess();
+      if (!hasAccess) {
+        showGate(() => {
+          router.push(section.route as any);
+        });
+        return;
+      }
+    }
+
     router.push(section.route as any);
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Collapsing Header (matching Iman Tracker style) */}
-      <Animated.View 
-        style={[
-          styles.headerSection,
-          { height: headerHeight }
-        ]}
-      >
-        <LinearGradient
-          colors={colors.gradientOcean as any}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerGradient}
-        >
-          <Animated.View 
-            style={[
-              styles.headerContent,
-              { opacity: headerContentOpacity }
-            ]}
-          >
-            <Animated.View 
-              style={[
-                styles.headerTop,
-                { transform: [{ scale: headerTitleScale }] }
-              ]}
-            >
-              <View style={styles.headerIconContainer}>
-                <IconSymbol
-                  ios_icon_name="book.fill"
-                  android_material_icon_name="menu-book"
-                  size={48}
-                  color="#FFFFFF"
-                />
-              </View>
-              <View style={styles.headerTextContainer}>
-                <Text style={styles.header}>Learning Center</Text>
-                <Text style={styles.subtitle}>Expand your Islamic knowledge</Text>
-              </View>
-            </Animated.View>
-          </Animated.View>
-        </LinearGradient>
-      </Animated.View>
-
-      {/* Learning Sections Grid */}
-      <Animated.ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: spacing.lg },
-        ]}
-        showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
-      >
-        <View style={styles.cardsGrid}>
-          {sections.map((section, index) => (
-            <LearningCard
-              key={index}
-              title={section.title}
-              description={section.description}
-              icon={section.iosIcon}
-              androidIcon={section.androidIcon}
-              gradient={section.gradientColors}
-              onPress={() => handleSectionPress(section)}
-            />
-          ))}
+    <SafeAreaView style={styles.root} edges={["top"]}>
+      <View style={styles.flex}>
+        {/* Soft ambient shapes */}
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          <View style={[styles.blob, styles.blobPurple]} />
+          <View style={[styles.blob, styles.blobTeal]} />
+          <View style={[styles.blob, styles.blobPink]} />
         </View>
 
-        {/* Inspirational Quote Card */}
-        <View style={styles.quoteCard}>
-          <LinearGradient
-            colors={colors.gradientSecondary}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.quoteGradient}
+        <TabHubHeader
+          title={t("tabs.learning")}
+          subtitle={t("learning.heroEyebrow")}
+          left={
+            <TabHubHeaderIconDecoration>
+              <IconSymbol ios_icon_name="book.pages.fill" android_material_icon_name="menu-book" size={22} color={colors.primary} />
+            </TabHubHeaderIconDecoration>
+          }
+        />
+
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: scrollBottomSpacer },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={[styles.sectionLabel, isRTL && styles.textRTL]}>{t("learning.sectionPaths")}</Text>
+
+          {/* Featured — lectures */}
+          <Pressable
+            onPress={() => handleSectionPress(featured)}
+            style={({ pressed }) => [styles.featuredWrap, pressed && styles.pressed]}
+            android_ripple={{ color: "rgba(255,255,255,0.25)" }}
           >
-            <View style={styles.quoteIconWrapper}>
+            <LinearGradient
+              colors={featured.gradientColors as unknown as readonly [string, string, ...string[]]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.featuredCard}
+            >
+              <View style={[styles.featuredTop, isRTL && styles.rowReverse]}>
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{t("learning.featuredBadge")}</Text>
+                </View>
+                <View style={styles.featuredIconCircle}>
+                  <IconSymbol
+                    ios_icon_name={featured.iosIcon}
+                    android_material_icon_name={featured.androidIcon as keyof typeof MaterialIcons.glyphMap}
+                    size={28}
+                    color="#fff"
+                  />
+                </View>
+              </View>
+              <Text style={styles.featuredTitle}>{t(featured.titleKey)}</Text>
+              <Text style={styles.featuredDesc}>{t(featured.descKey)}</Text>
+              <View style={[styles.featuredFooter, isRTL && styles.rowReverse]}>
+                <Text style={styles.featuredCta}>{t("common.continue")}</Text>
+                <IconSymbol
+                  ios_icon_name="arrow.right.circle.fill"
+                  android_material_icon_name="arrow-circle-right"
+                  size={26}
+                  color="rgba(255,255,255,0.95)"
+                />
+              </View>
+            </LinearGradient>
+          </Pressable>
+
+          {/* Bento row — quizzes & duas */}
+          <View style={[styles.bentoRow, isRTL && styles.rowReverse]}>
+            {compact.map((section) => (
+              <Pressable
+                key={section.route}
+                onPress={() => handleSectionPress(section)}
+                style={({ pressed }) => [
+                  styles.compactCard,
+                  { borderTopColor: section.accent },
+                  pressed && styles.pressedCard,
+                ]}
+                android_ripple={{ color: "rgba(139,92,246,0.12)" }}
+              >
+                <View style={[styles.compactIconWrap, { backgroundColor: `${section.accent}18` }]}>
+                  <IconSymbol
+                    ios_icon_name={section.iosIcon}
+                    android_material_icon_name={section.androidIcon as keyof typeof MaterialIcons.glyphMap}
+                    size={26}
+                    color={section.accent}
+                  />
+                </View>
+                <Text style={[styles.compactTitle, isRTL && styles.textRTL]} numberOfLines={2}>
+                  {t(section.titleKey)}
+                </Text>
+                <Text style={[styles.compactDesc, isRTL && styles.textRTL]} numberOfLines={3}>
+                  {t(section.descKey)}
+                </Text>
+                <View style={[styles.compactArrow, isRTL && styles.rowReverse]}>
+                  <IconSymbol
+                    ios_icon_name="chevron.right"
+                    android_material_icon_name="chevron-right"
+                    size={18}
+                    color={colors.textSecondary}
+                  />
+                </View>
+              </Pressable>
+            ))}
+          </View>
+
+          {/* Islamic stories — full width */}
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              router.push("/(tabs)/(learning)/stories" as any);
+            }}
+            style={({ pressed }) => [styles.storiesWide, pressed && styles.pressedCard]}
+            android_ripple={{ color: "rgba(245, 158, 11, 0.15)" }}
+          >
+            <LinearGradient
+              colors={["#F59E0B", "#D97706", "#B45309"] as unknown as readonly [string, string, ...string[]]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.storiesWideGradient}
+            >
+              <View style={[styles.storiesWideTop, isRTL && styles.rowReverse]}>
+                <View style={styles.storiesIconCircle}>
+                  <IconSymbol
+                    ios_icon_name="text.book.closed.fill"
+                    android_material_icon_name="auto-stories"
+                    size={26}
+                    color="#fff"
+                  />
+                </View>
+                <View style={styles.storiesBadge}>
+                  <Text style={styles.storiesBadgeText}>{t("learning.storiesBadge")}</Text>
+                </View>
+              </View>
+              <Text style={styles.storiesWideTitle}>{t("learning.storiesTitle")}</Text>
+              <Text style={styles.storiesWideDesc}>{t("learning.storiesDesc")}</Text>
+              <View style={[styles.storiesWideFooter, isRTL && styles.rowReverse]}>
+                <Text style={styles.storiesWideCta}>{t("common.continue")}</Text>
+                <IconSymbol
+                  ios_icon_name="arrow.right.circle.fill"
+                  android_material_icon_name="arrow-circle-right"
+                  size={24}
+                  color="rgba(255,255,255,0.95)"
+                />
+              </View>
+            </LinearGradient>
+          </Pressable>
+
+          {/* Allah names — full width */}
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              router.push("/(tabs)/(learning)/allah-names" as any);
+            }}
+            style={({ pressed }) => [styles.storiesWide, pressed && styles.pressedCard]}
+            android_ripple={{ color: "rgba(14, 165, 233, 0.15)" }}
+          >
+            <LinearGradient
+              colors={["#0EA5E9", "#0284C7", "#0369A1"] as unknown as readonly [string, string, ...string[]]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.storiesWideGradient}
+            >
+              <View style={[styles.storiesWideTop, isRTL && styles.rowReverse]}>
+                <View style={styles.storiesIconCircle}>
+                  <IconSymbol
+                    ios_icon_name="sparkles.rectangle.stack.fill"
+                    android_material_icon_name="auto-awesome"
+                    size={26}
+                    color="#fff"
+                  />
+                </View>
+                <View style={styles.storiesBadge}>
+                  <Text style={styles.storiesBadgeText}>Asma ul Husna</Text>
+                </View>
+              </View>
+              <Text style={styles.storiesWideTitle}>99 Names of Allah</Text>
+              <Text style={styles.storiesWideDesc}>
+                Meanings, definitions, and cited Qur'an and Hadith references for every Name.
+              </Text>
+              <View style={[styles.storiesWideFooter, isRTL && styles.rowReverse]}>
+                <Text style={styles.storiesWideCta}>{t("common.continue")}</Text>
+                <IconSymbol
+                  ios_icon_name="arrow.right.circle.fill"
+                  android_material_icon_name="arrow-circle-right"
+                  size={24}
+                  color="rgba(255,255,255,0.95)"
+                />
+              </View>
+            </LinearGradient>
+          </Pressable>
+
+          {/* Quote — editorial card */}
+          <View style={styles.quoteOuter}>
+            <View style={styles.quoteAccentBar} />
+            <View style={styles.quoteInner}>
               <IconSymbol
                 ios_icon_name="quote.opening"
                 android_material_icon_name="format-quote"
-                size={28}
-                color={colors.card}
+                size={22}
+                color={colors.primaryLight}
               />
+              <Text style={[styles.quoteText, isRTL && styles.textRTL]}>&ldquo;{t("learning.quote")}&rdquo;</Text>
+              <Text style={[styles.quoteSource, isRTL && styles.textRTL]}>— {t("learning.quoteSource")}</Text>
             </View>
-            <Text style={styles.quoteText}>
-              &quot;Seek knowledge from the cradle to the grave.&quot;
-            </Text>
-            <Text style={styles.quoteSource}>Prophet Muhammad (PBUH)</Text>
-          </LinearGradient>
-        </View>
+          </View>
+        </ScrollView>
+      </View>
 
-        {/* Bottom Padding for Tab Bar */}
-        <View style={styles.bottomPadding} />
-      </Animated.ScrollView>
+      <AccessGate
+        visible={gateVisible}
+        onClose={onGateClose}
+        onAccessGranted={onGateGranted}
+        title="Unlock Islamic Lectures"
+        description="Watch a short ad to access premium Islamic lectures for 24 hours"
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  headerSection: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    borderRadius: borderRadius.xl,
-    overflow: 'hidden',
-    ...shadows.large,
-  },
-  headerGradient: {
-    flex: 1,
-    padding: spacing.lg,
-    justifyContent: 'center',
-  },
-  headerContent: {
-    gap: spacing.md,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  headerIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTextContainer: {
+  flex: {
     flex: 1,
   },
-  header: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: spacing.xs,
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+  blob: {
+    position: "absolute",
+    borderRadius: 999,
+    opacity: 0.55,
   },
-  subtitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: 'rgba(255, 255, 255, 0.9)',
+  blobPurple: {
+    width: 280,
+    height: 280,
+    top: -80,
+    right: -60,
+    backgroundColor: "rgba(167, 139, 250, 0.35)",
   },
-  scrollView: {
+  blobTeal: {
+    width: 200,
+    height: 200,
+    top: 120,
+    left: -70,
+    backgroundColor: "rgba(45, 212, 191, 0.22)",
+  },
+  blobPink: {
+    width: 120,
+    height: 120,
+    top: 40,
+    left: "38%",
+    backgroundColor: "rgba(236, 72, 153, 0.12)",
+  },
+  scroll: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
   },
-  cardsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  rowReverse: {
+    flexDirection: "row-reverse",
+  },
+  textRTL: {
+    textAlign: "right",
+    writingDirection: "rtl",
+  },
+  sectionLabel: {
+    ...typography.captionBold,
+    color: colors.textSecondary,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    marginBottom: spacing.md,
+  },
+  featuredWrap: {
+    borderRadius: borderRadius.xxxl,
+    overflow: "hidden",
+    marginBottom: spacing.lg,
+    ...shadows.colored,
+  },
+  featuredCard: {
+    padding: spacing.xl,
+    minHeight: 200,
+    justifyContent: "space-between",
+  },
+  featuredTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.lg,
+  },
+  badge: {
+    backgroundColor: "rgba(255,255,255,0.25)",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.round,
+  },
+  badgeText: {
+    ...typography.smallBold,
+    color: "#fff",
+    letterSpacing: 0.5,
+  },
+  featuredIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "rgba(0,0,0,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  featuredTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#fff",
+    marginBottom: spacing.sm,
+    textShadowColor: "rgba(0,0,0,0.15)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  featuredDesc: {
+    ...typography.body,
+    color: "rgba(255,255,255,0.92)",
+    marginBottom: spacing.xl,
+  },
+  featuredFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  featuredCta: {
+    ...typography.bodyBold,
+    color: "#fff",
+    fontSize: 17,
+  },
+  pressed: {
+    opacity: 0.94,
+    transform: [{ scale: 0.99 }],
+  },
+  bentoRow: {
+    flexDirection: "row",
     gap: spacing.md,
     marginBottom: spacing.xl,
   },
-  learningCard: {
-    width: CARD_WIDTH,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
+  compactCard: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    borderTopWidth: 4,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minHeight: 200,
     ...shadows.medium,
   },
-  cardGradient: {
-    padding: spacing.lg,
-    minHeight: 140,
-    justifyContent: 'space-between',
+  pressedCard: {
+    opacity: 0.92,
   },
-  cardIconWrapper: {
+  compactIconWrap: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.md,
   },
-  cardContent: {
-    flex: 1,
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  cardTitle: {
+  compactTitle: {
     ...typography.bodyBold,
-    fontSize: 16,
-    color: colors.card,
+    fontSize: 17,
+    color: colors.text,
     marginBottom: spacing.xs,
   },
-  cardSubtitle: {
+  compactDesc: {
     ...typography.caption,
-    fontSize: 12,
-    color: colors.card,
-    opacity: 0.9,
-    lineHeight: 16,
+    color: colors.textSecondary,
+    flex: 1,
+    lineHeight: 20,
   },
-  cardArrow: {
-    alignSelf: 'flex-end',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quoteCard: {
-    borderRadius: borderRadius.xl,
-    overflow: 'hidden',
+  compactArrow: {
     marginTop: spacing.md,
-    ...shadows.emphasis,
+    alignSelf: "flex-end",
   },
-  quoteGradient: {
+  storiesWide: {
+    borderRadius: borderRadius.xl,
+    overflow: "hidden",
+    marginBottom: spacing.xl,
+    ...shadows.medium,
+  },
+  storiesWideGradient: {
     padding: spacing.xl,
-    alignItems: 'center',
+    minHeight: 160,
+    justifyContent: "space-between",
   },
-  quoteIconWrapper: {
+  storiesWideTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  storiesIconCircle: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
+    backgroundColor: "rgba(0,0,0,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  storiesBadge: {
+    backgroundColor: "rgba(255,255,255,0.25)",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.round,
+  },
+  storiesBadgeText: {
+    ...typography.smallBold,
+    color: "#fff",
+    letterSpacing: 0.5,
+  },
+  storiesWideTitle: {
+    ...typography.h4,
+    color: "#fff",
+    marginBottom: spacing.xs,
+    fontSize: 22,
+    fontWeight: "800",
+  },
+  storiesWideDesc: {
+    ...typography.body,
+    color: "rgba(255,255,255,0.92)",
+    marginBottom: spacing.lg,
+    lineHeight: 22,
+  },
+  storiesWideFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  storiesWideCta: {
+    ...typography.bodyBold,
+    color: "#fff",
+    fontSize: 16,
+  },
+  quoteOuter: {
+    flexDirection: "row",
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xl,
+    overflow: "hidden",
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
+  },
+  quoteAccentBar: {
+    width: 5,
+    backgroundColor: colors.primary,
+  },
+  quoteInner: {
+    flex: 1,
+    padding: spacing.xl,
+    gap: spacing.sm,
   },
   quoteText: {
     ...typography.h4,
-    fontSize: 18,
-    color: colors.card,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-    lineHeight: 26,
-    fontStyle: 'italic',
+    fontStyle: "italic",
+    color: colors.text,
+    lineHeight: 28,
   },
   quoteSource: {
-    ...typography.body,
-    fontSize: 14,
-    color: colors.card,
-    opacity: 0.85,
-    textAlign: 'center',
-  },
-  bottomPadding: {
-    height: 100,
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
   },
 });

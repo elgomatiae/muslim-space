@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Database } from './types';
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 // Use environment variables with EXPO_PUBLIC_ prefix for Expo/React Native
 // SECURITY: Never hardcode keys in production - always use environment variables
@@ -90,8 +89,8 @@ const finalKey = SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVC
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-// Create client with error handling to prevent crashes
-let supabaseInstance: ReturnType<typeof createClient<Database>> | null = null;
+// Schema-agnostic client: full `Database` types are not generated yet; typed `.from()` would reject valid tables.
+let supabaseInstance: SupabaseClient | null = null;
 
 // Safely get AsyncStorage - it might not be ready at module load time
 let safeAsyncStorage: typeof AsyncStorage | null = null;
@@ -106,7 +105,7 @@ try {
 }
 
 try {
-  supabaseInstance = createClient<Database>(finalUrl, finalKey, {
+  supabaseInstance = createClient(finalUrl, finalKey, {
     auth: {
       storage: safeAsyncStorage || undefined, // Only use storage if available
       autoRefreshToken: !!safeAsyncStorage, // Only auto-refresh if storage available
@@ -119,7 +118,7 @@ try {
   // Create a minimal client that won't crash
   // This should never happen, but safety first
   try {
-    supabaseInstance = createClient<Database>(finalUrl, finalKey, {
+    supabaseInstance = createClient(finalUrl, finalKey, {
       auth: {
         storage: undefined, // Don't use storage if initial creation failed
         autoRefreshToken: false,
@@ -139,7 +138,7 @@ export const supabase = supabaseInstance || (() => {
   console.error('Supabase client is null - this should not happen');
   // Return a minimal client that won't crash - don't use AsyncStorage in fallback
   try {
-    return createClient<Database>(finalUrl, finalKey, {
+    return createClient(finalUrl, finalKey, {
       auth: {
         storage: undefined, // Don't use storage in fallback
         autoRefreshToken: false,
@@ -150,6 +149,6 @@ export const supabase = supabaseInstance || (() => {
   } catch (error) {
     console.error('Even fallback client creation failed:', error);
     // Return a minimal client without auth config
-    return createClient<Database>(finalUrl, finalKey);
+    return createClient(finalUrl, finalKey);
   }
 })();

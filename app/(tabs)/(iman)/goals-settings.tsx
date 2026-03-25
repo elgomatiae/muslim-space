@@ -30,6 +30,8 @@ interface GoalConfig {
   goalField: string;
   completedField?: string;
   frequencyField?: string;
+  /** When true, weekly/daily toggle is hidden (goal still uses stored counters). */
+  hideFrequency?: boolean;
   min: number;
   max: number;
   step: number;
@@ -39,6 +41,140 @@ interface GoalConfig {
   isRequired?: boolean;
   defaultFrequency: FrequencyType;
   currentFrequency?: FrequencyType;
+}
+
+function formatSleepHours(n: number): string {
+  if (Number.isInteger(n)) return String(n);
+  return (Math.round(n * 10) / 10).toFixed(1).replace(/\.0$/, '');
+}
+
+/** Typed goal value: draft while editing, commit on blur; +/- uses fine steps (1 or sleep step). */
+function GoalNumberEditor({
+  config,
+  currentValue,
+  updateGoalValue,
+}: {
+  config: GoalConfig;
+  currentValue: number;
+  updateGoalValue: (goalField: string, value: number) => void;
+}) {
+  const isDecimal = config.step % 1 !== 0;
+  const [text, setText] = useState(() =>
+    isDecimal ? formatSleepHours(currentValue) : String(Math.round(currentValue))
+  );
+
+  useEffect(() => {
+    setText(isDecimal ? formatSleepHours(currentValue) : String(Math.round(currentValue)));
+  }, [currentValue, config.goalField, isDecimal]);
+
+  const commitFromText = (raw: string) => {
+    if (isDecimal) {
+      const normalized = raw.replace(',', '.').trim();
+      if (normalized === '' || normalized === '.') {
+        setText(formatSleepHours(currentValue));
+        return;
+      }
+      const n = parseFloat(normalized);
+      if (Number.isNaN(n)) {
+        setText(formatSleepHours(currentValue));
+        return;
+      }
+      const rounded = Math.round(n / config.step) * config.step;
+      const clamped = Math.max(config.min, Math.min(config.max, rounded));
+      updateGoalValue(config.goalField, clamped);
+      setText(formatSleepHours(clamped));
+    } else {
+      const digits = raw.replace(/\D/g, '');
+      if (digits === '') {
+        setText(String(Math.max(config.min, Math.round(currentValue))));
+        return;
+      }
+      const n = parseInt(digits, 10);
+      const clamped = Math.max(config.min, Math.min(config.max, n));
+      updateGoalValue(config.goalField, clamped);
+      setText(String(clamped));
+    }
+  };
+
+  const onChangeText = (raw: string) => {
+    if (isDecimal) {
+      const cleaned = raw.replace(/[^0-9.,]/g, '').replace(',', '.');
+      const parts = cleaned.split('.');
+      if (parts.length > 2) return;
+      setText(cleaned);
+    } else {
+      setText(raw.replace(/\D/g, ''));
+    }
+  };
+
+  const bump = (dir: -1 | 1) => {
+    if (isDecimal) {
+      const next = Math.round((currentValue + dir * config.step) / config.step) * config.step;
+      const clamped = Math.max(config.min, Math.min(config.max, next));
+      updateGoalValue(config.goalField, clamped);
+    } else {
+      const next = Math.round(currentValue) + dir;
+      const clamped = Math.max(config.min, Math.min(config.max, next));
+      updateGoalValue(config.goalField, clamped);
+    }
+  };
+
+  const currentFreq = config.currentFrequency || config.defaultFrequency;
+
+  return (
+    <>
+      <View style={styles.valueDisplay}>
+        <TextInput
+          style={styles.valueInput}
+          value={text}
+          onChangeText={onChangeText}
+          onBlur={() => commitFromText(text)}
+          onSubmitEditing={() => commitFromText(text)}
+          keyboardType={isDecimal ? 'decimal-pad' : 'number-pad'}
+          selectTextOnFocus
+          returnKeyType="done"
+          maxLength={isDecimal ? 8 : String(config.max).length + 2}
+        />
+        <Text style={styles.unitText}>
+          {config.hideFrequency ? `${config.unit}/week` : `${config.unit}/${currentFreq}`}
+        </Text>
+      </View>
+
+      <View style={styles.controlButtons}>
+        <TouchableOpacity
+          style={styles.controlButton}
+          onPress={() => bump(-1)}
+          activeOpacity={0.7}
+        >
+          <IconSymbol
+            ios_icon_name="minus"
+            android_material_icon_name="remove"
+            size={20}
+            color={colors.text}
+          />
+        </TouchableOpacity>
+
+        <View style={styles.rangeInfo}>
+          <Text style={styles.rangeText} numberOfLines={2}>
+            Type any value ({config.min}–{config.max})
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.controlButton}
+          onPress={() => bump(1)}
+          activeOpacity={0.7}
+        >
+          <IconSymbol
+            ios_icon_name="plus"
+            android_material_icon_name="add"
+            size={20}
+            color={colors.text}
+          />
+        </TouchableOpacity>
+      </View>
+    </>
+  );
 }
 
 const WORKOUT_TYPES = [
@@ -139,6 +275,8 @@ export default function GoalsSettingsScreen() {
       if (data.lectures_goal_frequency) frequencies.lectures = data.lectures_goal_frequency;
       if (data.quizzes_goal_frequency) frequencies.quizzes = data.quizzes_goal_frequency;
       if (data.reflection_goal_frequency) frequencies.reflection = data.reflection_goal_frequency;
+      if (data.stories_goal_frequency) frequencies.stories = data.stories_goal_frequency;
+      if (data.allah_names_goal_frequency) frequencies.allahNames = data.allah_names_goal_frequency;
       if (data.exercise_goal_frequency) frequencies.exercise = data.exercise_goal_frequency;
       if (data.water_goal_frequency) frequencies.water = data.water_goal_frequency;
       if (data.meditation_goal_frequency) frequencies.meditation = data.meditation_goal_frequency;
@@ -287,7 +425,7 @@ export default function GoalsSettingsScreen() {
       completedField: 'sunnahCompleted',
       frequencyField: 'sunnah_goal_frequency',
       min: 0,
-      max: 20,
+      max: 100,
       step: 1,
       unit: 'prayers',
       enabled: (localIbadahGoals?.sunnahDailyGoal ?? 0) > 0,
@@ -303,7 +441,7 @@ export default function GoalsSettingsScreen() {
       completedField: 'tahajjudCompleted',
       frequencyField: 'tahajjud_goal_frequency',
       min: 0,
-      max: 7,
+      max: 50,
       step: 1,
       unit: 'times',
       enabled: (localIbadahGoals?.tahajjudWeeklyGoal ?? 0) > 0,
@@ -319,7 +457,7 @@ export default function GoalsSettingsScreen() {
       completedField: 'quranDailyPagesCompleted',
       frequencyField: 'quran_pages_goal_frequency',
       min: 0,
-      max: 20,
+      max: 604,
       step: 1,
       unit: 'pages',
       enabled: (localIbadahGoals?.quranDailyPagesGoal ?? 0) > 0,
@@ -335,8 +473,8 @@ export default function GoalsSettingsScreen() {
       completedField: 'quranDailyVersesCompleted',
       frequencyField: 'quran_verses_goal_frequency',
       min: 0,
-      max: 50,
-      step: 5,
+      max: 6236,
+      step: 1,
       unit: 'verses',
       enabled: (localIbadahGoals?.quranDailyVersesGoal ?? 0) > 0,
       canDisable: true,
@@ -351,7 +489,7 @@ export default function GoalsSettingsScreen() {
       completedField: 'quranWeeklyMemorizationCompleted',
       frequencyField: 'quran_memorization_goal_frequency',
       min: 0,
-      max: 20,
+      max: 500,
       step: 1,
       unit: 'verses',
       enabled: (localIbadahGoals?.quranWeeklyMemorizationGoal ?? 0) > 0,
@@ -367,8 +505,8 @@ export default function GoalsSettingsScreen() {
       completedField: 'dhikrDailyCompleted',
       frequencyField: 'dhikr_goal_frequency',
       min: 0,
-      max: 5000,
-      step: 10,
+      max: 500000,
+      step: 1,
       unit: 'times',
       enabled: (localIbadahGoals?.dhikrDailyGoal ?? 0) > 0,
       canDisable: true,
@@ -383,7 +521,7 @@ export default function GoalsSettingsScreen() {
       completedField: 'duaDailyCompleted',
       frequencyField: 'dua_goal_frequency',
       min: 0,
-      max: 10,
+      max: 100,
       step: 1,
       unit: 'duas',
       enabled: (localIbadahGoals?.duaDailyGoal ?? 0) > 0,
@@ -418,7 +556,7 @@ export default function GoalsSettingsScreen() {
       completedField: 'weeklyLecturesCompleted',
       frequencyField: 'lectures_goal_frequency',
       min: 0,
-      max: 10,
+      max: 100,
       step: 1,
       unit: 'lectures',
       enabled: (localIlmGoals?.weeklyLecturesGoal ?? 0) > 0,
@@ -434,7 +572,7 @@ export default function GoalsSettingsScreen() {
       completedField: 'weeklyQuizzesCompleted',
       frequencyField: 'quizzes_goal_frequency',
       min: 0,
-      max: 7,
+      max: 100,
       step: 1,
       unit: 'quizzes',
       enabled: (localIlmGoals?.weeklyQuizzesGoal ?? 0) > 0,
@@ -450,13 +588,45 @@ export default function GoalsSettingsScreen() {
       completedField: 'weeklyReflectionCompleted',
       frequencyField: 'reflection_goal_frequency',
       min: 0,
-      max: 7,
+      max: 100,
       step: 1,
       unit: 'reflections',
       enabled: (localIlmGoals?.weeklyReflectionGoal ?? 0) > 0,
       canDisable: true,
       defaultFrequency: 'weekly',
       currentFrequency: goalFrequencies.reflection || 'weekly',
+    },
+    {
+      id: 'stories',
+      label: 'Islamic Stories',
+      description: 'Read seerah, prophets, and ṣaḥābah stories each week',
+      goalField: 'weeklyStoriesGoal',
+      completedField: 'weeklyStoriesCompleted',
+      frequencyField: 'stories_goal_frequency',
+      min: 0,
+      max: 100,
+      step: 1,
+      unit: 'stories',
+      enabled: (localIlmGoals?.weeklyStoriesGoal ?? 0) > 0,
+      canDisable: true,
+      defaultFrequency: 'weekly',
+      currentFrequency: goalFrequencies.stories || 'weekly',
+    },
+    {
+      id: 'allahNames',
+      label: "Allah's Names (Asma ul Husna)",
+      description: 'Review names of Allah with meanings and evidences',
+      goalField: 'weeklyAllahNamesGoal',
+      completedField: 'weeklyAllahNamesCompleted',
+      frequencyField: 'allah_names_goal_frequency',
+      min: 0,
+      max: 99,
+      step: 1,
+      unit: 'names',
+      enabled: (localIlmGoals?.weeklyAllahNamesGoal ?? 0) > 0,
+      canDisable: true,
+      defaultFrequency: 'weekly',
+      currentFrequency: goalFrequencies.allahNames || 'weekly',
     },
   ];
 
@@ -469,7 +639,7 @@ export default function GoalsSettingsScreen() {
       completedField: 'dailyWaterCompleted',
       frequencyField: 'water_goal_frequency',
       min: 0,
-      max: 15,
+      max: 40,
       step: 1,
       unit: 'glasses',
       enabled: (localAmanahGoals?.dailyWaterGoal ?? 0) > 0,
@@ -485,7 +655,7 @@ export default function GoalsSettingsScreen() {
       completedField: 'dailySleepCompleted',
       frequencyField: 'sleep_goal_frequency',
       min: 0,
-      max: 12,
+      max: 16,
       step: 0.5,
       unit: 'hours',
       enabled: (localAmanahGoals?.dailySleepGoal ?? 0) > 0,
@@ -501,7 +671,7 @@ export default function GoalsSettingsScreen() {
       completedField: 'weeklyMeditationCompleted',
       frequencyField: 'meditation_goal_frequency',
       min: 0,
-      max: 7,
+      max: 100,
       step: 1,
       unit: 'sessions',
       enabled: (localAmanahGoals?.weeklyMeditationGoal ?? 0) > 0,
@@ -517,7 +687,7 @@ export default function GoalsSettingsScreen() {
       completedField: 'weeklyJournalCompleted',
       frequencyField: 'journal_goal_frequency',
       min: 0,
-      max: 7,
+      max: 100,
       step: 1,
       unit: 'entries',
       enabled: (localAmanahGoals?.weeklyJournalGoal ?? 0) > 0,
@@ -645,6 +815,8 @@ export default function GoalsSettingsScreen() {
       weeklyRecitationsGoal: 2,
       weeklyQuizzesGoal: 1,
       weeklyReflectionGoal: 3,
+      weeklyStoriesGoal: 3,
+      weeklyAllahNamesGoal: 7,
       dailyExerciseGoal: 30,
       dailyWaterGoal: 8,
       weeklyMeditationGoal: 2,
@@ -797,6 +969,7 @@ export default function GoalsSettingsScreen() {
           <View style={styles.goalControls}>
 
             {/* Frequency Toggle */}
+            {!config.hideFrequency && (
             <View style={styles.frequencyToggle}>
               <Text style={styles.frequencyLabel}>Frequency:</Text>
               <View style={styles.frequencyButtons}>
@@ -832,55 +1005,13 @@ export default function GoalsSettingsScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+            )}
 
-            <View style={styles.valueDisplay}>
-              <Text style={styles.valueText}>{currentValue}</Text>
-              <Text style={styles.unitText}>{config.unit}/{currentFreq}</Text>
-            </View>
-
-            <View style={styles.controlButtons}>
-              <TouchableOpacity
-                style={styles.controlButton}
-                onPress={() => {
-                  const newValue = Math.max(config.min, currentValue - config.step);
-                  if (newValue >= config.min) {
-                    updateGoalValue(config.goalField, newValue);
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <IconSymbol
-                  ios_icon_name="minus"
-                  android_material_icon_name="remove"
-                  size={20}
-                  color={colors.text}
-                />
-              </TouchableOpacity>
-
-              <View style={styles.rangeInfo}>
-                <Text style={styles.rangeText}>
-                  {config.min} - {config.max}
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.controlButton}
-                onPress={() => {
-                  const newValue = Math.min(config.max, currentValue + config.step);
-                  if (newValue <= config.max) {
-                    updateGoalValue(config.goalField, newValue);
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <IconSymbol
-                  ios_icon_name="plus"
-                  android_material_icon_name="add"
-                  size={20}
-                  color={colors.text}
-                />
-              </TouchableOpacity>
-            </View>
+            <GoalNumberEditor
+              config={config}
+              currentValue={currentValue}
+              updateGoalValue={updateGoalValue}
+            />
           </View>
         )}
       </View>
@@ -921,23 +1052,9 @@ export default function GoalsSettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.back();
-          }}
-          activeOpacity={0.7}
-        >
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow-back"
-            size={24}
-            color={colors.text}
-          />
-        </TouchableOpacity>
+        <View style={styles.backButton} />
         <Text style={styles.headerTitle}>Customize Goals</Text>
         <TouchableOpacity
           style={styles.saveButton}
@@ -956,7 +1073,7 @@ export default function GoalsSettingsScreen() {
           color={colors.info}
         />
         <Text style={styles.infoText}>
-          Customize your spiritual and wellness goals. Toggle any goal off to exclude it from your Iman Tracker score. Switch between daily and weekly frequencies for each goal.
+          Customize your spiritual and wellness goals. Toggle any goal off to exclude it from your Iman Tracker score. Switch between daily and weekly frequencies for each goal. Tap the number to type any amount within the allowed range; +/− adjusts by one (sleep uses half-hour steps).
         </Text>
       </View>
 
@@ -1304,8 +1421,8 @@ export default function GoalsSettingsScreen() {
                     <TouchableOpacity
                       style={styles.modalAmountButton}
                       onPress={() => {
-                        if (editingExerciseGoal.amount > 5) {
-                          setEditingExerciseGoal({ ...editingExerciseGoal, amount: editingExerciseGoal.amount - 5 });
+                        if (editingExerciseGoal.amount > 1) {
+                          setEditingExerciseGoal({ ...editingExerciseGoal, amount: editingExerciseGoal.amount - 1 });
                         }
                       }}
                       activeOpacity={0.7}
@@ -1333,7 +1450,7 @@ export default function GoalsSettingsScreen() {
                       style={styles.modalAmountButton}
                       onPress={() => {
                         if (editingExerciseGoal.amount < 300) {
-                          setEditingExerciseGoal({ ...editingExerciseGoal, amount: editingExerciseGoal.amount + 5 });
+                          setEditingExerciseGoal({ ...editingExerciseGoal, amount: editingExerciseGoal.amount + 1 });
                         }
                       }}
                       activeOpacity={0.7}
@@ -1346,7 +1463,7 @@ export default function GoalsSettingsScreen() {
                       />
                     </TouchableOpacity>
                   </View>
-                  <Text style={styles.modalAmountHint}>Range: 5 - 300 minutes</Text>
+                  <Text style={styles.modalAmountHint}>Type any duration (1–300 minutes)</Text>
                 </View>
 
                 {/* Save Button */}
@@ -1677,6 +1794,19 @@ const styles = StyleSheet.create({
     ...typography.h2,
     color: colors.text,
     fontWeight: '700',
+  },
+  valueInput: {
+    ...typography.h2,
+    color: colors.text,
+    fontWeight: '700',
+    minWidth: 56,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.highlight,
+    textAlign: 'center',
   },
   unitText: {
     ...typography.caption,

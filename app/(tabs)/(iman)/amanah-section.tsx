@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
@@ -21,6 +21,13 @@ export default function AmanahSection() {
       ...amanahGoals,
       [field]: Math.min(currentValue + amount, maxValue),
     };
+    await updateAmanahGoals(updatedGoals);
+  };
+
+  const setCounter = async (field: string, value: number, maxField: string) => {
+    const maxValue = amanahGoals[maxField as keyof typeof amanahGoals] as number;
+    const clamped = Math.max(0, Math.min(maxValue, value));
+    const updatedGoals = { ...amanahGoals, [field]: clamped };
     await updateAmanahGoals(updatedGoals);
   };
 
@@ -112,9 +119,17 @@ export default function AmanahSection() {
           <View style={styles.subsectionContent}>
             {amanahGoals.dailyExerciseGoal > 0 && (
               <View style={styles.goalItem}>
-                <Text style={styles.goalLabel}>
-                  Daily Exercise ({amanahGoals.dailyExerciseCompleted}/{amanahGoals.dailyExerciseGoal} minutes)
-                </Text>
+                <View style={styles.goalLabelRow}>
+                  <Text style={styles.goalLabel}>Daily Exercise </Text>
+                  <TextInput
+                    style={styles.goalCountInput}
+                    value={String(amanahGoals.dailyExerciseCompleted || 0)}
+                    onChangeText={(t) => setCounter('dailyExerciseCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'dailyExerciseGoal')}
+                    keyboardType="number-pad"
+                    maxLength={4}
+                  />
+                  <Text style={styles.goalLabel}> / {amanahGoals.dailyExerciseGoal} min</Text>
+                </View>
                 <View style={styles.progressBar}>
                   <View 
                     style={[
@@ -161,9 +176,17 @@ export default function AmanahSection() {
 
             {amanahGoals.dailyWaterGoal > 0 && (
               <View style={styles.goalItem}>
-                <Text style={styles.goalLabel}>
-                  Daily Water Intake ({amanahGoals.dailyWaterCompleted}/{amanahGoals.dailyWaterGoal} glasses)
-                </Text>
+                <View style={styles.goalLabelRow}>
+                  <Text style={styles.goalLabel}>Daily Water </Text>
+                  <TextInput
+                    style={styles.goalCountInput}
+                    value={String(amanahGoals.dailyWaterCompleted || 0)}
+                    onChangeText={(t) => setCounter('dailyWaterCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'dailyWaterGoal')}
+                    keyboardType="number-pad"
+                    maxLength={3}
+                  />
+                  <Text style={styles.goalLabel}> / {amanahGoals.dailyWaterGoal} glasses</Text>
+                </View>
                 <View style={styles.progressBar}>
                   <View 
                     style={[
@@ -210,9 +233,17 @@ export default function AmanahSection() {
 
             {amanahGoals.weeklyWorkoutGoal > 0 && (
               <View style={styles.goalItem}>
-                <Text style={styles.goalLabel}>
-                  Weekly Workouts ({amanahGoals.weeklyWorkoutCompleted}/{amanahGoals.weeklyWorkoutGoal} sessions)
-                </Text>
+                <View style={styles.goalLabelRow}>
+                  <Text style={styles.goalLabel}>Weekly Workouts </Text>
+                  <TextInput
+                    style={styles.goalCountInput}
+                    value={String(amanahGoals.weeklyWorkoutCompleted || 0)}
+                    onChangeText={(t) => setCounter('weeklyWorkoutCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'weeklyWorkoutGoal')}
+                    keyboardType="number-pad"
+                    maxLength={3}
+                  />
+                  <Text style={styles.goalLabel}> / {amanahGoals.weeklyWorkoutGoal} sessions</Text>
+                </View>
                 <View style={styles.progressBar}>
                   <View 
                     style={[
@@ -289,9 +320,17 @@ export default function AmanahSection() {
 
           <View style={styles.subsectionContent}>
             <View style={styles.goalItem}>
-              <Text style={styles.goalLabel}>
-                Weekly Meditation Sessions ({amanahGoals.weeklyMeditationCompleted}/{amanahGoals.weeklyMeditationGoal})
-              </Text>
+              <View style={styles.goalLabelRow}>
+                <Text style={styles.goalLabel}>Weekly Meditation </Text>
+                <TextInput
+                  style={styles.goalCountInput}
+                  value={String(amanahGoals.weeklyMeditationCompleted || 0)}
+                  onChangeText={(t) => setCounter('weeklyMeditationCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'weeklyMeditationGoal')}
+                  keyboardType="number-pad"
+                  maxLength={3}
+                />
+                <Text style={styles.goalLabel}> / {amanahGoals.weeklyMeditationGoal}</Text>
+              </View>
               <View style={styles.progressBar}>
                 <View 
                   style={[
@@ -367,9 +406,17 @@ export default function AmanahSection() {
 
           <View style={styles.subsectionContent}>
             <View style={styles.goalItem}>
-              <Text style={styles.goalLabel}>
-                Weekly Journal Entries ({amanahGoals.weeklyJournalCompleted}/{amanahGoals.weeklyJournalGoal})
-              </Text>
+              <View style={styles.goalLabelRow}>
+                <Text style={styles.goalLabel}>Weekly Journal </Text>
+                <TextInput
+                  style={styles.goalCountInput}
+                  value={String(amanahGoals.weeklyJournalCompleted || 0)}
+                  onChangeText={(t) => setCounter('weeklyJournalCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'weeklyJournalGoal')}
+                  keyboardType="number-pad"
+                  maxLength={3}
+                />
+                <Text style={styles.goalLabel}> / {amanahGoals.weeklyJournalGoal}</Text>
+              </View>
               <View style={styles.progressBar}>
                 <View 
                   style={[
@@ -445,9 +492,20 @@ export default function AmanahSection() {
 
           <View style={styles.subsectionContent}>
             <View style={styles.goalItem}>
-              <Text style={styles.goalLabel}>
-                Daily Sleep ({amanahGoals.dailySleepCompleted}/{amanahGoals.dailySleepGoal} hours)
-              </Text>
+              <View style={styles.goalLabelRow}>
+                <Text style={styles.goalLabel}>Daily Sleep </Text>
+                <TextInput
+                  style={styles.goalCountInput}
+                  value={String(amanahGoals.dailySleepCompleted ?? 0)}
+                  onChangeText={(t) => {
+                    const v = parseFloat(t.replace(/[^\d.]/g, ''));
+                    if (!isNaN(v)) setCounter('dailySleepCompleted', v, 'dailySleepGoal');
+                  }}
+                  keyboardType="decimal-pad"
+                  maxLength={4}
+                />
+                <Text style={styles.goalLabel}> / {amanahGoals.dailySleepGoal} hrs</Text>
+              </View>
               <View style={styles.progressBar}>
                 <View 
                   style={[
@@ -632,10 +690,28 @@ const styles = StyleSheet.create({
   goalItem: {
     gap: spacing.sm,
   },
+  goalLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
   goalLabel: {
     ...typography.body,
     color: colors.text,
     fontWeight: '600',
+  },
+  goalCountInput: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '700',
+    minWidth: 44,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.highlight,
+    textAlign: 'center',
   },
   progressBar: {
     height: 8,

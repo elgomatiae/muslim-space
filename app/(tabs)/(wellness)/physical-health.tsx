@@ -46,6 +46,7 @@ interface WorkoutDurations {
 export default function PhysicalHealthScreen() {
   const { user } = useAuth();
   const { amanahGoals, updateAmanahGoals, refreshScores } = useImanTracker();
+  const { t } = useTranslation();
   const [goals, setGoals] = useState<PhysicalWellnessGoals | null>(null);
   const [waterIntakeToday, setWaterIntakeToday] = useState(0);
   const [todayExerciseMinutes, setTodayExerciseMinutes] = useState(0);

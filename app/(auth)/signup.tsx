@@ -91,7 +91,7 @@ export default function SignupScreen() {
       if (data.user) {
         console.log('Signup successful:', data.user.id);
         console.log('Username from form:', username.trim());
-        
+
         if (Platform.OS !== 'web') {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
@@ -99,36 +99,10 @@ export default function SignupScreen() {
         // Clear error message on success
         setErrorMessage('');
 
-        // Check if email confirmation is required
-        if (data.user.identities && data.user.identities.length === 0) {
-          // User already exists
-          Alert.alert(
-            t('auth.accountExists'),
-            t('auth.accountExistsMessage'),
-            [
-              {
-                text: t('common.ok'),
-                onPress: () => router.replace('/(auth)/login'),
-              },
-            ]
-          );
-          setLoading(false);
-        } else {
-          // New user created - immediately create profile with username in Supabase
-          try {
-            console.log('📝 Creating user profile in Supabase with username:', username.trim());
-            await initializeUserProfile(
-              data.user.id,
-              username.trim(), // Use the username from the form
-              email.trim()
-            );
-            console.log('✅ User profile created successfully with username');
-          } catch (profileError) {
-            console.error('⚠️ Error creating profile (non-critical):', profileError);
-            // Continue even if profile creation fails - it will be created on login
-          }
-          
-          // Show email verification message
+        // If Supabase returned a session, the user is already signed in and RLS permits profile upserts.
+        // If email confirmation is required, `data.session` will be null; in that case we must NOT
+        // attempt to write to `profiles` yet, because `auth.uid()` is null and RLS will reject it.
+        if (!data.session) {
           Alert.alert(
             t('auth.verifyYourEmail'),
             t('auth.verificationEmailSent'),
@@ -139,8 +113,31 @@ export default function SignupScreen() {
               },
             ]
           );
-          setLoading(false);
+        } else {
+          // Now that we have an authenticated session, initialize/update the profile row.
+          try {
+            console.log('📝 Initializing user profile in Supabase...');
+            await initializeUserProfile(
+              data.user.id,
+              username.trim(),
+              email.trim()
+            );
+            console.log('✅ Profile initialized');
+          } catch (profileError) {
+            console.error('⚠️ Error initializing profile (non-critical):', profileError);
+            // Continue: profile will also be initialized on login via AuthContext.
+          }
+
+          // Navigation is normally handled by AuthContext, but we can also move the user forward.
+          try {
+            // Keep route consistent with other parts of the app/AuthContext
+            router.replace('/(tabs)/(home)/');
+          } catch (navError) {
+            console.error('Navigation error after signup:', navError);
+          }
         }
+
+        setLoading(false);
       }
     } catch (error: any) {
       console.error('Signup error:', error);
@@ -212,6 +209,7 @@ export default function SignupScreen() {
               }}
               autoCapitalize="none"
               editable={!loading}
+              textAlignVertical="center"
             />
           </View>
 
@@ -237,6 +235,7 @@ export default function SignupScreen() {
               autoCapitalize="none"
               autoComplete="email"
               editable={!loading}
+              textAlignVertical="center"
             />
           </View>
 
@@ -261,6 +260,7 @@ export default function SignupScreen() {
               secureTextEntry={!showPassword}
               autoCapitalize="none"
               editable={!loading}
+              textAlignVertical="center"
             />
             <TouchableOpacity
               style={styles.eyeIcon}
@@ -297,6 +297,7 @@ export default function SignupScreen() {
               secureTextEntry={!showConfirmPassword}
               autoCapitalize="none"
               editable={!loading}
+              textAlignVertical="center"
             />
             <TouchableOpacity
               style={styles.eyeIcon}
@@ -429,8 +430,10 @@ const styles = StyleSheet.create({
     flex: 1,
     ...typography.body,
     color: colors.text,
-    paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
+    paddingVertical: 0,
+    minHeight: 56,
+    textAlignVertical: 'center',
   },
   eyeIcon: {
     paddingRight: spacing.lg,

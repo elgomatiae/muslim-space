@@ -4,6 +4,10 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from '
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
+
+function gradient3(c: readonly string[]): readonly [string, string, string] {
+  return c as unknown as readonly [string, string, string];
+}
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useImanTracker } from '@/contexts/ImanTrackerContext';
 
@@ -74,7 +78,7 @@ export default function QuizResultScreen() {
       >
         {/* Result Banner */}
         <LinearGradient
-          colors={gradeColor}
+          colors={gradient3(gradeColor)}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.resultBanner}
@@ -152,7 +156,7 @@ export default function QuizResultScreen() {
         {/* Ilm Points Earned */}
         <View style={styles.pointsCard}>
           <LinearGradient
-            colors={colors.gradientPurple}
+            colors={gradient3(colors.gradientPurple)}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.pointsGradient}
@@ -185,7 +189,7 @@ export default function QuizResultScreen() {
           activeOpacity={0.8}
         >
           <LinearGradient
-            colors={colors.gradientPrimary}
+            colors={gradient3(colors.gradientPrimary)}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.actionButtonGradient}

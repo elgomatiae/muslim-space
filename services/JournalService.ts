@@ -2,7 +2,7 @@
  * JournalService - Service for managing journal entries
  */
 
-import { supabase } from '@/app/integrations/supabase/client';
+import { supabase } from '@/lib/integrations/supabase/client';
 
 export interface JournalEntry {
   id: string;
@@ -55,8 +55,7 @@ export async function saveJournalEntry(
   userId: string,
   title: string,
   content: string,
-  tags?: string[],
-  mood?: string
+  tags?: string[]
 ): Promise<JournalEntry | null> {
   try {
     console.log('💾 [JournalService] Saving journal entry...');
@@ -70,7 +69,7 @@ export async function saveJournalEntry(
       title: title.trim() || 'Untitled Entry',
       content: content.trim(),
       tags: tags || [],
-      mood: mood || null,
+      mood: null,
     };
 
     const { data, error } = await supabase
@@ -103,8 +102,7 @@ export async function updateJournalEntry(
   entryId: string,
   title: string,
   content: string,
-  tags?: string[],
-  mood?: string
+  tags?: string[]
 ): Promise<JournalEntry | null> {
   try {
     console.log('✏️ [JournalService] Updating journal entry:', entryId);
@@ -117,7 +115,7 @@ export async function updateJournalEntry(
       title: title.trim() || 'Untitled Entry',
       content: content.trim(),
       tags: tags || [],
-      mood: mood || null,
+      mood: null,
       updated_at: new Date().toISOString(),
     };
 

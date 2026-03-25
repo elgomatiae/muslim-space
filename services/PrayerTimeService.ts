@@ -5,7 +5,7 @@
 
 import { Coordinates, CalculationMethod, PrayerTimes, Madhab, HighLatitudeRule } from 'adhan';
 import { UserLocation, getCurrentLocation } from './LocationService';
-import { supabase } from '@/app/integrations/supabase/client';
+import { supabase } from '@/lib/integrations/supabase/client';
 
 export interface PrayerTime {
   name: string;

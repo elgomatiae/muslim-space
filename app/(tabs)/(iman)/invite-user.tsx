@@ -76,8 +76,7 @@ export default function InviteUserScreen() {
           errorMessage += 'No profiles found in database. Make sure users have signed up and have profiles.';
         }
         
-        const { getErrorMessage } = require('@/utils/errorHandler');
-        Alert.alert(t('iman.userNotFound'), getErrorMessage(error) || errorMessage);
+        Alert.alert(t('iman.userNotFound'), errorMessage);
         setLoading(false);
         return;
       }
@@ -135,14 +134,7 @@ export default function InviteUserScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow_back"
-            size={24}
-            color={colors.text}
-          />
-        </TouchableOpacity>
+        <View style={styles.backButton} />
         <Text style={styles.headerTitle}>Invite User</Text>
         <View style={styles.headerRight} />
       </View>

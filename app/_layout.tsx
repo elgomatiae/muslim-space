@@ -2,12 +2,12 @@
 import "react-native-reanimated";
 import React, { useEffect, useRef } from "react";
 import { useFonts } from "expo-font";
-import { Stack, router } from "expo-router";
+import { Stack, router, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useColorScheme, Alert } from "react-native";
+import { useColorScheme, Alert, Platform, View } from "react-native";
 import { useNetworkState } from "expo-network";
 import {
   DarkTheme,
@@ -23,6 +23,8 @@ import { ImanTrackerProvider } from "@/contexts/ImanTrackerContext";
 import { AchievementCelebrationProvider } from "@/contexts/AchievementCelebrationContext";
 import { I18nProvider } from "@/contexts/I18nContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { AdMobProvider } from "@/contexts/AdMobContext";
+import { BannerAdBar } from "@/components/ads/BannerAdBar";
 
 // Lazy NotificationProvider - only loads after React Native is fully initialized
 // This prevents native module crashes by delaying NotificationProvider initialization
@@ -35,7 +37,7 @@ function LazyNotificationProvider({ children }: { children: React.ReactNode }) {
     const timer = setTimeout(() => {
       // Double-check that React Native bridge is ready
       const isReady = 
-        (typeof global !== 'undefined' && global.__fbBatchedBridge) ||
+        (typeof global !== 'undefined' && (global as any).__fbBatchedBridge) ||
         (typeof window !== 'undefined');
       
       if (isReady) {
@@ -84,9 +86,31 @@ SplashScreen.preventAutoHideAsync().catch(() => {
   // Ignore errors if splash screen is already prevented
 });
 
+/** Minimum time the native splash stays visible so it doesn’t flash away instantly. */
+const SPLASH_MIN_VISIBLE_MS = 900;
+const splashClockStart = Date.now();
+
 export const unstable_settings = {
   initialRouteName: "index", // Start at index which checks auth and redirects
 };
+
+function GlobalBannerAdHost() {
+  const segments = useSegments();
+  const insets = useSafeAreaInsets();
+
+  if (Platform.OS === "web") return null;
+
+  // Tabs layout renders BannerAdBar. usePathname() omits (tabs) from the URL, so we
+  // must use segments — otherwise a second banner appears on Learning and other tabs.
+  const isInTabs = Array.isArray(segments) && segments[0] === "(tabs)";
+  if (isInTabs) return null;
+
+  return (
+    <View style={{ width: "100%", paddingBottom: insets.bottom, backgroundColor: "transparent" }}>
+      <BannerAdBar />
+    </View>
+  );
+}
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -136,17 +160,29 @@ export default function RootLayout() {
       console.warn('Font loading error (using system font):', fontError);
       // Continue with app - use system fonts
     }
-    
-    // Hide splash screen when fonts are loaded (or errored)
-    if ((loaded || fontError) && !splashScreenHidden.current) {
+
+    if (!loaded && !fontError) {
+      return;
+    }
+
+    if (splashScreenHidden.current) {
+      return;
+    }
+
+    const elapsed = Date.now() - splashClockStart;
+    const remaining = Math.max(0, SPLASH_MIN_VISIBLE_MS - elapsed);
+
+    const id = setTimeout(() => {
+      if (splashScreenHidden.current) return;
       splashScreenHidden.current = true;
       SplashScreen.hideAsync().catch((error) => {
-        // Ignore errors if splash screen is already hidden or not registered
         if (__DEV__) {
           console.log('Splash screen hide error (ignored):', error.message);
         }
       });
-    }
+    }, remaining);
+
+    return () => clearTimeout(id);
   }, [loaded, fontError]);
 
   React.useEffect(() => {
@@ -194,6 +230,7 @@ export default function RootLayout() {
     <ErrorBoundary>
       <SafeAreaProvider>
         <StatusBar style="auto" animated />
+        <AdMobProvider>
           <ThemeProvider
             value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
           >
@@ -205,18 +242,33 @@ export default function RootLayout() {
                   <ImanTrackerProvider>
                     <WidgetProvider>
                       <GestureHandlerRootView>
-                      <Stack>
-                      {/* Root index - handles auth routing */}
-                      <Stack.Screen name="index" options={{ headerShown: false }} />
-                      
-                      {/* Auth screens */}
-                      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flex: 1 }}>
+                            <Stack>
+                              {/* Root index - handles auth routing */}
+                              <Stack.Screen
+                                name="index"
+                                options={{ headerShown: false }}
+                              />
 
-                      {/* Main app with tabs - protected */}
-                      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                              {/* Auth screens */}
+                              <Stack.Screen
+                                name="(auth)"
+                                options={{ headerShown: false }}
+                              />
 
-                      </Stack>
-                      <SystemBars style={"auto"} />
+                              {/* Main app with tabs - protected */}
+                              <Stack.Screen
+                                name="(tabs)"
+                                options={{ headerShown: false }}
+                              />
+                            </Stack>
+                          </View>
+
+                          <GlobalBannerAdHost />
+                        </View>
+
+                        <SystemBars style={"auto"} />
                       </GestureHandlerRootView>
                     </WidgetProvider>
                   </ImanTrackerProvider>
@@ -225,6 +277,7 @@ export default function RootLayout() {
               </AuthProvider>
             </I18nProvider>
           </ThemeProvider>
+        </AdMobProvider>
       </SafeAreaProvider>
     </ErrorBoundary>
   );

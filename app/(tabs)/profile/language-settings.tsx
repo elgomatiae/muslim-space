@@ -11,7 +11,6 @@ import {
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
 import { useTranslation } from '@/contexts/I18nContext';
 import * as Haptics from 'expo-haptics';
 
@@ -92,22 +91,7 @@ export default function LanguageSettingsScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-          >
-            <IconSymbol
-              ios_icon_name="chevron.left"
-              android_material_icon_name="arrow-back"
-              size={24}
-              color={colors.text}
-            />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{t('language.title')}</Text>
-          <View style={styles.backButtonPlaceholder} />
-        </View>
+        {/* Stack header provides back to Profile tab root */}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('language.selectLanguage')}</Text>

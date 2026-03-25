@@ -89,6 +89,7 @@ const DHIKR_PHRASES: DhikrPhrase[] = [
 
 export default function DhikrWindowScreen() {
   const { ibadahGoals, updateIbadahGoals } = useImanTracker();
+  const { t } = useTranslation();
   const [selectedPhrase, setSelectedPhrase] = useState<DhikrPhrase>(DHIKR_PHRASES[0]);
   const [showPhraseSelector, setShowPhraseSelector] = useState(false);
   const [sessionCount, setSessionCount] = useState(0);
@@ -173,23 +174,9 @@ export default function DhikrWindowScreen() {
   const strokeDashoffset = circumference * (1 - progress);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.back();
-          }}
-          activeOpacity={0.7}
-        >
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow-back"
-            size={24}
-            color={colors.text}
-          />
-        </TouchableOpacity>
+        <View style={styles.backButton} />
         <Text style={styles.headerTitle}>Dhikr Counter</Text>
         <TouchableOpacity
           style={styles.resetButton}

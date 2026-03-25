@@ -2,7 +2,7 @@
  * RecitationService - Clean implementation for fetching Quran recitations
  */
 
-import { supabase } from '@/app/integrations/supabase/client';
+import { supabase } from '@/lib/integrations/supabase/client';
 
 export interface Recitation {
   id: string;

@@ -240,9 +240,9 @@ export async function scheduleDailyReminder(
         priority: Notifications.AndroidNotificationPriority.DEFAULT,
       },
       trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
         hour,
         minute,
-        repeats: true,
       },
     });
 
@@ -307,7 +307,10 @@ export async function updateNotificationPreferences(
     if (error) {
       // Handle table not found error gracefully
       if (error.code === 'PGRST205') {
-        console.log('⚠️ notification_preferences table not found - saving locally only. Please run migration 012_create_notification_preferences_table.sql');
+        if (!didLogMissingNotificationPreferences) {
+          didLogMissingNotificationPreferences = true;
+          console.log('⚠️ notification_preferences table not found - saving locally only. Please run migration 012_create_notification_preferences_table.sql');
+        }
       } else {
         console.log('Error updating notification preferences:', error);
       }
@@ -338,7 +341,10 @@ export async function loadNotificationPreferences(userId: string): Promise<any> 
     if (error) {
       // Handle table not found error gracefully
       if (error.code === 'PGRST205') {
-        console.log('⚠️ notification_preferences table not found - using local storage. Please run migration 012_create_notification_preferences_table.sql');
+        if (!didLogMissingNotificationPreferences) {
+          didLogMissingNotificationPreferences = true;
+          console.log('⚠️ notification_preferences table not found - using local storage. Please run migration 012_create_notification_preferences_table.sql');
+        }
         // Try to load from local storage
         try {
           const localPrefs = await AsyncStorage.getItem('notificationPreferences');
@@ -521,6 +527,14 @@ export async function updateNotificationSettings(
         console.log('✅ Prayer notifications enabled - will be scheduled when prayer times load');
       }
     }
+
+    if (settings.goalReminderNotifications !== undefined) {
+      if (!settings.goalReminderNotifications) {
+        await cancelSleepTrackingReminder();
+      } else {
+        await scheduleSleepTrackingReminder(userId);
+      }
+    }
   } catch (error) {
     console.log('Error updating notification settings:', error);
   }
@@ -599,6 +613,71 @@ const PRAYER_NOTIFICATION_IDS_KEY = '@prayer_notification_ids';
 const DAILY_GOAL_NOTIFICATION_IDS_KEY = '@daily_goal_notification_ids';
 const LAST_DAILY_GOAL_CHECK_KEY = '@last_daily_goal_check_date';
 
+/** Stable id for repeating local 10:00 sleep-tracking reminder (cancel when goal or goal-reminders off). */
+const SLEEP_TRACKING_NOTIFICATION_ID = 'sleep_tracking_reminder_10am';
+
+/**
+ * Cancel the dedicated daily 10 AM sleep tracking reminder.
+ */
+export async function cancelSleepTrackingReminder(): Promise<void> {
+  try {
+    await Notifications.cancelScheduledNotificationAsync(SLEEP_TRACKING_NOTIFICATION_ID);
+  } catch {
+    // Not scheduled or already cancelled
+  }
+}
+
+/**
+ * Schedule a repeating notification at 10:00 in the user's local timezone to log sleep,
+ * only when goal reminder notifications are enabled and the user has a non-zero sleep goal.
+ */
+export async function scheduleSleepTrackingReminder(userId?: string): Promise<void> {
+  try {
+    configureNotificationHandler();
+    await cancelSleepTrackingReminder();
+
+    const settings = await getNotificationSettings(userId);
+    if (!settings.goalReminderNotifications) {
+      return;
+    }
+
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') {
+      return;
+    }
+
+    const { loadAmanahGoals } = await import('./imanScoreCalculator');
+    const amanahGoals = await loadAmanahGoals(userId);
+    if (amanahGoals.dailySleepGoal <= 0) {
+      return;
+    }
+
+    await Notifications.scheduleNotificationAsync({
+      identifier: SLEEP_TRACKING_NOTIFICATION_ID,
+      content: {
+        title: '💤 Sleep tracking',
+        body: 'Log how you slept in the Sleep Tracker to stay on track with your wellness goal.',
+        sound: 'default',
+        priority: Notifications.AndroidNotificationPriority.DEFAULT,
+        categoryIdentifier: 'daily_goal',
+        channelId: 'daily_goal',
+        data: {
+          type: 'sleep_tracking_reminder',
+        },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: 10,
+        minute: 0,
+      },
+    });
+
+    console.log('✅ Scheduled sleep tracking reminder at 10:00 (local time), repeating daily');
+  } catch (error) {
+    console.error('Error scheduling sleep tracking reminder:', error);
+  }
+}
+
 // Weekly goal reminder notification IDs storage key
 const WEEKLY_GOAL_NOTIFICATION_IDS_KEY = '@weekly_goal_notification_ids';
 const LAST_WEEKLY_GOAL_CHECK_KEY = '@last_weekly_goal_check_date';
@@ -607,6 +686,10 @@ const LAST_WEEKLY_GOAL_CHECK_KEY = '@last_weekly_goal_check_date';
 const IMAN_SCORE_HISTORY_KEY = '@iman_score_daily_history';
 const LAST_LOW_SCORE_NOTIFICATION_KEY = '@last_low_score_notification';
 const LAST_DROP_NOTIFICATION_KEY = '@last_drop_notification';
+
+// Avoid spamming the same "table not found" warning every time the app loads.
+// (When migrations haven't been run yet, Supabase will throw PGRST205 repeatedly.)
+let didLogMissingNotificationPreferences = false;
 
 /**
  * Check and send Iman score drop notifications
@@ -912,6 +995,7 @@ export async function scheduleDailyGoalReminders(userId?: string): Promise<void>
     const settings = await getNotificationSettings(userId);
     if (!settings.goalReminderNotifications) {
       console.log('📵 Daily goal reminder notifications are disabled');
+      await cancelSleepTrackingReminder();
       return;
     }
 
@@ -919,11 +1003,15 @@ export async function scheduleDailyGoalReminders(userId?: string): Promise<void>
     const { status } = await Notifications.getPermissionsAsync();
     if (status !== 'granted') {
       console.log('📵 Notification permission not granted');
+      await cancelSleepTrackingReminder();
       return;
     }
 
     // Configure notification handler before scheduling
     configureNotificationHandler();
+
+    // Sleep: dedicated 10:00 local reminder (not mixed with staggered daily goal times)
+    await scheduleSleepTrackingReminder(userId);
 
     // Check if we've already scheduled notifications for today
     // Note: We still allow rescheduling if goals are updated (checked by caller)
@@ -1029,16 +1117,7 @@ export async function scheduleDailyGoalReminders(userId?: string): Promise<void>
       });
     }
 
-    // Check Sleep (if goal is set)
-    if (amanahGoals.dailySleepGoal > 0 && amanahGoals.dailySleepCompleted < amanahGoals.dailySleepGoal) {
-      incompleteGoals.push({
-        type: 'sleep',
-        title: 'Sleep Goal Reminder',
-        message: `You have ${amanahGoals.dailySleepGoal - amanahGoals.dailySleepCompleted} hour${amanahGoals.dailySleepGoal - amanahGoals.dailySleepCompleted > 1 ? 's' : ''} of sleep remaining to reach your goal today.`,
-        goal: amanahGoals.dailySleepGoal,
-        completed: amanahGoals.dailySleepCompleted,
-      });
-    }
+    // NOTE: Sleep is NOT included here — it uses scheduleSleepTrackingReminder (10:00 local, repeating)
 
     if (incompleteGoals.length === 0) {
       console.log('✅ All daily goals are complete! No reminders needed.');
@@ -1106,7 +1185,7 @@ export async function scheduleDailyGoalReminders(userId?: string): Promise<void>
           },
         },
         trigger: {
-          type: 'date',
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
           date: notificationDate,
         },
         identifier: `daily_goal_${goal.type}_${notificationDate.toISOString()}`,
@@ -1308,6 +1387,17 @@ export async function scheduleWeeklyGoalReminders(userId?: string): Promise<void
         message: `You have ${ilmGoals.weeklyReflectionGoal - ilmGoals.weeklyReflectionCompleted} reflection${ilmGoals.weeklyReflectionGoal - ilmGoals.weeklyReflectionCompleted > 1 ? 's' : ''} remaining this week.`,
         goal: ilmGoals.weeklyReflectionGoal,
         completed: ilmGoals.weeklyReflectionCompleted,
+      });
+    }
+
+    // Check Islamic Stories
+    if (ilmGoals.weeklyStoriesGoal > 0 && ilmGoals.weeklyStoriesCompleted < ilmGoals.weeklyStoriesGoal) {
+      incompleteGoals.push({
+        type: 'stories',
+        title: 'Islamic Stories Reminder',
+        message: `You have ${ilmGoals.weeklyStoriesGoal - ilmGoals.weeklyStoriesCompleted} stor${ilmGoals.weeklyStoriesGoal - ilmGoals.weeklyStoriesCompleted > 1 ? 'ies' : 'y'} left to read this week.`,
+        goal: ilmGoals.weeklyStoriesGoal,
+        completed: ilmGoals.weeklyStoriesCompleted,
       });
     }
 

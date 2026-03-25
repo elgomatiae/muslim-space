@@ -12,7 +12,8 @@ import {
   IbadahGoals,
   IlmGoals,
   AmanahGoals,
-  getOverallImanScore,
+  calculateAllSectionScores,
+  calculateOverallImanScore,
   getCurrentSectionScores,
   checkAndHandleResets
 } from '@/utils/imanScoreCalculator';
@@ -55,10 +56,13 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
     if (!user?.id) return;
 
     try {
-      const [overall, sections] = await Promise.all([
-        getOverallImanScore(user.id),
-        getCurrentSectionScores(user.id),
+      const [ibadahGoals, ilmGoals, amanahGoals] = await Promise.all([
+        loadIbadahGoals(user.id),
+        loadIlmGoals(user.id),
+        loadAmanahGoals(user.id),
       ]);
+      const sections = await calculateAllSectionScores(ibadahGoals, ilmGoals, amanahGoals, user.id);
+      const overall = calculateOverallImanScore(sections, ibadahGoals, ilmGoals, amanahGoals);
 
       setImanScore(overall);
       setSectionScores(sections);
@@ -243,6 +247,26 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       });
   }, [user?.id, loadAllGoals]);
 
+  // Time-based decay refresh (daily/weekly score should slowly fade).
+  // Recalculate periodically while the app is active so the UI feels smooth.
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const intervalMs = 60 * 1000; // 1 minute cadence
+    const id = setInterval(() => {
+      try {
+        if (AppState.currentState !== 'active') return;
+        checkAndHandleResets(user.id)
+          .then(() => refreshScores())
+          .catch(() => {});
+      } catch {
+        // ignore
+      }
+    }, intervalMs);
+
+    return () => clearInterval(id);
+  }, [user?.id, refreshScores]);
+
   const updateIbadahGoals = useCallback(async (goals: Partial<IbadahGoals>) => {
     if (!user?.id) {
       console.error('❌ Cannot update goals: no user logged in');
@@ -263,19 +287,11 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       
       // Calculate scores immediately with updated goals (don't wait for storage reload)
       try {
-        const { calculateAllSectionScores } = await import('@/utils/imanScoreCalculator');
-        const WEIGHTS = { ibadah: 0.60, ilm: 0.25, amanah: 0.15 };
-        
+        const { calculateAllSectionScores, calculateOverallImanScore } = await import('@/utils/imanScoreCalculator');
         const sections = await calculateAllSectionScores(updated, ilmGoals, amanahGoals, user.id);
-        const overall = Math.round(
-          (sections.ibadah * WEIGHTS.ibadah) +
-          (sections.ilm * WEIGHTS.ilm) +
-          (sections.amanah * WEIGHTS.amanah)
-        );
-        
+        const overall = calculateOverallImanScore(sections, updated, ilmGoals, amanahGoals);
         setImanScore(overall);
         setSectionScores(sections);
-        
         console.log(`✅ Scores updated immediately: Ibadah=${sections.ibadah}%, Ilm=${sections.ilm}%, Amanah=${sections.amanah}%, Overall=${overall}%`);
       } catch (scoreErr) {
         console.error('Error calculating scores immediately:', scoreErr);
@@ -350,19 +366,11 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       
       // Calculate scores immediately with updated goals (don't wait for storage reload)
       try {
-        const { calculateAllSectionScores } = await import('@/utils/imanScoreCalculator');
-        const WEIGHTS = { ibadah: 0.60, ilm: 0.25, amanah: 0.15 };
-        
+        const { calculateAllSectionScores, calculateOverallImanScore } = await import('@/utils/imanScoreCalculator');
         const sections = await calculateAllSectionScores(ibadahGoals, updated, amanahGoals, user.id);
-        const overall = Math.round(
-          (sections.ibadah * WEIGHTS.ibadah) +
-          (sections.ilm * WEIGHTS.ilm) +
-          (sections.amanah * WEIGHTS.amanah)
-        );
-        
+        const overall = calculateOverallImanScore(sections, ibadahGoals, updated, amanahGoals);
         setImanScore(overall);
         setSectionScores(sections);
-        
         console.log(`✅ Scores updated immediately: Ibadah=${sections.ibadah}%, Ilm=${sections.ilm}%, Amanah=${sections.amanah}%, Overall=${overall}%`);
       } catch (scoreErr) {
         console.error('Error calculating scores immediately:', scoreErr);
@@ -437,19 +445,11 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
       
       // Calculate scores immediately with updated goals (don't wait for storage reload)
       try {
-        const { calculateAllSectionScores } = await import('@/utils/imanScoreCalculator');
-        const WEIGHTS = { ibadah: 0.60, ilm: 0.25, amanah: 0.15 };
-        
+        const { calculateAllSectionScores, calculateOverallImanScore } = await import('@/utils/imanScoreCalculator');
         const sections = await calculateAllSectionScores(ibadahGoals, ilmGoals, updated, user.id);
-        const overall = Math.round(
-          (sections.ibadah * WEIGHTS.ibadah) +
-          (sections.ilm * WEIGHTS.ilm) +
-          (sections.amanah * WEIGHTS.amanah)
-        );
-        
+        const overall = calculateOverallImanScore(sections, ibadahGoals, ilmGoals, updated);
         setImanScore(overall);
         setSectionScores(sections);
-        
         console.log(`✅ Scores updated immediately: Ibadah=${sections.ibadah}%, Ilm=${sections.ilm}%, Amanah=${sections.amanah}%, Overall=${overall}%`);
       } catch (scoreErr) {
         console.error('Error calculating scores immediately:', scoreErr);

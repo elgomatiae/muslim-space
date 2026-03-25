@@ -320,6 +320,21 @@ export async function logIlmActivity(
       });
     }
 
+    // Check for Islamic story reading
+    if (newGoals.weeklyStoriesCompleted > (oldGoals.weeklyStoriesCompleted || 0)) {
+      const increase = newGoals.weeklyStoriesCompleted - (oldGoals.weeklyStoriesCompleted || 0);
+      await logActivity({
+        userId,
+        activityType: 'story_read',
+        activityCategory: 'ilm',
+        activityTitle: `Islamic Story Read`,
+        activityDescription: `Tracked ${increase} stor${increase > 1 ? 'ies' : 'y'}`,
+        activityValue: increase,
+        activityUnit: 'stories',
+        pointsEarned: increase * 6,
+      });
+    }
+
     // Check for goal completions (reaching 100%)
     const checkGoalCompletion = (
       completed: number,
@@ -359,6 +374,15 @@ export async function logIlmActivity(
         newGoals.weeklyQuizzesGoal,
         oldGoals.weeklyQuizzesCompleted || 0,
         'Weekly Quizzes',
+        'ilm'
+      );
+    }
+    if (newGoals.weeklyStoriesGoal > 0) {
+      await checkGoalCompletion(
+        newGoals.weeklyStoriesCompleted,
+        newGoals.weeklyStoriesGoal,
+        oldGoals.weeklyStoriesCompleted || 0,
+        'Weekly Islamic Stories',
         'ilm'
       );
     }

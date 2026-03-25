@@ -1,14 +1,6 @@
-
 import { Stack } from 'expo-router';
+import { miniTabStackScreenOptions, TAB_ROOT_HREFS } from '@/components/navigation/miniTabStack';
 
 export default function LearningLayout() {
-  return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="quizzes" />
-      <Stack.Screen name="lectures" />
-      <Stack.Screen name="quiz-take" />
-      <Stack.Screen name="quiz-result" />
-    </Stack>
-  );
+  return <Stack screenOptions={miniTabStackScreenOptions(TAB_ROOT_HREFS.learning)} />;
 }

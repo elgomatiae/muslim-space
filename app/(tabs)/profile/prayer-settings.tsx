@@ -11,14 +11,12 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { getCurrentLocation, hasLocationPermission, requestLocationPermission } from '@/services/LocationService';
 import { getTodayPrayerTimes } from '@/services/PrayerTimeService';
 
 export default function PrayerSettingsScreen() {
-  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [locationInfo, setLocationInfo] = useState<string>('');
   const [prayerTimes, setPrayerTimes] = useState<any>(null);
@@ -78,23 +76,7 @@ export default function PrayerSettingsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow-back"
-            size={24}
-            color={colors.text}
-          />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Prayer Settings</Text>
-        <View style={styles.backButton} />
-      </View>
+      {/* Stack header provides back to Profile tab root */}
 
       {/* Location Card */}
       <View style={styles.card}>

@@ -39,6 +39,7 @@ export async function clearUserSpecificData(userId: string): Promise<void> {
       `dhikrGoals_${userId}`,
       `quranGoals_${userId}`,
       `lastResetCheck_${userId}`,
+      `storyReadingTracked_${userId}`,
     ];
 
     await Promise.all(keys.map(key => AsyncStorage.removeItem(key)));

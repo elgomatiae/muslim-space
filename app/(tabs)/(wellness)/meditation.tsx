@@ -11,6 +11,8 @@ import { useTranslation } from "@/contexts/I18nContext";
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAccessGate } from '@/hooks/useAccessGate';
+import { AccessGate } from '@/components/access/AccessGate';
 
 interface MeditationPractice {
   title: string;
@@ -46,6 +48,7 @@ export default function MeditationScreen() {
     updateAmanahGoals, 
     refreshScores 
   } = useImanTracker();
+  const { checkAccess, showGate, gateVisible, onGateClose, onGateGranted } = useAccessGate();
   const [sessions, setSessions] = useState<MeditationSession[]>([]);
   const [todayCount, setTodayCount] = useState(0);
   const [dailyGoal, setDailyGoal] = useState(1);
@@ -55,6 +58,7 @@ export default function MeditationScreen() {
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [timerInterval, setTimerInterval] = useState<NodeJS.Timeout | null>(null);
+  const [pendingPractice, setPendingPractice] = useState<MeditationPractice | null>(null);
   
   // Breathing animation
   const breatheAnim = useRef(new Animated.Value(0)).current;
@@ -205,13 +209,36 @@ export default function MeditationScreen() {
     breatheOpacity.setValue(1);
   };
 
-  const handleStartPractice = (practice: MeditationPractice) => {
-    setSelectedPractice(practice);
-    setTimeRemaining(practice.duration * 60);
-    setIsTimerActive(false);
-    setDhikrCount(0);
-    setCurrentPhraseIndex(0);
-    setShowSessionModal(true);
+  const handleStartPractice = async (practice: MeditationPractice) => {
+    // Check if user has access
+    if (await checkAccess()) {
+      // User has access, start practice directly
+      setSelectedPractice(practice);
+      setTimeRemaining(practice.duration * 60);
+      setIsTimerActive(false);
+      setDhikrCount(0);
+      setCurrentPhraseIndex(0);
+      setShowSessionModal(true);
+    } else {
+      // No access, show gate and store the practice
+      setPendingPractice(practice);
+      showGate();
+    }
+  };
+
+  // Handle access granted - start pending practice
+  const handleGateGranted = () => {
+    onGateGranted();
+    if (pendingPractice) {
+      const practice = pendingPractice;
+      setPendingPractice(null);
+      setSelectedPractice(practice);
+      setTimeRemaining(practice.duration * 60);
+      setIsTimerActive(false);
+      setDhikrCount(0);
+      setCurrentPhraseIndex(0);
+      setShowSessionModal(true);
+    }
   };
 
   const startTimer = () => {
@@ -752,19 +779,27 @@ export default function MeditationScreen() {
                       </TouchableOpacity>
 
                       <Text style={styles.dhikrInstruction}>
-                        Tap the circle to count your dhikr
+                        Tap the circle to count • Tap a phrase below to switch
                       </Text>
 
                       <View style={styles.dhikrPhrasesList}>
                         {DHIKR_PHRASES.map((phrase, index) => (
-                          <React.Fragment key={index}>
-                            <View 
-                              style={[
-                                styles.dhikrPhraseItem,
-                                index === currentPhraseIndex && styles.dhikrPhraseItemActive,
-                                index < currentPhraseIndex && styles.dhikrPhraseItemComplete,
-                              ]}
-                            >
+                          <TouchableOpacity
+                            key={index}
+                            activeOpacity={0.7}
+                            onPress={() => {
+                              if (index !== currentPhraseIndex) {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                setCurrentPhraseIndex(index);
+                                setDhikrCount(0);
+                              }
+                            }}
+                            style={[
+                              styles.dhikrPhraseItem,
+                              index === currentPhraseIndex && styles.dhikrPhraseItemActive,
+                              index < currentPhraseIndex && styles.dhikrPhraseItemComplete,
+                            ]}
+                          >
                               <View style={styles.dhikrPhraseCheck}>
                                 {index < currentPhraseIndex ? (
                                   <IconSymbol
@@ -787,8 +822,7 @@ export default function MeditationScreen() {
                                 <Text style={styles.dhikrPhraseTransliteration}>{phrase.transliteration}</Text>
                                 <Text style={styles.dhikrPhraseCount}>×{phrase.count}</Text>
                               </View>
-                            </View>
-                          </React.Fragment>
+                            </TouchableOpacity>
                         ))}
                       </View>
                     </View>
@@ -959,6 +993,15 @@ export default function MeditationScreen() {
           </SafeAreaView>
         )}
       </Modal>
+
+      {/* Access Gate Modal */}
+      <AccessGate
+        visible={gateVisible}
+        onClose={onGateClose}
+        onAccessGranted={handleGateGranted}
+        title="Unlock Meditation"
+        description="Watch a short ad to unlock access to meditation sessions"
+      />
     </SafeAreaView>
   );
 }

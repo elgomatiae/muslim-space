@@ -8,7 +8,7 @@ interface AchievementProgress {
   current_value: number;
 }
 
-interface UserStats {
+export interface UserStats {
   total_prayers: number;
   total_dhikr: number;
   total_quran_pages: number;
@@ -18,6 +18,62 @@ interface UserStats {
   quizzes_completed: number;
   workouts_completed: number;
   meditation_sessions: number;
+}
+
+/** Maps achievement `requirement_type` → value from `calculateUserStats` (single source of truth). */
+export function getCurrentValueForRequirement(requirementType: string, stats: UserStats): number {
+  switch (requirementType) {
+    case 'total_prayers':
+      return stats.total_prayers;
+    case 'total_dhikr':
+      return stats.total_dhikr;
+    case 'total_quran_pages':
+      return stats.total_quran_pages;
+    case 'streak':
+      return stats.current_streak;
+    case 'days_active':
+      return stats.days_active;
+    case 'lectures_watched':
+      return stats.lectures_watched;
+    case 'quizzes_completed':
+      return stats.quizzes_completed;
+    case 'workouts_completed':
+      return stats.workouts_completed;
+    case 'meditation_sessions':
+      return stats.meditation_sessions;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Persist latest stats to AsyncStorage so any legacy reads of `iman_tracker_history_*` stay aligned with Supabase-derived counts.
+ */
+export async function syncLocalAchievementHistoryCache(userId: string, stats: UserStats): Promise<void> {
+  try {
+    const key = `iman_tracker_history_${userId}`;
+    const prevRaw = await AsyncStorage.getItem(key);
+    const prev = prevRaw ? JSON.parse(prevRaw) : {};
+    await AsyncStorage.setItem(
+      key,
+      JSON.stringify({
+        ...prev,
+        totalPrayers: stats.total_prayers,
+        totalDhikr: stats.total_dhikr,
+        totalQuranPages: stats.total_quran_pages,
+        currentStreak: stats.current_streak,
+        streak: stats.current_streak,
+        daysActive: stats.days_active,
+        lecturesWatched: stats.lectures_watched,
+        quizzesCompleted: stats.quizzes_completed,
+        workoutsCompleted: stats.workouts_completed,
+        meditationSessions: stats.meditation_sessions,
+        lastAchievementStatsSync: new Date().toISOString(),
+      })
+    );
+  } catch (e) {
+    if (__DEV__) console.log('syncLocalAchievementHistoryCache:', e);
+  }
 }
 
 /**
@@ -46,13 +102,12 @@ export async function calculateUserStats(userId: string): Promise<UserStats> {
         .eq('user_id', userId)
         .single(),
       
-      // Count completed lectures
+      // Lectures: count rows the user tracked (insert = completed tracking flow). Do not require `completed` — legacy rows used wrong columns and stayed false.
       supabase
         .from('tracked_content')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
-        .eq('content_type', 'lecture')
-        .eq('completed', true),
+        .eq('content_type', 'lecture'),
       
       // Count completed quizzes
       supabase
@@ -755,39 +810,7 @@ export async function checkAndUnlockAchievements(userId: string): Promise<string
         continue;
       }
 
-      // Get current value based on requirement type
-      let currentValue = 0;
-      switch (achievement.requirement_type) {
-        case 'total_prayers':
-          currentValue = stats.total_prayers;
-          break;
-        case 'total_dhikr':
-          currentValue = stats.total_dhikr;
-          break;
-        case 'total_quran_pages':
-          currentValue = stats.total_quran_pages;
-          break;
-        case 'streak':
-          currentValue = stats.current_streak;
-          break;
-        case 'days_active':
-          currentValue = stats.days_active;
-          break;
-        case 'lectures_watched':
-          currentValue = stats.lectures_watched;
-          break;
-        case 'quizzes_completed':
-          currentValue = stats.quizzes_completed;
-          break;
-        case 'workouts_completed':
-          currentValue = stats.workouts_completed;
-          break;
-        case 'meditation_sessions':
-          currentValue = stats.meditation_sessions;
-          break;
-        default:
-          currentValue = 0;
-      }
+      const currentValue = getCurrentValueForRequirement(achievement.requirement_type, stats);
 
       // Add to batch progress update
       progressUpdates.push({
@@ -927,39 +950,7 @@ export async function calculateAchievementProgress(
     // Get user stats
     const stats = await calculateUserStats(userId);
 
-    // Get current value based on requirement type
-    let currentValue = 0;
-    switch (achievement.requirement_type) {
-      case 'total_prayers':
-        currentValue = stats.total_prayers;
-        break;
-      case 'total_dhikr':
-        currentValue = stats.total_dhikr;
-        break;
-      case 'total_quran_pages':
-        currentValue = stats.total_quran_pages;
-        break;
-      case 'streak':
-        currentValue = stats.current_streak;
-        break;
-      case 'days_active':
-        currentValue = stats.days_active;
-        break;
-      case 'lectures_watched':
-        currentValue = stats.lectures_watched;
-        break;
-      case 'quizzes_completed':
-        currentValue = stats.quizzes_completed;
-        break;
-      case 'workouts_completed':
-        currentValue = stats.workouts_completed;
-        break;
-      case 'meditation_sessions':
-        currentValue = stats.meditation_sessions;
-        break;
-      default:
-        currentValue = 0;
-    }
+    const currentValue = getCurrentValueForRequirement(achievement.requirement_type, stats);
 
     const percentage = Math.min(100, (currentValue / achievement.requirement_value) * 100);
 
@@ -1033,36 +1024,7 @@ export async function getAchievementSuggestions(userId: string): Promise<any[]> 
     const suggestions = achievements
       .filter(a => !unlockedIds.has(a.id))
       .map(achievement => {
-        let currentValue = 0;
-        switch (achievement.requirement_type) {
-          case 'total_prayers':
-            currentValue = stats.total_prayers;
-            break;
-          case 'total_dhikr':
-            currentValue = stats.total_dhikr;
-            break;
-          case 'total_quran_pages':
-            currentValue = stats.total_quran_pages;
-            break;
-          case 'streak':
-            currentValue = stats.current_streak;
-            break;
-          case 'days_active':
-            currentValue = stats.days_active;
-            break;
-          case 'lectures_watched':
-            currentValue = stats.lectures_watched;
-            break;
-          case 'quizzes_completed':
-            currentValue = stats.quizzes_completed;
-            break;
-          case 'workouts_completed':
-            currentValue = stats.workouts_completed;
-            break;
-          case 'meditation_sessions':
-            currentValue = stats.meditation_sessions;
-            break;
-        }
+        const currentValue = getCurrentValueForRequirement(achievement.requirement_type, stats);
 
         const progress = (currentValue / achievement.requirement_value) * 100;
 

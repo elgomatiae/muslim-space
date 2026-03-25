@@ -8,12 +8,11 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/app/integrations/supabase/client';
+import { supabase } from '@/lib/integrations/supabase/client';
 import { hasLocationPermission, requestLocationPermission } from '@/services/LocationService';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 interface HealthCheckResult {
@@ -259,13 +258,6 @@ export default function HealthCheckScreen() {
           </View>
         )}
 
-        {/* Close Button */}
-        <TouchableOpacity
-          style={styles.closeButton}
-          onPress={() => router.back()}
-        >
-          <Text style={styles.closeButtonText}>Close</Text>
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );

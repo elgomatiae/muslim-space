@@ -9,6 +9,10 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from '@/contexts/I18nContext';
 import { supabase } from '@/lib/supabase';
 
+function gradient3(c: readonly string[]): readonly [string, string, string] {
+  return c as unknown as readonly [string, string, string];
+}
+
 interface QuizQuestion {
   id: string;
   question: string;
@@ -523,7 +527,7 @@ export default function QuizTakeScreen() {
           activeOpacity={0.8}
         >
           <LinearGradient
-            colors={colors.gradientPrimary}
+            colors={gradient3(colors.gradientPrimary)}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.actionButtonGradient}

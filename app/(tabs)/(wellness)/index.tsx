@@ -1,1021 +1,458 @@
-
-import React, { useState, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import React, { useMemo, useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ScrollView,
+  Platform,
+} from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
-import { LinearGradient } from "expo-linear-gradient";
-import * as Haptics from 'expo-haptics';
+import * as Haptics from "expo-haptics";
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
 import { useTranslation } from "@/contexts/I18nContext";
 import { router } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { TabHubHeader, TabHubHeaderIconDecoration } from "@/components/navigation/TabHubHeader";
 
-import { getScreenWidth } from '@/utils/screenDimensions';
+type WellnessTab = "mental" | "physical";
 
-const SCREEN_WIDTH = getScreenWidth();
-const CARD_WIDTH = (SCREEN_WIDTH - spacing.lg * 3) / 2;
-
-// Header animation constants
-const HEADER_MAX_HEIGHT = 180;
-const HEADER_MIN_HEIGHT = 80;
-const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
-
-type WellnessTab = 'mental' | 'physical';
-
-interface WellnessCardProps {
+type LinkItem = {
   title: string;
   subtitle: string;
   icon: string;
-  androidIcon: string;
-  gradient: string[];
-  onPress: () => void;
-}
-
-const WellnessCard: React.FC<WellnessCardProps> = ({ title, subtitle, icon, androidIcon, gradient, onPress }) => {
-  const scaleAnim = React.useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.96,
-      useNativeDriver: true,
-      tension: 300,
-      friction: 10,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      tension: 300,
-      friction: 10,
-    }).start();
-  };
-
-  return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-      <TouchableOpacity
-        style={styles.wellnessCard}
-        activeOpacity={1}
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-      >
-        <LinearGradient
-          colors={gradient as unknown as readonly [string, string, ...string[]]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.cardGradient}
-        >
-          <View style={styles.cardTopSection}>
-            <View style={styles.cardIconWrapper}>
-              <IconSymbol
-                ios_icon_name={icon}
-                android_material_icon_name={androidIcon as keyof typeof MaterialIcons.glyphMap}
-                size={38}
-                color={colors.card}
-              />
-            </View>
-            <View style={styles.cardArrow}>
-              <IconSymbol
-                ios_icon_name="arrow.right.circle.fill"
-                android_material_icon_name="arrow-forward-ios"
-                size={20}
-                color={colors.card}
-              />
-            </View>
-          </View>
-          <View style={styles.cardContent}>
-            <Text style={styles.cardTitle}>{title}</Text>
-            <Text style={styles.cardSubtitle}>{subtitle}</Text>
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
-    </Animated.View>
-  );
+  androidIcon: keyof typeof MaterialIcons.glyphMap;
+  tint: string;
+  route: string;
 };
+
+function HubLinkRow({
+  title,
+  subtitle,
+  icon,
+  androidIcon,
+  tint,
+  onPress,
+}: {
+  title: string;
+  subtitle: string;
+  icon: string;
+  androidIcon: keyof typeof MaterialIcons.glyphMap;
+  tint: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.92 }]}
+      android_ripple={{ color: "rgba(139,92,246,0.08)" }}
+    >
+      <View style={[styles.linkIcon, { backgroundColor: tint + "22" }]}>
+        <IconSymbol ios_icon_name={icon} android_material_icon_name={androidIcon} size={22} color={tint} />
+      </View>
+      <View style={styles.linkCopy}>
+        <Text style={styles.linkTitle} numberOfLines={1}>
+          {title}
+        </Text>
+        <Text style={styles.linkSubtitle} numberOfLines={1}>
+          {subtitle}
+        </Text>
+      </View>
+      <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={18} color={colors.textSecondary} />
+    </Pressable>
+  );
+}
 
 export default function WellnessScreen() {
   const { t } = useTranslation();
-  const { amanahGoals, sectionScores } = useImanTracker();
-  const [activeTab, setActiveTab] = useState<WellnessTab>('mental');
-  const tabScaleAnim = useRef(new Animated.Value(1)).current;
-  
-  // Scroll animation values
-  const scrollY = useRef(new Animated.Value(0)).current;
-  
-  // Header height animation
-  const headerHeight = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
-    extrapolate: 'clamp',
-  });
-  
-  // Header content opacity
-  const headerContentOpacity = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE / 2, HEADER_SCROLL_DISTANCE],
-    outputRange: [1, 0.3, 0],
-    extrapolate: 'clamp',
-  });
-  
-  // Header subtitle opacity (fade faster)
-  const headerSubtitleOpacity = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE / 3],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-  
-  // Score info row opacity (fade faster)
-  const scoreInfoOpacity = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE / 3],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-  
-  // Icon and score circle scale
-  const headerIconScale = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [1, 0.7],
-    extrapolate: 'clamp',
-  });
-  
-  // Title scale for collapsed state
-  const headerTitleScale = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [1, 0.85],
-    extrapolate: 'clamp',
-  });
+  const insets = useSafeAreaInsets();
+  const { sectionScores } = useImanTracker();
+  const [activeTab, setActiveTab] = useState<WellnessTab>("mental");
 
-  // Calculate Amanah completion percentage
-  const calculateAmanahCompletion = () => {
-    if (!amanahGoals) return 0;
-    
-    let totalGoals = 0;
-    let completedGoals = 0;
-    
-    // Physical goals
-    if (amanahGoals.dailyExerciseGoal > 0) {
-      totalGoals++;
-      if (amanahGoals.dailyExerciseCompleted >= amanahGoals.dailyExerciseGoal) completedGoals++;
-    }
-    if (amanahGoals.dailyWaterGoal > 0) {
-      totalGoals++;
-      if (amanahGoals.dailyWaterCompleted >= amanahGoals.dailyWaterGoal) completedGoals++;
-    }
-    if (amanahGoals.weeklyWorkoutGoal > 0) {
-      totalGoals++;
-      if (amanahGoals.weeklyWorkoutCompleted >= amanahGoals.weeklyWorkoutGoal) completedGoals++;
-    }
-    
-    // Mental goals
-    if (amanahGoals.weeklyMentalHealthGoal > 0) {
-      totalGoals++;
-      if (amanahGoals.weeklyMentalHealthCompleted >= amanahGoals.weeklyMentalHealthGoal) completedGoals++;
-    }
-    if (amanahGoals.weeklyStressManagementGoal > 0) {
-      totalGoals++;
-      if (amanahGoals.weeklyStressManagementCompleted >= amanahGoals.weeklyStressManagementGoal) completedGoals++;
-    }
-    
-    // Sleep goals
-    if (amanahGoals.dailySleepGoal > 0) {
-      totalGoals++;
-      if (amanahGoals.dailySleepCompleted >= amanahGoals.dailySleepGoal) completedGoals++;
-    }
-    
-    return totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0;
-  };
+  const bottomPad = Math.max(100, insets.bottom + 88);
 
-  const amanahCompletion = calculateAmanahCompletion();
   const amanahScore = sectionScores.amanah || 0;
 
-  const handleTabChange = (tab: WellnessTab) => {
+  const mentalLinks: LinkItem[] = useMemo(
+    () => [
+      {
+        title: t("wellness.journal"),
+        subtitle: t("wellness.journalSubtitle"),
+        icon: "book.fill",
+        androidIcon: "menu-book",
+        tint: colors.primaryDark,
+        route: "/(tabs)/(wellness)/journal",
+      },
+      {
+        title: t("wellness.meditation"),
+        subtitle: t("wellness.meditationSubtitle"),
+        icon: "leaf.fill",
+        androidIcon: "spa",
+        tint: colors.secondaryDark,
+        route: "/(tabs)/(wellness)/meditation",
+      },
+      {
+        title: t("wellness.healingDuas"),
+        subtitle: t("wellness.healingDuasSubtitle"),
+        icon: "hands.sparkles.fill",
+        androidIcon: "self-improvement",
+        tint: "#7C3AED",
+        route: "/(tabs)/(wellness)/mental-duas",
+      },
+      {
+        title: t("wellness.support"),
+        subtitle: t("wellness.supportSubtitle"),
+        icon: "heart.fill",
+        androidIcon: "favorite",
+        tint: colors.accentDark,
+        route: "/(tabs)/(wellness)/emotional-support",
+      },
+    ],
+    [t]
+  );
+
+  const physicalLinks: LinkItem[] = useMemo(
+    () => [
+      {
+        title: t("wellness.activity"),
+        subtitle: t("wellness.activitySubtitle"),
+        icon: "figure.mixed.cardio",
+        androidIcon: "fitness-center",
+        tint: colors.warningDark,
+        route: "/(tabs)/(wellness)/activity-tracker",
+      },
+      {
+        title: t("wellness.sleep"),
+        subtitle: t("wellness.sleepSubtitle"),
+        icon: "moon.stars.fill",
+        androidIcon: "bedtime",
+        tint: colors.secondaryDark,
+        route: "/(tabs)/(wellness)/sleep-tracker",
+      },
+      {
+        title: t("wellness.goals"),
+        subtitle: t("wellness.goalsSubtitle"),
+        icon: "target",
+        androidIcon: "track-changes",
+        tint: colors.info,
+        route: "/(tabs)/(wellness)/physical-goals",
+      },
+      {
+        title: t("wellness.history"),
+        subtitle: t("wellness.historySubtitle"),
+        icon: "chart.line.uptrend.xyaxis",
+        androidIcon: "trending-up",
+        tint: "#7C3AED",
+        route: "/(tabs)/(wellness)/activity-history",
+      },
+    ],
+    [t]
+  );
+
+  const activeLinks = activeTab === "mental" ? mentalLinks : physicalLinks;
+
+  const handleTab = (tab: WellnessTab) => {
     if (tab === activeTab) return;
-    
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
-    // Smooth scale animation on tab change
-    Animated.sequence([
-      Animated.timing(tabScaleAnim, {
-        toValue: 0.95,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(tabScaleAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
-    
     setActiveTab(tab);
   };
 
-  const mentalHealthCards = [
-    {
-      title: t('wellness.journal'),
-      subtitle: t('wellness.journalSubtitle'),
-      icon: 'book.fill',
-      androidIcon: 'menu-book',
-      gradient: colors.gradientPrimary,
-      route: '/(tabs)/(wellness)/journal',
-    },
-    {
-      title: t('wellness.meditation'),
-      subtitle: t('wellness.meditationSubtitle'),
-      icon: 'leaf.fill',
-      androidIcon: 'spa',
-      gradient: colors.gradientTeal,
-      route: '/(tabs)/(wellness)/meditation',
-    },
-    {
-      title: t('wellness.healingDuas'),
-      subtitle: t('wellness.healingDuasSubtitle'),
-      icon: 'hands.sparkles.fill',
-      androidIcon: 'self-improvement',
-      gradient: colors.gradientPurple,
-      route: '/(tabs)/(wellness)/mental-duas',
-    },
-    {
-      title: t('wellness.support'),
-      subtitle: t('wellness.supportSubtitle'),
-      icon: 'heart.fill',
-      androidIcon: 'favorite',
-      gradient: colors.gradientAccent,
-      route: '/(tabs)/(wellness)/emotional-support',
-    },
-  ];
-
-  const physicalHealthCards = [
-    {
-      title: t('wellness.activity'),
-      subtitle: t('wellness.activitySubtitle'),
-      icon: 'figure.mixed.cardio',
-      androidIcon: 'fitness-center',
-      gradient: colors.gradientWarning,
-      route: '/(tabs)/(wellness)/activity-tracker',
-    },
-    {
-      title: t('wellness.sleep'),
-      subtitle: t('wellness.sleepSubtitle'),
-      icon: 'moon.stars.fill',
-      androidIcon: 'bedtime',
-      gradient: colors.gradientSecondary,
-      route: '/(tabs)/(wellness)/sleep-tracker',
-    },
-    {
-      title: t('wellness.goals'),
-      subtitle: t('wellness.goalsSubtitle'),
-      icon: 'target',
-      androidIcon: 'track-changes',
-      gradient: colors.gradientInfo,
-      route: '/(tabs)/(wellness)/physical-goals',
-    },
-    {
-      title: t('wellness.history'),
-      subtitle: t('wellness.historySubtitle'),
-      icon: 'chart.line.uptrend.xyaxis',
-      androidIcon: 'trending-up',
-      gradient: colors.gradientPurple,
-      route: '/(tabs)/(wellness)/activity-history',
-    },
-  ];
-
-  const activeCards = activeTab === 'mental' ? mentalHealthCards : physicalHealthCards;
-
-  const handleCardPress = (route: string) => {
+  const openRoute = (route: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Navigate directly - no access gates
     router.push(route as any);
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Animated Header Section */}
-      <Animated.View 
-        style={[
-          styles.headerSection,
-          { height: headerHeight }
-        ]}
-      >
-        <LinearGradient
-          colors={colors.gradientOcean as unknown as readonly [string, string, ...string[]]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerGradient}
-        >
-          <Animated.View 
-            style={[
-              styles.headerContent,
-              { opacity: headerContentOpacity }
-            ]}
-          >
-            <View style={styles.headerTop}>
-              <Animated.View 
-                style={[
-                  styles.headerIconContainer,
-                  { transform: [{ scale: headerIconScale }] }
-                ]}
-              >
-                <LinearGradient
-                  colors={['rgba(255, 255, 255, 0.3)', 'rgba(255, 255, 255, 0.1)']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.headerIconGradient}
-                >
-                  <IconSymbol
-                    ios_icon_name="heart.circle.fill"
-                    android_material_icon_name="favorite"
-                    size={40}
-                    color={colors.card}
-                  />
-                </LinearGradient>
-              </Animated.View>
-              <View style={styles.headerTextContainer}>
-                <Animated.Text 
-                  style={[
-                    styles.headerTitle,
-                    { transform: [{ scale: headerTitleScale }] }
-                  ]}
-                >
-                  Wellness Hub
-                </Animated.Text>
-                <Animated.Text 
-                  style={[
-                    styles.headerSubtitle,
-                    { opacity: headerSubtitleOpacity }
-                  ]}
-                >
-                  Nurture mind, body & soul
-                </Animated.Text>
-              </View>
-              
-              {/* Amanah Score - Aligned with title */}
-              <Animated.View 
-                style={[
-                  styles.scoreCircle,
-                  { transform: [{ scale: headerIconScale }] }
-                ]}
-              >
-                <LinearGradient
-                  colors={colors.gradientPrimary as unknown as readonly [string, string, ...string[]]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.scoreCircleGradient}
-                >
-                  <Text style={styles.scoreNumber}>{Math.round(amanahScore)}</Text>
-                  <Text style={styles.scoreLabel}>Score</Text>
-                </LinearGradient>
-              </Animated.View>
-            </View>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
+      <View style={styles.flex}>
+        <TabHubHeader
+          title={t("tabs.wellness")}
+          subtitle={t("wellness.hubTagline")}
+          left={
+            <TabHubHeaderIconDecoration>
+              <IconSymbol ios_icon_name="heart.circle.fill" android_material_icon_name="favorite" size={22} color={colors.secondaryDark} />
+            </TabHubHeaderIconDecoration>
+          }
+        />
 
-            {/* Well-Being Progress Info */}
-            <Animated.View 
-              style={[
-                styles.scoreInfoRow,
-                { opacity: scoreInfoOpacity }
-              ]}
+        <View style={styles.tabPillWrap}>
+          <View style={styles.tabPill}>
+            <Pressable
+              onPress={() => handleTab("mental")}
+              style={[styles.tabPillSeg, activeTab === "mental" && styles.tabPillSegOn]}
             >
-              <Text style={styles.scoreInfoText}>
-                {amanahCompletion}% of goals completed today
-              </Text>
-              <View style={styles.progressBar}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    { width: `${amanahCompletion}%` },
-                  ]}
-                />
-              </View>
-            </Animated.View>
-          </Animated.View>
-        </LinearGradient>
-      </Animated.View>
-
-      {/* Fixed Tab Switcher */}
-      <Animated.View 
-        style={[
-          styles.tabContainer,
-          { transform: [{ scale: tabScaleAnim }] }
-        ]}
-      >
-        <View style={styles.tabSwitcher}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'mental' && styles.tabActive]}
-            onPress={() => handleTabChange('mental')}
-            activeOpacity={0.7}
-          >
-            {activeTab === 'mental' ? (
-              <LinearGradient
-                colors={colors.gradientPrimary as unknown as readonly [string, string, ...string[]]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.tabGradient}
-              >
-                <View style={styles.tabIconContainer}>
-                  <IconSymbol
-                    ios_icon_name="brain.head.profile"
-                    android_material_icon_name="psychology"
-                    size={22}
-                    color={colors.card}
-                  />
-                </View>
-                <Text style={styles.tabTextActive}>Mental Health</Text>
-              </LinearGradient>
-            ) : (
-              <View style={styles.tabInactive}>
-                <View style={styles.tabIconContainerInactive}>
-                  <IconSymbol
-                    ios_icon_name="brain.head.profile"
-                    android_material_icon_name="psychology"
-                    size={22}
-                    color={colors.textSecondary}
-                  />
-                </View>
-                <Text style={styles.tabText}>Mental Health</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'physical' && styles.tabActive]}
-            onPress={() => handleTabChange('physical')}
-            activeOpacity={0.8}
-          >
-            {activeTab === 'physical' ? (
-              <LinearGradient
-                colors={colors.gradientWarning as unknown as readonly [string, string, ...string[]]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.tabGradient}
-              >
-                <View style={styles.tabIconContainer}>
-                  <IconSymbol
-                    ios_icon_name="figure.run"
-                    android_material_icon_name="directions-run"
-                    size={22}
-                    color={colors.card}
-                  />
-                </View>
-                <Text style={styles.tabTextActive}>Physical Health</Text>
-              </LinearGradient>
-            ) : (
-              <View style={styles.tabInactive}>
-                <View style={styles.tabIconContainerInactive}>
-                  <IconSymbol
-                    ios_icon_name="figure.run"
-                    android_material_icon_name="directions-run"
-                    size={22}
-                    color={colors.textSecondary}
-                  />
-                </View>
-                <Text style={styles.tabText}>Physical Health</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-        </View>
-      </Animated.View>
-
-      {/* Scrollable Content */}
-      <Animated.ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
-      >
-        {/* Wellness Cards Grid */}
-        <View style={styles.cardsGrid}>
-          {activeCards.map((card, index) => (
-            <WellnessCard
-              key={`${activeTab}-${index}`}
-              title={card.title}
-              subtitle={card.subtitle}
-              icon={card.icon}
-              androidIcon={card.androidIcon}
-              gradient={card.gradient}
-              onPress={() => handleCardPress(card.route)}
-            />
-          ))}
-        </View>
-
-        {/* Sources Tab */}
-        <TouchableOpacity
-          style={styles.sourcesTabCard}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push('/(tabs)/(wellness)/sources' as any);
-          }}
-          activeOpacity={0.8}
-        >
-          <LinearGradient
-            colors={colors.gradientSecondary as unknown as readonly [string, string, ...string[]]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.sourcesTabGradient}
-          >
-            <View style={styles.sourcesTabHeaderContent}>
-              <View style={styles.sourcesTabIconWrapper}>
-                <IconSymbol
-                  ios_icon_name="book.pages.fill"
-                  android_material_icon_name="menu-book"
-                  size={28}
-                  color={colors.card}
-                />
-              </View>
-              <Text style={styles.sourcesTabTitle}>Sources</Text>
               <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron-right"
-                size={24}
-                color={colors.card}
+                ios_icon_name="brain.head.profile"
+                android_material_icon_name="psychology"
+                size={18}
+                color={activeTab === "mental" ? colors.primaryDark : colors.textSecondary}
               />
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
-
-        {/* Inspirational Quote Tab - Always Visible */}
-        <View style={styles.quoteCard}>
-          <LinearGradient
-            colors={colors.gradientTeal as unknown as readonly [string, string, ...string[]]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.quoteGradient}
-          >
-            <View style={styles.quoteTopSection}>
-              <View style={styles.quoteIconWrapper}>
-                <IconSymbol
-                  ios_icon_name="quote.opening"
-                  android_material_icon_name="format-quote"
-                  size={32}
-                  color={colors.card}
-                />
-              </View>
-            </View>
-            <Text style={styles.quoteText}>
-              &quot;Verily, with hardship comes ease.&quot;
-            </Text>
-            <View style={styles.quoteFooter}>
-              <View style={styles.quoteDivider} />
-              <Text style={styles.quoteSource}>Quran 94:6</Text>
-            </View>
-          </LinearGradient>
+              <Text style={[styles.tabPillText, activeTab === "mental" && styles.tabPillTextOn]} numberOfLines={1}>
+                {t("wellness.mentalHealth")}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => handleTab("physical")}
+              style={[styles.tabPillSeg, activeTab === "physical" && styles.tabPillSegOnPhysical]}
+            >
+              <IconSymbol
+                ios_icon_name="figure.run"
+                android_material_icon_name="directions-run"
+                size={18}
+                color={activeTab === "physical" ? colors.warningDark : colors.textSecondary}
+              />
+              <Text style={[styles.tabPillText, activeTab === "physical" && styles.tabPillTextOnPhysical]} numberOfLines={1}>
+                {t("wellness.physicalHealth")}
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
-        {/* Bottom Padding for Tab Bar */}
-        <View style={styles.bottomPadding} />
-      </Animated.ScrollView>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.snapshot}>
+            <Text style={styles.snapshotLabel}>{t("wellness.hubAmanah")}</Text>
+            <View style={styles.snapshotScoreRow}>
+              <Text style={styles.snapshotValue}>{Math.round(amanahScore)}</Text>
+              <Text style={styles.snapshotPct}>%</Text>
+            </View>
+          </View>
+
+          <View style={styles.groupCard}>
+            {activeLinks.map((item, index) => (
+              <View key={item.route}>
+                <HubLinkRow
+                  title={item.title}
+                  subtitle={item.subtitle}
+                  icon={item.icon}
+                  androidIcon={item.androidIcon}
+                  tint={item.tint}
+                  onPress={() => openRoute(item.route)}
+                />
+                {index < activeLinks.length - 1 ? <View style={styles.rowDivider} /> : null}
+              </View>
+            ))}
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [styles.sourcesRow, pressed && { opacity: 0.92 }]}
+            onPress={() => openRoute("/(tabs)/(wellness)/sources")}
+            android_ripple={{ color: "rgba(20,184,166,0.12)" }}
+          >
+            <View style={[styles.sourcesIcon, { backgroundColor: colors.secondary + "22" }]}>
+              <IconSymbol ios_icon_name="book.pages.fill" android_material_icon_name="menu-book" size={22} color={colors.secondaryDark} />
+            </View>
+            <Text style={styles.sourcesLabel}>{t("wellness.sourcesAndRefs")}</Text>
+            <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={18} color={colors.textSecondary} />
+          </Pressable>
+
+          <View style={styles.quoteCard}>
+            <View style={styles.quoteAccent} />
+            <View style={styles.quoteBody}>
+              <Text style={styles.quoteText}>{t("wellness.quoteEase")}</Text>
+              <Text style={styles.quoteRef}>{t("wellness.quoteEaseRef")}</Text>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safe: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  headerSection: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    marginBottom: spacing.xl,
-    borderRadius: borderRadius.xxxl,
-    overflow: 'hidden',
-    ...shadows.large,
-  },
-  headerGradient: {
-    padding: spacing.xl,
-    justifyContent: 'center',
-  },
-  headerContent: {
-    gap: spacing.md,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    minHeight: 64,
-  },
-  headerIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    overflow: 'hidden',
-    ...shadows.medium,
-  },
-  headerIconGradient: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTextContainer: {
+  flex: {
     flex: 1,
-    justifyContent: 'center',
   },
-  headerTitle: {
-    ...typography.h1,
-    color: colors.card,
-    fontWeight: '900',
-    marginBottom: spacing.xs,
-    fontSize: 28,
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    ...typography.body,
-    color: colors.card,
-    opacity: 0.95,
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  scoreCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    overflow: 'hidden',
-    ...shadows.medium,
-    flexShrink: 0,
-  },
-  scoreCircleGradient: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scoreNumber: {
-    ...typography.h2,
-    color: colors.card,
-    fontWeight: '900',
-    fontSize: 20,
-  },
-  scoreLabel: {
-    ...typography.smallBold,
-    color: colors.card,
-    opacity: 0.9,
-    marginTop: -2,
-    fontSize: 8,
-    letterSpacing: 0.5,
-  },
-  scoreInfoRow: {
-    marginTop: spacing.sm,
-    gap: spacing.xs,
-  },
-  scoreInfoText: {
-    ...typography.caption,
-    color: colors.card,
-    opacity: 0.95,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  progressBar: {
-    height: 5,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderRadius: borderRadius.sm,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.sm,
-  },
-  tabContainer: {
+  tabPillWrap: {
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
   },
-  tabSwitcher: {
-    flexDirection: 'row',
-    gap: spacing.sm,
+  tabPill: {
+    flexDirection: "row",
     backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xs,
-    ...shadows.medium,
+    borderRadius: borderRadius.round,
+    padding: 4,
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  tab: {
-    flex: 1,
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-  },
-  tabActive: {
     ...shadows.small,
+    gap: 4,
   },
-  tabGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
+  tabPillSeg: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.xs,
+    borderRadius: borderRadius.round,
   },
-  tabIconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  tabPillSegOn: {
+    backgroundColor: colors.highlightPurple,
   },
-  tabInactive: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    backgroundColor: 'transparent',
+  tabPillSegOnPhysical: {
+    backgroundColor: colors.warningLight,
   },
-  tabIconContainerInactive: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.highlight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabText: {
-    ...typography.bodyBold,
-    fontSize: 14,
+  tabPillText: {
+    fontSize: 13,
+    fontWeight: "600",
     color: colors.textSecondary,
-    fontWeight: '600',
+    flexShrink: 1,
   },
-  tabTextActive: {
-    ...typography.bodyBold,
-    fontSize: 14,
-    color: colors.card,
-    fontWeight: '700',
+  tabPillTextOn: {
+    color: colors.primaryDark,
+    fontWeight: "800",
   },
-  scrollView: {
+  tabPillTextOnPhysical: {
+    color: colors.warningDark,
+    fontWeight: "800",
+  },
+  scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xl,
   },
-  sectionHeader: {
-    marginBottom: spacing.lg,
-    gap: spacing.xs,
-  },
-  sectionTitle: {
-    ...typography.h3,
-    color: colors.text,
-    fontWeight: '800',
-    fontSize: 22,
-  },
-  sectionSubtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-    fontSize: 14,
-  },
-  cardsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-    marginBottom: spacing.xl,
-  },
-  wellnessCard: {
-    width: CARD_WIDTH,
-    borderRadius: borderRadius.xl,
-    overflow: 'hidden',
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  cardGradient: {
-    padding: spacing.lg,
-    minHeight: 160,
-    justifyContent: 'space-between',
-  },
-  cardTopSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.md,
-  },
-  cardIconWrapper: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.small,
-  },
-  cardContent: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  cardTitle: {
-    ...typography.h4,
-    fontSize: 16,
-    color: colors.card,
-    fontWeight: '800',
-    marginBottom: spacing.xs / 2,
-  },
-  cardSubtitle: {
-    ...typography.caption,
-    color: colors.card,
-    opacity: 0.9,
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  cardArrow: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sourcesTabCard: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
-    borderRadius: borderRadius.xl,
-    overflow: 'hidden',
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  sourcesTabGradient: {
-    padding: spacing.xl,
-  },
-  sourcesTabHeaderContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  sourcesTabIconWrapper: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.small,
-  },
-  sourcesTabTitle: {
-    ...typography.h3,
-    color: colors.card,
-    flex: 1,
-    fontWeight: '700',
-  },
-  quoteCard: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
-    borderRadius: borderRadius.xl,
-    overflow: 'hidden',
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  quoteGradient: {
-    padding: spacing.xl,
-    alignItems: 'center',
-  },
-  quoteTopSection: {
-    width: '100%',
-    alignItems: 'flex-start',
-    marginBottom: spacing.lg,
-  },
-  quoteIconWrapper: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.small,
-  },
-  quoteText: {
-    ...typography.h4,
-    color: colors.card,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
-    fontStyle: 'italic',
-    lineHeight: 26,
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  quoteFooter: {
-    width: '100%',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  quoteDivider: {
-    width: 50,
-    height: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: borderRadius.sm,
-  },
-  quoteSource: {
-    ...typography.bodyBold,
-    color: colors.card,
-    opacity: 0.95,
-    fontSize: 13,
-    letterSpacing: 0.5,
-  },
-  sourcesCard: {
-    marginBottom: spacing.lg,
-    borderRadius: borderRadius.xl,
-    overflow: 'hidden',
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  sourcesGradient: {
-    padding: spacing.lg,
-  },
-  sourcesHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-    gap: spacing.md,
-  },
-  sourcesIconWrapper: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.small,
-  },
-  sourcesHeaderText: {
-    flex: 1,
-  },
-  sourcesTitle: {
-    ...typography.h3,
-    color: colors.card,
-    fontWeight: '800',
-    marginBottom: spacing.xs / 2,
-  },
-  sourcesSubtitle: {
-    ...typography.caption,
-    color: colors.card,
-    opacity: 0.9,
-  },
-  sourcesBody: {
-    marginTop: spacing.sm,
-    gap: spacing.xs,
-  },
-  sourcesSectionHeading: {
-    ...typography.bodyBold,
-    color: colors.text,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-    fontSize: 15,
-  },
-  sourcesItem: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: spacing.xs,
-  },
-  sourcesFooter: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.md,
-    fontStyle: 'italic',
-    lineHeight: 20,
-  },
-  bottomPadding: {
-    height: 100,
-  },
-  contentTabSwitcher: {
-    flexDirection: 'row',
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
+  snapshot: {
+    alignItems: "center",
     backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xs,
-    ...shadows.medium,
+    borderRadius: borderRadius.xl,
     borderWidth: 1,
     borderColor: colors.border,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    ...shadows.small,
   },
-  contentTabButton: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  contentTabButtonActive: {
-    backgroundColor: colors.primary,
-  },
-  contentTabButtonText: {
-    ...typography.bodyBold,
+  snapshotLabel: {
+    fontSize: 11,
+    fontWeight: "700",
     color: colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: spacing.sm,
   },
-  contentTabButtonTextActive: {
-    color: colors.card,
-    fontWeight: '700',
+  snapshotScoreRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+  },
+  snapshotValue: {
+    fontSize: Platform.OS === "ios" ? 44 : 40,
+    fontWeight: "800",
+    color: colors.secondaryDark,
+    fontVariant: ["tabular-nums"],
+    letterSpacing: -1,
+  },
+  snapshotPct: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: colors.textSecondary,
+    marginLeft: 2,
+  },
+  groupCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: "hidden",
+    marginBottom: spacing.md,
+    ...shadows.small,
+  },
+  linkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    gap: spacing.md,
+  },
+  linkIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  linkCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  linkTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  linkSubtitle: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  rowDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginLeft: 44 + spacing.md * 2,
+  },
+  sourcesRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    gap: spacing.md,
+    ...shadows.small,
+  },
+  sourcesIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sourcesLabel: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  quoteCard: {
+    flexDirection: "row",
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: "hidden",
+    marginBottom: spacing.lg,
+    ...shadows.small,
+  },
+  quoteAccent: {
+    width: 4,
+    backgroundColor: colors.secondary,
+  },
+  quoteBody: {
+    flex: 1,
+    padding: spacing.lg,
+  },
+  quoteText: {
+    ...typography.body,
+    color: colors.text,
+    fontStyle: "italic",
+    lineHeight: 22,
+    fontWeight: "600",
+  },
+  quoteRef: {
+    ...typography.smallBold,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
   },
 });

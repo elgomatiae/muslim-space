@@ -12,7 +12,6 @@ import {
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
 import Constants from 'expo-constants';
 
 export default function AboutScreen() {
@@ -58,12 +57,12 @@ export default function AboutScreen() {
         { 
           label: 'Privacy Policy', 
           value: 'View our privacy policy',
-          action: () => handleOpenLink('https://muslim-space-146.created.app/privacy'),
+          action: () => handleOpenLink('https://elgomatiae.github.io/muslim-space/'),
         },
         { 
           label: 'Support Center', 
           value: 'Get help and find answers',
-          action: () => handleOpenLink('https://muslim-space-146.created.app/support'),
+          action: () => handleOpenLink('https://elgomatiae.github.io/muslim-space/'),
         },
         { 
           label: 'Contact Us', 
@@ -81,23 +80,7 @@ export default function AboutScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-          >
-            <IconSymbol
-              ios_icon_name="chevron.left"
-              android_material_icon_name="arrow-back"
-              size={24}
-              color={colors.text}
-            />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>About</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+        {/* Stack header provides back to Profile tab root */}
 
         {/* App Header Card */}
         <View style={styles.appHeaderCard}>
@@ -162,28 +145,6 @@ export default function AboutScreen() {
             </View>
           </View>
         ))}
-
-        {/* Credits */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Credits</Text>
-          <View style={styles.card}>
-            <View style={styles.creditRow}>
-              <Text style={styles.creditText}>
-                Built with ❤️ for the Muslim community
-              </Text>
-            </View>
-            <View style={styles.creditRow}>
-              <Text style={styles.creditText}>
-                Prayer times calculated using astronomical algorithms
-              </Text>
-            </View>
-            <View style={styles.creditRow}>
-              <Text style={styles.creditText}>
-                Quran verses and Hadiths from authentic sources
-              </Text>
-            </View>
-          </View>
-        </View>
 
         {/* Footer */}
         <View style={styles.footer}>

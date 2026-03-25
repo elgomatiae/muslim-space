@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from '@/contexts/I18nContext';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
@@ -30,6 +29,7 @@ import {
 
 export default function InvitesInboxScreen() {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [invites, setInvites] = useState<CommunityInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -154,14 +154,7 @@ export default function InvitesInboxScreen() {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <IconSymbol
-              ios_icon_name="chevron.left"
-              android_material_icon_name="arrow_back"
-              size={24}
-              color={colors.text}
-            />
-          </TouchableOpacity>
+          <View style={styles.backButton} />
           <Text style={styles.headerTitle}>Invites</Text>
           <View style={styles.headerRight} />
         </View>
@@ -179,14 +172,7 @@ export default function InvitesInboxScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow_back"
-            size={24}
-            color={colors.text}
-          />
-        </TouchableOpacity>
+        <View style={styles.backButton} />
         <Text style={styles.headerTitle}>Invites</Text>
         <View style={styles.headerRight} />
       </View>

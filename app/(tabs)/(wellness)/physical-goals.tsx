@@ -29,7 +29,7 @@ export default function PhysicalGoalsScreen() {
 
   if (loading || !amanahGoals) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['bottom']}>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading goals...</Text>
         </View>
@@ -43,17 +43,10 @@ export default function PhysicalGoalsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <IconSymbol
-              ios_icon_name="chevron.left"
-              android_material_icon_name="arrow-back"
-              size={24}
-              color={colors.text}
-            />
-          </TouchableOpacity>
+          <View style={styles.backButton} />
           <Text style={styles.title}>Physical Goals</Text>
           <View style={styles.placeholder} />
         </View>

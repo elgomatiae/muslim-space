@@ -19,6 +19,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from '@/contexts/I18nContext';
+import { initializeUserProfile } from '@/utils/profileSupabaseSync';
 
 export default function LoginScreen() {
   const { t } = useTranslation();
@@ -70,7 +71,21 @@ export default function LoginScreen() {
         }
         // Clear error message on success
         setErrorMessage('');
-        // Navigation will be handled automatically by AuthContext
+
+        // Ensure Supabase `profiles` row exists/updated for this user.
+        // `initializeUserProfile` is "fill missing only" so it won't overwrite
+        // a user's edited name/email.
+        try {
+          const usernameFromMeta =
+            (data.user.user_metadata as any)?.username || email.trim().split('@')[0];
+          const emailFromAuth = data.user.email ?? email.trim();
+
+          await initializeUserProfile(data.user.id, usernameFromMeta, emailFromAuth);
+        } catch (profileError) {
+          console.error('⚠️ Error initializing profile after login (non-critical):', profileError);
+        }
+
+        // Navigation is still normally handled automatically by AuthContext
       }
     } catch (error: any) {
       console.error('Login error:', error);
@@ -180,6 +195,7 @@ export default function LoginScreen() {
               autoCapitalize="none"
               autoComplete="email"
               editable={!loading}
+              textAlignVertical="center"
             />
           </View>
 
@@ -205,6 +221,7 @@ export default function LoginScreen() {
               autoCapitalize="none"
               autoComplete="password"
               editable={!loading}
+              textAlignVertical="center"
             />
             <TouchableOpacity
               style={styles.eyeIcon}
@@ -345,8 +362,10 @@ const styles = StyleSheet.create({
     flex: 1,
     ...typography.body,
     color: colors.text,
-    paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
+    paddingVertical: 0,
+    minHeight: 56,
+    textAlignVertical: 'center',
   },
   eyeIcon: {
     paddingRight: spacing.lg,

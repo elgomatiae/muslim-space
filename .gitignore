@@ -23,6 +23,13 @@ yarn-error.*
 .DS_Store
 *.pem
 
+# Google Service Account JSON keys (keep secure!)
+api-*.json
+*-*.json
+!package.json
+!tsconfig.json
+!tsconfig.*.json
+
 .env
 .env*.local
 .env.local

@@ -1,15 +1,18 @@
 
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useImanTracker } from '@/contexts/ImanTrackerContext';
+import { useAccessGate } from '@/hooks/useAccessGate';
+import { AccessGate } from '@/components/access/AccessGate';
 
 export default function IlmSection() {
   const { ilmGoals, updateIlmGoals } = useImanTracker();
+  const { checkAccess, showGate, gateVisible, onGateClose, onGateGranted } = useAccessGate();
 
   if (!ilmGoals) return null;
 
@@ -24,10 +27,18 @@ export default function IlmSection() {
     await updateIlmGoals(updatedGoals);
   };
 
+  const setCounter = async (field: string, value: number, maxField: string) => {
+    const maxValue = ilmGoals[maxField as keyof typeof ilmGoals] as number;
+    const clamped = Math.max(0, Math.min(maxValue, value));
+    const updatedGoals = { ...ilmGoals, [field]: clamped };
+    await updateIlmGoals(updatedGoals);
+  };
+
   const hasAnyGoals = ilmGoals.weeklyLecturesGoal > 0 || 
-                      ilmGoals.weeklyRecitationsGoal > 0 || 
+                      ilmGoals.weeklyStoriesGoal > 0 || 
                       ilmGoals.weeklyQuizzesGoal > 0 || 
-                      ilmGoals.weeklyReflectionGoal > 0;
+                      ilmGoals.weeklyReflectionGoal > 0 ||
+                      ilmGoals.weeklyAllahNamesGoal > 0;
 
   return (
     <View style={styles.container}>
@@ -105,9 +116,17 @@ export default function IlmSection() {
 
           <View style={styles.subsectionContent}>
             <View style={styles.goalItem}>
-              <Text style={styles.goalLabel}>
-                Weekly Lectures ({ilmGoals.weeklyLecturesCompleted}/{ilmGoals.weeklyLecturesGoal})
-              </Text>
+              <View style={styles.goalLabelRow}>
+                <Text style={styles.goalLabel}>Weekly Lectures </Text>
+                <TextInput
+                  style={styles.goalCountInput}
+                  value={String(ilmGoals.weeklyLecturesCompleted || 0)}
+                  onChangeText={(t) => setCounter('weeklyLecturesCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'weeklyLecturesGoal')}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                />
+                <Text style={styles.goalLabel}> / {ilmGoals.weeklyLecturesGoal}</Text>
+              </View>
               <View style={styles.progressBar}>
                 <View 
                   style={[
@@ -143,8 +162,17 @@ export default function IlmSection() {
 
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => {
+              onPress={async () => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                // Check access before navigating to lectures
+                const hasAccess = await checkAccess();
+                if (!hasAccess) {
+                  // Show access gate, navigate after ad is watched
+                  showGate(() => {
+                    router.push('/(tabs)/(learning)/lectures' as any);
+                  });
+                  return;
+                }
                 router.push('/(tabs)/(learning)/lectures' as any);
               }}
               activeOpacity={0.7}
@@ -168,6 +196,92 @@ export default function IlmSection() {
         </View>
       )}
 
+      {/* Islamic Stories */}
+      {ilmGoals.weeklyStoriesGoal > 0 && (
+        <View style={styles.subsection}>
+          <View style={styles.subsectionHeader}>
+            <IconSymbol
+              ios_icon_name="text.book.closed.fill"
+              android_material_icon_name="auto-stories"
+              size={18}
+              color="#3B82F6"
+            />
+            <Text style={styles.subsectionTitle}>Islamic Stories</Text>
+          </View>
+
+          <View style={styles.subsectionContent}>
+            <View style={styles.goalItem}>
+              <View style={styles.goalLabelRow}>
+                <Text style={styles.goalLabel}>Weekly Stories </Text>
+                <TextInput
+                  style={styles.goalCountInput}
+                  value={String(ilmGoals.weeklyStoriesCompleted || 0)}
+                  onChangeText={(t) => setCounter('weeklyStoriesCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'weeklyStoriesGoal')}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                />
+                <Text style={styles.goalLabel}> / {ilmGoals.weeklyStoriesGoal}</Text>
+              </View>
+              <View style={styles.progressBar}>
+                <View 
+                  style={[
+                    styles.progressFill,
+                    { 
+                      width: `${ilmGoals.weeklyStoriesGoal > 0 ? (ilmGoals.weeklyStoriesCompleted / ilmGoals.weeklyStoriesGoal) * 100 : 0}%`,
+                      backgroundColor: '#3B82F6',
+                    }
+                  ]} 
+                />
+              </View>
+              <TouchableOpacity
+                style={styles.incrementButton}
+                onPress={() => incrementCounter('weeklyStoriesCompleted', 1, 'weeklyStoriesGoal')}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={['#3B82F6', '#2563EB']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.incrementGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="plus"
+                    android_material_icon_name="add"
+                    size={14}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.incrementText}>Mark Story</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(tabs)/(learning)/stories' as any);
+              }}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={['#3B82F6', '#2563EB']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.actionGradient}
+              >
+                <IconSymbol
+                  ios_icon_name="book.fill"
+                  android_material_icon_name="menu-book"
+                  size={18}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.actionText}>Read Stories</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* Quizzes Section */}
       {ilmGoals.weeklyQuizzesGoal > 0 && (
         <View style={styles.subsection}>
@@ -183,9 +297,17 @@ export default function IlmSection() {
 
           <View style={styles.subsectionContent}>
             <View style={styles.goalItem}>
-              <Text style={styles.goalLabel}>
-                Weekly Quizzes ({ilmGoals.weeklyQuizzesCompleted}/{ilmGoals.weeklyQuizzesGoal})
-              </Text>
+              <View style={styles.goalLabelRow}>
+                <Text style={styles.goalLabel}>Weekly Quizzes </Text>
+                <TextInput
+                  style={styles.goalCountInput}
+                  value={String(ilmGoals.weeklyQuizzesCompleted || 0)}
+                  onChangeText={(t) => setCounter('weeklyQuizzesCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'weeklyQuizzesGoal')}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                />
+                <Text style={styles.goalLabel}> / {ilmGoals.weeklyQuizzesGoal}</Text>
+              </View>
               <View style={styles.progressBar}>
                 <View 
                   style={[
@@ -222,6 +344,92 @@ export default function IlmSection() {
         </View>
       )}
 
+      {/* Allah Names Section */}
+      {ilmGoals.weeklyAllahNamesGoal > 0 && (
+        <View style={styles.subsection}>
+          <View style={styles.subsectionHeader}>
+            <IconSymbol
+              ios_icon_name="sparkles.rectangle.stack.fill"
+              android_material_icon_name="auto-awesome"
+              size={18}
+              color="#3B82F6"
+            />
+            <Text style={styles.subsectionTitle}>Allah's Names (Asma ul Husna)</Text>
+          </View>
+
+          <View style={styles.subsectionContent}>
+            <View style={styles.goalItem}>
+              <View style={styles.goalLabelRow}>
+                <Text style={styles.goalLabel}>Weekly Names Reviewed </Text>
+                <TextInput
+                  style={styles.goalCountInput}
+                  value={String(ilmGoals.weeklyAllahNamesCompleted || 0)}
+                  onChangeText={(t) => setCounter('weeklyAllahNamesCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'weeklyAllahNamesGoal')}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                />
+                <Text style={styles.goalLabel}> / {ilmGoals.weeklyAllahNamesGoal}</Text>
+              </View>
+              <View style={styles.progressBar}>
+                <View 
+                  style={[
+                    styles.progressFill,
+                    { 
+                      width: `${ilmGoals.weeklyAllahNamesGoal > 0 ? (ilmGoals.weeklyAllahNamesCompleted / ilmGoals.weeklyAllahNamesGoal) * 100 : 0}%`,
+                      backgroundColor: '#3B82F6',
+                    }
+                  ]} 
+                />
+              </View>
+              <TouchableOpacity
+                style={styles.incrementButton}
+                onPress={() => incrementCounter('weeklyAllahNamesCompleted', 1, 'weeklyAllahNamesGoal')}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={['#3B82F6', '#2563EB']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.incrementGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="plus"
+                    android_material_icon_name="add"
+                    size={14}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.incrementText}>Mark Name</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(tabs)/(learning)/allah-names' as any);
+              }}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={['#3B82F6', '#2563EB']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.actionGradient}
+              >
+                <IconSymbol
+                  ios_icon_name="book.fill"
+                  android_material_icon_name="menu-book"
+                  size={18}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.actionText}>Review Names</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* Reflection Section */}
       {ilmGoals.weeklyReflectionGoal > 0 && (
         <View style={styles.subsection}>
@@ -237,9 +445,17 @@ export default function IlmSection() {
 
           <View style={styles.subsectionContent}>
             <View style={styles.goalItem}>
-              <Text style={styles.goalLabel}>
-                Weekly Reflections ({ilmGoals.weeklyReflectionCompleted}/{ilmGoals.weeklyReflectionGoal})
-              </Text>
+              <View style={styles.goalLabelRow}>
+                <Text style={styles.goalLabel}>Weekly Reflections </Text>
+                <TextInput
+                  style={styles.goalCountInput}
+                  value={String(ilmGoals.weeklyReflectionCompleted || 0)}
+                  onChangeText={(t) => setCounter('weeklyReflectionCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'weeklyReflectionGoal')}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                />
+                <Text style={styles.goalLabel}> / {ilmGoals.weeklyReflectionGoal}</Text>
+              </View>
               <View style={styles.progressBar}>
                 <View 
                   style={[
@@ -276,6 +492,15 @@ export default function IlmSection() {
         </View>
       )}
       </LinearGradient>
+
+      {/* Access Gate Modal */}
+      <AccessGate
+        visible={gateVisible}
+        onClose={onGateClose}
+        onAccessGranted={onGateGranted}
+        title="Unlock Islamic Lectures"
+        description="Watch a short ad to access premium Islamic lectures for 24 hours"
+      />
     </View>
   );
 }
@@ -376,10 +601,28 @@ const styles = StyleSheet.create({
   goalItem: {
     gap: spacing.sm,
   },
+  goalLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
   goalLabel: {
     ...typography.body,
     color: colors.text,
     fontWeight: '600',
+  },
+  goalCountInput: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '700',
+    minWidth: 44,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.highlight,
+    textAlign: 'center',
   },
   progressBar: {
     height: 8,

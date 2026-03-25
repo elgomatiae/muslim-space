@@ -14,8 +14,6 @@ import { colors, typography, spacing, borderRadius, shadows } from '@/styles/com
 import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNotifications } from '@/contexts/NotificationContext';
-import { router } from 'expo-router';
-
 export default function NotificationSettingsScreen() {
   const { settings, loading, requestPermissions, updateSettings, scheduledCount } = useNotifications();
   const [requesting, setRequesting] = useState(false);
@@ -62,23 +60,7 @@ export default function NotificationSettingsScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-          >
-            <IconSymbol
-              ios_icon_name="chevron.left"
-              android_material_icon_name="arrow-back"
-              size={24}
-              color={colors.text}
-            />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Notification Settings</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+        {/* Stack header provides back to Profile tab root */}
 
         {/* Permissions Section */}
         <View style={styles.section}>

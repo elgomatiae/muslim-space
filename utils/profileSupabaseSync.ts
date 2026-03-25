@@ -107,6 +107,7 @@ export async function syncProfileToSupabase(userId: string): Promise<void> {
     // Update Supabase with local data
     await updateUserProfile(userId, {
       full_name: localProfile.name, // Use full_name instead of display_name
+      email: typeof localProfile.email === 'string' ? localProfile.email : undefined,
     });
     
     console.log('Profile synced to Supabase successfully');
@@ -164,12 +165,25 @@ export async function initializeUserProfile(userId: string, username?: string, e
       
       // If username is provided and current profile doesn't have full_name, or it's different, update it
       const finalName = username?.trim() || email?.split('@')[0] || 'User';
-      if (!existingProfile.full_name || existingProfile.full_name !== finalName) {
+      const existingName = existingProfile.full_name?.trim();
+      // Only fill full_name if missing; don't overwrite user's edited value
+      if (!existingName) {
         console.log('🔄 Updating existing profile with full_name:', finalName);
         await updateUserProfile(userId, {
           full_name: finalName, // Use full_name instead of username
         });
         console.log('✅ Profile updated with full_name');
+      }
+
+      // Only fill email if it's missing/empty.
+      // This prevents overwriting a user's edited `profiles.email` on next sign-in
+      // when Supabase Auth email may still be the original value.
+      const finalEmail = email?.trim();
+      const existingEmail = existingProfile.email?.trim();
+      if (finalEmail && !existingEmail) {
+        console.log('🔄 Updating existing profile with email:', finalEmail);
+        await updateUserProfile(userId, { email: finalEmail });
+        console.log('✅ Profile updated with email');
       }
       
       // Sync to local
@@ -198,7 +212,7 @@ export async function initializeUserProfile(userId: string, username?: string, e
       throw new Error('Failed to create user profile');
     }
     
-    console.log('✅ User profile created successfully in Supabase with username:', finalUsername);
+    console.log('✅ User profile created successfully in Supabase with username:', finalName);
     
     // Save to local storage
     const localProfile = {

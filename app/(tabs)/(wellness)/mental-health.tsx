@@ -57,6 +57,7 @@ const MOODS = [
 export default function MentalHealthHubScreen() {
   const { user } = useAuth();
   const { amanahGoals, updateAmanahGoals } = useImanTracker();
+  const { t } = useTranslation();
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [duas, setDuas] = useState<Dua[]>([]);
   const [prompts, setPrompts] = useState<JournalPrompt[]>([]);
@@ -1663,12 +1664,6 @@ const styles = StyleSheet.create({
     ...typography.h4,
     color: colors.text,
     marginBottom: spacing.sm,
-  },
-  moodGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-    marginBottom: spacing.md,
   },
   moodButton: {
     width: '30%',

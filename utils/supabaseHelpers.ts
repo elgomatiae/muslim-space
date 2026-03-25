@@ -3,7 +3,7 @@
  * Ensures all queries are properly scoped and hardened
  */
 
-import { supabase } from '@/app/integrations/supabase/client';
+import { supabase } from '@/lib/integrations/supabase/client';
 import { logger } from './logger';
 
 /**

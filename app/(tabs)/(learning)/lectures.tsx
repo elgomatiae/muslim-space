@@ -12,7 +12,7 @@ import {
   incrementLectureViews,
   type LectureDisplay 
 } from '@/services/LectureService';
-import { supabase } from '@/app/integrations/supabase/client';
+import { supabase } from '@/lib/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from '@/contexts/I18nContext';
 import { useImanTracker } from '@/contexts/ImanTrackerContext';
@@ -20,6 +20,9 @@ import * as Haptics from 'expo-haptics';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAccessGate } from '@/hooks/useAccessGate';
+import { AccessGate } from '@/components/access/AccessGate';
+import { router } from 'expo-router';
 
 // Helper functions
 function isSupabaseConfigured(): boolean {
@@ -86,8 +89,10 @@ function shuffleArray<T>(array: T[]): T[] {
 
 export default function LecturesScreen() {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const { ilmGoals, updateIlmGoals } = useImanTracker();
   const insets = useSafeAreaInsets();
+  const { checkAccess, showGate, gateVisible, onGateClose, onGateGranted: originalOnGateGranted } = useAccessGate();
   const [categories, setCategories] = useState<string[]>([]);
   const [lecturesByCategory, setLecturesByCategory] = useState<{ [key: string]: LectureDisplay[] }>({});
   const [uncategorizedLectures, setUncategorizedLectures] = useState<LectureDisplay[]>([]);
@@ -100,6 +105,25 @@ export default function LecturesScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [pendingLecture, setPendingLecture] = useState<LectureDisplay | null>(null);
+  const [accessChecked, setAccessChecked] = useState(false);
+
+  // Custom handler for when access is granted - opens pending lecture
+  const onGateGranted = async () => {
+    await originalOnGateGranted();
+    // If there's a pending lecture, open it after access is granted
+    if (pendingLecture) {
+      const lecture = pendingLecture;
+      setPendingLecture(null);
+      await incrementLectureViews(lecture.id);
+      
+      if (isYouTubeUrl(lecture.url)) {
+        setPendingLecture(lecture);
+        setShowTrackingModal(true);
+      } else {
+        setSelectedLecture(lecture);
+      }
+    }
+  };
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -160,9 +184,20 @@ export default function LecturesScreen() {
     }
   }, []);
 
+  // Check access when component mounts (don't block, just check)
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    const checkAccessOnMount = async () => {
+      await checkAccess();
+      setAccessChecked(true);
+    };
+    checkAccessOnMount();
+  }, []);
+
+  useEffect(() => {
+    if (accessChecked) {
+      loadData();
+    }
+  }, [loadData, accessChecked]);
 
   const performSearch = useCallback(async () => {
     if (!searchQuery.trim()) {
@@ -198,16 +233,19 @@ export default function LecturesScreen() {
     try {
       await incrementLectureViews(lecture.id);
       
-      // Track in tracked_content table if it exists
+      // Track in tracked_content (schema: video_id, video_title, completed — used by achievement lecture counts)
       try {
         await supabase.from('tracked_content').insert({
           user_id: user.id,
           content_type: 'lecture',
-          content_id: lecture.id,
-          title: lecture.title,
+          video_id: lecture.id as string,
+          video_title: lecture.title,
+          video_url: lecture.url,
+          scholar_name: lecture.scholar_name ?? undefined,
+          completed: true,
+          completed_at: new Date().toISOString(),
         });
       } catch (err) {
-        // Table might not exist, that's okay
         console.debug('Could not track in tracked_content:', err);
       }
 
@@ -259,6 +297,16 @@ export default function LecturesScreen() {
   };
 
   const handleLecturePress = async (lecture: LectureDisplay) => {
+    // Check access before allowing lecture viewing
+    const hasAccess = await checkAccess();
+    if (!hasAccess) {
+      // Show access gate, store the lecture to open after ad is watched
+      setPendingLecture(lecture);
+      showGate();
+      return;
+    }
+
+    // User has access, proceed with lecture
     await incrementLectureViews(lecture.id);
 
     if (isYouTubeUrl(lecture.url)) {
@@ -650,6 +698,15 @@ export default function LecturesScreen() {
           </View>
         </View>
       )}
+
+      {/* Access Gate Modal */}
+      <AccessGate
+        visible={gateVisible}
+        onClose={onGateClose}
+        onAccessGranted={onGateGranted}
+        title="Unlock Islamic Lectures"
+        description="Watch a short ad to access premium Islamic lectures for 24 hours"
+      />
     </View>
   );
 }

@@ -33,28 +33,6 @@ export function AchievementCelebrationProvider({ children }: { children: ReactNo
   const [celebrationVisible, setCelebrationVisible] = useState(false);
   const processedAchievementsRef = useRef<Set<string>>(new Set());
 
-  // Check for uncelebrated achievements on mount and when user changes
-  useEffect(() => {
-    if (user?.id) {
-      // Initial check
-      const timer = setTimeout(() => {
-        checkCelebrationQueue();
-      }, 1000);
-      
-      // Set up interval to check for new achievements every 5 seconds
-      const interval = setInterval(() => {
-        if (!celebrationVisible) {
-          checkCelebrationQueue();
-        }
-      }, 5000);
-
-      return () => {
-        clearTimeout(timer);
-        clearInterval(interval);
-      };
-    }
-  }, [user?.id, checkCelebrationQueue, celebrationVisible]);
-
   const celebrateAchievement = useCallback(async (achievement: Achievement) => {
     console.log('🎉 Celebrating achievement:', achievement.title);
     
@@ -145,6 +123,28 @@ export function AchievementCelebrationProvider({ children }: { children: ReactNo
       checkCelebrationQueue();
     }, 300);
   }, [checkCelebrationQueue]);
+
+  // Check for uncelebrated achievements on mount and when user changes
+  useEffect(() => {
+    if (user?.id) {
+      // Initial check
+      const timer = setTimeout(() => {
+        checkCelebrationQueue();
+      }, 1000);
+
+      // Set up interval to check for new achievements every 5 seconds
+      const interval = setInterval(() => {
+        if (!celebrationVisible) {
+          checkCelebrationQueue();
+        }
+      }, 5000);
+
+      return () => {
+        clearTimeout(timer);
+        clearInterval(interval);
+      };
+    }
+  }, [user?.id, checkCelebrationQueue, celebrationVisible]);
 
   return (
     <AchievementCelebrationContext.Provider

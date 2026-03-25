@@ -8,6 +8,9 @@
       "developmentClient": true,
       "distribution": "internal",
       "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_USE_REAL_ADMOB": "true"
+      },
       "ios": {
         "resourceClass": "m-medium"
       }
@@ -15,12 +18,19 @@
     "preview": {
       "distribution": "internal",
       "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_USE_REAL_ADMOB": "true",
+        "REMOVE_ADMOB_STUB": "true"
+      },
       "ios": {
         "resourceClass": "m-medium"
       }
     },
     "production": {
       "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_USE_REAL_ADMOB": "true"
+      },
       "ios": {
         "resourceClass": "m-medium",
         "buildConfiguration": "Release"

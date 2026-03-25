@@ -21,8 +21,6 @@ import {
   ActivityLogEntry,
   ActivityCategory,
 } from '@/utils/activityLogger';
-import { router } from 'expo-router';
-
 type FilterType = 'all' | 'ibadah' | 'ilm' | 'amanah';
 
 export default function ActivityScreen() {
@@ -183,26 +181,14 @@ export default function ActivityScreen() {
   const groupedActivities = groupActivitiesByDate(activities);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* HEADER */}
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      {/* HEADER — back lives in stack header (returns to Iman tab root) */}
       <LinearGradient
         colors={colors.gradientOcean}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerContainer}
       >
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow-back"
-            size={24}
-            color="#FFFFFF"
-          />
-        </TouchableOpacity>
         <View style={styles.headerContent}>
           <View style={styles.headerIconContainer}>
             <IconSymbol

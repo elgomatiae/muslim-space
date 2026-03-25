@@ -20,14 +20,6 @@ interface ProfileOption {
   action: () => void;
 }
 
-interface StatItem {
-  value: string;
-  label: string;
-  iosIcon: string;
-  androidIcon: string;
-  color: string;
-}
-
 interface UserProfile {
   name: string;
   email: string;
@@ -49,12 +41,6 @@ export default function ProfileScreen() {
   const [tempProfile, setTempProfile] = useState<UserProfile>(profile);
   const [savingProfile, setSavingProfile] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [stats, setStats] = useState<StatItem[]>([
-    { value: '0', label: t('profile.daysActive'), iosIcon: 'calendar', androidIcon: 'calendar-today', color: colors.primary },
-    { value: '0', label: t('profile.prayers'), iosIcon: 'moon.stars', androidIcon: 'self-improvement', color: colors.accent },
-    { value: '0', label: t('profile.dayStreak'), iosIcon: 'flame.fill', androidIcon: 'local-fire-department', color: colors.error },
-  ]);
-
   const [tapCount, setTapCount] = useState(0);
   const [lastTapTime, setLastTapTime] = useState(0);
   const [pinModalVisible, setPinModalVisible] = useState(false);
@@ -85,40 +71,9 @@ export default function ProfileScreen() {
     }
   }, [user]);
 
-  const loadStats = useCallback(async () => {
-    try {
-      const prayerData = await AsyncStorage.getItem('prayerData');
-      const imanData = await AsyncStorage.getItem('imanTrackerData');
-      
-      let totalPrayers = 0;
-      let daysActive = 0;
-      let currentStreak = 0;
-
-      if (prayerData) {
-        const prayers = JSON.parse(prayerData);
-        totalPrayers = prayers.filter((p: any) => p.completed).length;
-      }
-
-      if (imanData) {
-        const iman = JSON.parse(imanData);
-        daysActive = iman.daysActive || 0;
-        currentStreak = iman.currentStreak || 0;
-      }
-
-      setStats([
-        { value: daysActive.toString(), label: t('profile.daysActive'), iosIcon: 'calendar', androidIcon: 'calendar-today', color: colors.primary },
-        { value: totalPrayers.toString(), label: t('profile.prayers'), iosIcon: 'moon.stars', androidIcon: 'self-improvement', color: colors.accent },
-        { value: currentStreak.toString(), label: t('profile.dayStreak'), iosIcon: 'flame.fill', androidIcon: 'local-fire-department', color: colors.error },
-      ]);
-    } catch (error) {
-      console.log('Error loading stats:', error);
-    }
-  }, []);
-
   useEffect(() => {
     loadProfile();
-    loadStats();
-  }, [loadProfile, loadStats]);
+  }, [loadProfile]);
 
   // Auto-save profile changes to Supabase (debounced)
   const autoSaveProfile = useCallback(async (updatedProfile: UserProfile) => {
@@ -142,6 +97,7 @@ export default function ProfileScreen() {
         // Save to Supabase - use full_name (your schema column)
         await updateUserProfile(user.id, {
           full_name: updatedProfile.name,
+        email: updatedProfile.email?.trim(),
         });
         
         console.log('✅ Profile auto-saved successfully');
@@ -169,6 +125,7 @@ export default function ProfileScreen() {
         setSavingProfile(true);
         await updateUserProfile(user.id, {
           full_name: tempProfile.name, // Use full_name from your schema
+          email: tempProfile.email?.trim(),
         });
         setSavingProfile(false);
       }
@@ -417,25 +374,6 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </LinearGradient>
 
-          <View style={styles.statsContainer}>
-            {stats.map((stat, index) => (
-              <React.Fragment key={index}>
-                <View style={styles.statCard}>
-                  <View style={[styles.statIconContainer, { backgroundColor: stat.color }]}>
-                    <IconSymbol
-                      ios_icon_name={stat.iosIcon}
-                      android_material_icon_name={stat.androidIcon}
-                      size={26}
-                      color={colors.card}
-                    />
-                  </View>
-                  <Text style={styles.statValue}>{stat.value}</Text>
-                  <Text style={styles.statLabel}>{stat.label}</Text>
-                </View>
-              </React.Fragment>
-            ))}
-          </View>
-
           <View style={styles.infoContainer}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionIconContainer}>
@@ -581,15 +519,19 @@ export default function ProfileScreen() {
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>Email</Text>
                   <TextInput
-                    style={[styles.input, styles.inputDisabled]}
+                    style={styles.input}
                     value={tempProfile.email}
                     placeholder="Enter your email"
                     placeholderTextColor={colors.textSecondary}
                     keyboardType="email-address"
                     autoCapitalize="none"
-                    editable={false}
+                    editable={true}
+                    onChangeText={(text) => {
+                      const updated = { ...tempProfile, email: text };
+                      setTempProfile(updated);
+                      autoSaveProfile(updated);
+                    }}
                   />
-                  <Text style={styles.inputHint}>Email cannot be changed</Text>
                 </View>
 
 
@@ -766,41 +708,6 @@ const styles = StyleSheet.create({
   editButtonText: {
     ...typography.captionBold,
     color: colors.primary,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xxxl,
-    gap: spacing.md,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    alignItems: 'center',
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  statIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: borderRadius.round,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  statValue: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  statLabel: {
-    ...typography.small,
-    color: colors.textSecondary,
-    textAlign: 'center',
   },
   infoContainer: {
     marginBottom: spacing.xxxl,

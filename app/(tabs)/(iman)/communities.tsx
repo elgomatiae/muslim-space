@@ -299,21 +299,9 @@ export default function CommunitiesScreen() {
       {/* Modern Header with Gradient Effect */}
       <View style={styles.headerContainer}>
         <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton} 
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-          >
-            <View style={styles.backButtonCircle}>
-              <IconSymbol
-                ios_icon_name="chevron.left"
-                android_material_icon_name="arrow-back"
-                size={20}
-                color={colors.text}
-              />
-            </View>
-          </TouchableOpacity>
-          
+          {/* Back control is the stack header (returns to Iman tab root) */}
+          <View style={styles.backButton} />
+
           <View style={styles.headerTitleContainer}>
             <Text style={styles.headerTitle}>Communities</Text>
             {communities.length > 0 && (

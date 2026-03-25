@@ -30,6 +30,7 @@ interface WorkoutDurations {
 export default function ActivityTrackerScreen() {
   const { user } = useAuth();
   const { amanahGoals, updateAmanahGoals, refreshData } = useImanTracker();
+  const { t } = useTranslation();
   const [refreshing, setRefreshing] = useState(false);
   const [todayExerciseMinutes, setTodayExerciseMinutes] = useState(0);
   const [workoutTypes, setWorkoutTypes] = useState<string[]>(['general']);
@@ -249,7 +250,7 @@ export default function ActivityTrackerScreen() {
           // Log to activity_log for achievements
           if (user) {
             try {
-              const workoutTypeLabel = WORKOUT_TYPES.find(t => t.value === selectedType)?.label || 'Exercise';
+              const workoutTypeLabel = WORKOUT_TYPES.find(workoutTypeOption => workoutTypeOption.value === selectedType)?.label || 'Exercise';
               const { logActivity } = await import('@/utils/activityLogger');
               await logActivity({
                 userId: user.id,
@@ -287,7 +288,7 @@ export default function ActivityTrackerScreen() {
       // Directly log workout to activity_log for achievements
       if (user) {
         try {
-          const workoutTypeLabel = WORKOUT_TYPES.find(t => t.value === selectedType)?.label || 'Exercise';
+          const workoutTypeLabel = WORKOUT_TYPES.find(workoutTypeOption => workoutTypeOption.value === selectedType)?.label || 'Exercise';
           const { logActivity } = await import('@/utils/activityLogger');
           await logActivity({
             userId: user.id,
@@ -581,17 +582,10 @@ export default function ActivityTrackerScreen() {
   const percentage = Math.round(progress * 100);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      {/* Header — stack provides back to Wellness tab root */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow-back"
-            size={24}
-            color={colors.text}
-          />
-        </TouchableOpacity>
+        <View style={styles.backButton} />
         <Text style={styles.headerTitle}>Activity Tracker</Text>
         <TouchableOpacity 
           onPress={() => {
@@ -923,7 +917,7 @@ export default function ActivityTrackerScreen() {
 
             <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
               {workoutTypes.map((type, index) => {
-                const workoutType = WORKOUT_TYPES.find(t => t.value === type);
+                const workoutType = WORKOUT_TYPES.find(workoutTypeOption => workoutTypeOption.value === type);
                 if (!workoutType) return null;
 
                 return (
@@ -1022,7 +1016,7 @@ export default function ActivityTrackerScreen() {
 
             <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
               {workoutTypes.map((type, index) => {
-                const workoutType = WORKOUT_TYPES.find(t => t.value === type);
+                const workoutType = WORKOUT_TYPES.find(workoutTypeOption => workoutTypeOption.value === type);
                 if (!workoutType) return null;
 
                 const isSelected = selectedWorkoutType === type;

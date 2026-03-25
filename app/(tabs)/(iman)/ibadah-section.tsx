@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
@@ -42,6 +42,13 @@ export default function IbadahSection() {
       ...ibadahGoals,
       [field]: Math.min(currentValue + amount, maxValue),
     };
+    await updateIbadahGoals(updatedGoals);
+  };
+
+  const setCounter = async (field: string, value: number, maxField: string) => {
+    const maxValue = (ibadahGoals[maxField as keyof typeof ibadahGoals] as number) || 0;
+    const clamped = Math.max(0, Math.min(maxValue, value));
+    const updatedGoals = { ...ibadahGoals, [field]: clamped };
     await updateIbadahGoals(updatedGoals);
   };
 
@@ -152,9 +159,17 @@ export default function IbadahSection() {
 
           {(ibadahGoals.sunnahDailyGoal || 0) > 0 && (
             <View style={styles.goalItem}>
-              <Text style={styles.goalLabel}>
-                Sunnah Prayers ({ibadahGoals.sunnahCompleted || 0}/{ibadahGoals.sunnahDailyGoal || 0} today)
-              </Text>
+              <View style={styles.goalLabelRow}>
+                <Text style={styles.goalLabel}>Sunnah Prayers </Text>
+                <TextInput
+                  style={styles.goalCountInput}
+                  value={String(ibadahGoals.sunnahCompleted || 0)}
+                  onChangeText={(t) => setCounter('sunnahCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'sunnahDailyGoal')}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                />
+                <Text style={styles.goalLabel}> / {ibadahGoals.sunnahDailyGoal || 0} today</Text>
+              </View>
               <View style={styles.progressBar}>
                 <View 
                   style={[
@@ -191,9 +206,17 @@ export default function IbadahSection() {
 
           {(ibadahGoals.tahajjudWeeklyGoal || 0) > 0 && (
             <View style={styles.goalItem}>
-              <Text style={styles.goalLabel}>
-                Tahajjud ({ibadahGoals.tahajjudCompleted || 0}/{ibadahGoals.tahajjudWeeklyGoal || 0} this week)
-              </Text>
+              <View style={styles.goalLabelRow}>
+                <Text style={styles.goalLabel}>Tahajjud </Text>
+                <TextInput
+                  style={styles.goalCountInput}
+                  value={String(ibadahGoals.tahajjudCompleted || 0)}
+                  onChangeText={(t) => setCounter('tahajjudCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'tahajjudWeeklyGoal')}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                />
+                <Text style={styles.goalLabel}> / {ibadahGoals.tahajjudWeeklyGoal || 0} this week</Text>
+              </View>
               <View style={styles.progressBar}>
                 <View 
                   style={[
@@ -246,9 +269,17 @@ export default function IbadahSection() {
           <View style={styles.subsectionContent}>
             {(ibadahGoals.quranDailyPagesGoal || 0) > 0 && (
               <View style={styles.goalItem}>
-                <Text style={styles.goalLabel}>
-                  Daily Pages ({ibadahGoals.quranDailyPagesCompleted || 0}/{ibadahGoals.quranDailyPagesGoal || 0})
-                </Text>
+                <View style={styles.goalLabelRow}>
+                  <Text style={styles.goalLabel}>Daily Pages </Text>
+                  <TextInput
+                    style={styles.goalCountInput}
+                    value={String(ibadahGoals.quranDailyPagesCompleted || 0)}
+                    onChangeText={(t) => setCounter('quranDailyPagesCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'quranDailyPagesGoal')}
+                    keyboardType="number-pad"
+                    maxLength={4}
+                  />
+                  <Text style={styles.goalLabel}> / {ibadahGoals.quranDailyPagesGoal || 0}</Text>
+                </View>
                 <View style={styles.progressBar}>
                   <View 
                     style={[
@@ -295,9 +326,17 @@ export default function IbadahSection() {
 
             {(ibadahGoals.quranDailyVersesGoal || 0) > 0 && (
               <View style={styles.goalItem}>
-                <Text style={styles.goalLabel}>
-                  Daily Verses ({ibadahGoals.quranDailyVersesCompleted || 0}/{ibadahGoals.quranDailyVersesGoal || 0})
-                </Text>
+                <View style={styles.goalLabelRow}>
+                  <Text style={styles.goalLabel}>Daily Verses </Text>
+                  <TextInput
+                    style={styles.goalCountInput}
+                    value={String(ibadahGoals.quranDailyVersesCompleted || 0)}
+                    onChangeText={(t) => setCounter('quranDailyVersesCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'quranDailyVersesGoal')}
+                    keyboardType="number-pad"
+                    maxLength={5}
+                  />
+                  <Text style={styles.goalLabel}> / {ibadahGoals.quranDailyVersesGoal || 0}</Text>
+                </View>
                 <View style={styles.progressBar}>
                   <View 
                     style={[
@@ -358,9 +397,17 @@ export default function IbadahSection() {
 
             {(ibadahGoals.quranWeeklyMemorizationGoal || 0) > 0 && (
               <View style={styles.goalItem}>
-                <Text style={styles.goalLabel}>
-                  Weekly Memorization ({ibadahGoals.quranWeeklyMemorizationCompleted || 0}/{ibadahGoals.quranWeeklyMemorizationGoal || 0} verses)
-                </Text>
+                <View style={styles.goalLabelRow}>
+                  <Text style={styles.goalLabel}>Weekly Memorization </Text>
+                  <TextInput
+                    style={styles.goalCountInput}
+                    value={String(ibadahGoals.quranWeeklyMemorizationCompleted || 0)}
+                    onChangeText={(t) => setCounter('quranWeeklyMemorizationCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'quranWeeklyMemorizationGoal')}
+                    keyboardType="number-pad"
+                    maxLength={4}
+                  />
+                  <Text style={styles.goalLabel}> / {ibadahGoals.quranWeeklyMemorizationGoal || 0} verses</Text>
+                </View>
                 <View style={styles.progressBar}>
                   <View 
                     style={[
@@ -424,9 +471,17 @@ export default function IbadahSection() {
           <View style={styles.subsectionContent}>
             {(ibadahGoals.dhikrDailyGoal || 0) > 0 && (
               <View style={styles.goalItem}>
-                <Text style={styles.goalLabel}>
-                  Daily Dhikr ({ibadahGoals.dhikrDailyCompleted || 0}/{ibadahGoals.dhikrDailyGoal || 0})
-                </Text>
+                <View style={styles.goalLabelRow}>
+                  <Text style={styles.goalLabel}>Daily Dhikr </Text>
+                  <TextInput
+                    style={styles.goalCountInput}
+                    value={String(ibadahGoals.dhikrDailyCompleted || 0)}
+                    onChangeText={(t) => setCounter('dhikrDailyCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'dhikrDailyGoal')}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                  />
+                  <Text style={styles.goalLabel}> / {ibadahGoals.dhikrDailyGoal || 0}</Text>
+                </View>
                 <View style={styles.progressBar}>
                   <View 
                     style={[
@@ -543,9 +598,17 @@ export default function IbadahSection() {
 
             {(ibadahGoals.duaDailyGoal || 0) > 0 && (
               <View style={styles.goalItem}>
-                <Text style={styles.goalLabel}>
-                  Daily Duʿāʾ ({ibadahGoals.duaDailyCompleted || 0}/{ibadahGoals.duaDailyGoal || 0})
-                </Text>
+                <View style={styles.goalLabelRow}>
+                  <Text style={styles.goalLabel}>Daily Duʿāʾ </Text>
+                  <TextInput
+                    style={styles.goalCountInput}
+                    value={String(ibadahGoals.duaDailyCompleted || 0)}
+                    onChangeText={(t) => setCounter('duaDailyCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'duaDailyGoal')}
+                    keyboardType="number-pad"
+                    maxLength={4}
+                  />
+                  <Text style={styles.goalLabel}> / {ibadahGoals.duaDailyGoal || 0}</Text>
+                </View>
                 <View style={styles.progressBar}>
                   <View 
                     style={[
@@ -598,9 +661,17 @@ export default function IbadahSection() {
 
           <View style={styles.subsectionContent}>
             <View style={styles.goalItem}>
-              <Text style={styles.goalLabel}>
-                Weekly Fasting ({ibadahGoals.fastingWeeklyCompleted || 0}/{ibadahGoals.fastingWeeklyGoal || 0} days)
-              </Text>
+              <View style={styles.goalLabelRow}>
+                <Text style={styles.goalLabel}>Weekly Fasting </Text>
+                <TextInput
+                  style={styles.goalCountInput}
+                  value={String(ibadahGoals.fastingWeeklyCompleted || 0)}
+                  onChangeText={(t) => setCounter('fastingWeeklyCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'fastingWeeklyGoal')}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                />
+                <Text style={styles.goalLabel}> / {ibadahGoals.fastingWeeklyGoal || 0} days</Text>
+              </View>
               <View style={styles.progressBar}>
                 <View 
                   style={[
@@ -717,10 +788,28 @@ const styles = StyleSheet.create({
   goalItem: {
     gap: spacing.sm,
   },
+  goalLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
   goalLabel: {
     ...typography.body,
     color: colors.text,
     fontWeight: '600',
+  },
+  goalCountInput: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '700',
+    minWidth: 44,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.highlight,
+    textAlign: 'center',
   },
   prayersGrid: {
     flexDirection: 'row',

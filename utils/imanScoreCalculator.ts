@@ -12,6 +12,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getTodayPrayerTimes } from '@/services/PrayerTimeService';
 
 // ============================================================================
 // INTERFACES
@@ -67,6 +68,10 @@ export interface IlmGoals {
   weeklyQuizzesCompleted: number;
   weeklyReflectionGoal: number;
   weeklyReflectionCompleted: number;
+  weeklyStoriesGoal: number;
+  weeklyStoriesCompleted: number;
+  weeklyAllahNamesGoal: number;
+  weeklyAllahNamesCompleted: number;
   
   score?: number;
 }
@@ -129,18 +134,242 @@ export interface SectionScores {
 // CONFIGURATION
 // ============================================================================
 
-// Overall ring weights for final Iman score
+// Overall ring weights for final Iman score (renormalized over active sections only)
 const SECTION_WEIGHTS = {
   ibadah: 0.60,  // 60% - Most important (Worship is the foundation)
   ilm: 0.25,     // 25% - Knowledge
   amanah: 0.15,  // 15% - Well-being
 };
 
+/** Ilm section contributes to overall score only if at least one Ilm goal is enabled */
+export function hasIlmGoalsEnabled(goals: IlmGoals): boolean {
+  return (
+    goals.weeklyLecturesGoal > 0 ||
+    goals.weeklyQuizzesGoal > 0 ||
+    goals.weeklyReflectionGoal > 0 ||
+    goals.weeklyStoriesGoal > 0 ||
+    goals.weeklyAllahNamesGoal > 0
+  );
+}
+
+/** True when exercise/workout is tracked via per-type targets (goals settings), not legacy aggregate fields */
+function hasActiveWorkoutTypeTargets(goals: AmanahGoals): boolean {
+  if (!goals.workoutTypeGoals) return false;
+  for (const typeGoals of Object.values(goals.workoutTypeGoals)) {
+    if (typeGoals?.daily && typeGoals.daily > 0) return true;
+    if (typeGoals?.weekly && typeGoals.weekly > 0) return true;
+  }
+  return false;
+}
+
+function countAmanahDailyWorkoutTargets(goals: AmanahGoals): number {
+  if (!goals.workoutTypeGoals) return 0;
+  let n = 0;
+  for (const typeGoals of Object.values(goals.workoutTypeGoals)) {
+    if (typeGoals?.daily && typeGoals.daily > 0) n += 1;
+  }
+  return n;
+}
+
+function countAmanahWeeklyWorkoutTargets(goals: AmanahGoals): number {
+  if (!goals.workoutTypeGoals) return 0;
+  let n = 0;
+  for (const typeGoals of Object.values(goals.workoutTypeGoals)) {
+    if (typeGoals?.weekly && typeGoals.weekly > 0) n += 1;
+  }
+  return n;
+}
+
+/** Amanah section contributes only if at least one wellness goal is enabled */
+export function hasAmanahGoalsEnabled(goals: AmanahGoals): boolean {
+  if (
+    goals.dailyExerciseGoal > 0 ||
+    goals.dailyWaterGoal > 0 ||
+    goals.dailySleepGoal > 0 ||
+    goals.weeklyWorkoutGoal > 0 ||
+    goals.weeklyMeditationGoal > 0 ||
+    goals.weeklyJournalGoal > 0
+  ) {
+    return true;
+  }
+  if (goals.workoutTypeGoals) {
+    for (const typeGoals of Object.values(goals.workoutTypeGoals)) {
+      if (typeGoals?.daily && typeGoals.daily > 0) return true;
+      if (typeGoals?.weekly && typeGoals.weekly > 0) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Ibadah always participates: fard prayers are always tracked, plus any optional toggles.
+ */
+export function hasIbadahSectionActive(_goals: IbadahGoals): boolean {
+  return true;
+}
+
+/**
+ * Overall Iman score: weighted blend of section scores, counting only sections with
+ * at least one enabled goal (Ilm / Amanah). Weights are renormalized so they sum to 1
+ * among active sections — completing every enabled goal yields 100%.
+ */
+export function calculateOverallImanScore(
+  scores: SectionScores,
+  ibadahGoals: IbadahGoals,
+  ilmGoals: IlmGoals,
+  amanahGoals: AmanahGoals
+): number {
+  let wIbadah = hasIbadahSectionActive(ibadahGoals) ? SECTION_WEIGHTS.ibadah : 0;
+  let wIlm = hasIlmGoalsEnabled(ilmGoals) ? SECTION_WEIGHTS.ilm : 0;
+  let wAmanah = hasAmanahGoalsEnabled(amanahGoals) ? SECTION_WEIGHTS.amanah : 0;
+
+  const sum = wIbadah + wIlm + wAmanah;
+  if (sum <= 0) return 0;
+
+  wIbadah /= sum;
+  wIlm /= sum;
+  wAmanah /= sum;
+
+  return Math.round(
+    scores.ibadah * wIbadah +
+    scores.ilm * wIlm +
+    scores.amanah * wAmanah
+  );
+}
+
 // Ibadah goal weights (Fard prayers are most important)
 const IBADAH_WEIGHTS = {
   fard: 5,       // Fard prayers weighted 5x
   normal: 1,     // Other goals weighted 1x
 };
+
+type GoalPeriod = 'daily' | 'weekly';
+
+interface DecayCarryoverSnapshot {
+  daily: Record<string, number>;
+  weekly: Record<string, number>;
+}
+
+const EMPTY_DECAY_CARRYOVER: DecayCarryoverSnapshot = { daily: {}, weekly: {} };
+
+function getDecayCarryoverKey(userId?: string | null): string {
+  return userId ? `imanDecayCarryover_${userId}` : 'imanDecayCarryover';
+}
+
+async function loadDecayCarryover(userId?: string | null): Promise<DecayCarryoverSnapshot> {
+  try {
+    const raw = await AsyncStorage.getItem(getDecayCarryoverKey(userId));
+    if (!raw) return EMPTY_DECAY_CARRYOVER;
+    const parsed = JSON.parse(raw) as Partial<DecayCarryoverSnapshot>;
+    return {
+      daily: parsed.daily ?? {},
+      weekly: parsed.weekly ?? {},
+    };
+  } catch {
+    return EMPTY_DECAY_CARRYOVER;
+  }
+}
+
+async function saveDecayCarryover(snapshot: DecayCarryoverSnapshot, userId?: string | null): Promise<void> {
+  await AsyncStorage.setItem(getDecayCarryoverKey(userId), JSON.stringify(snapshot));
+}
+
+function getDayElapsedRatio(now: Date = new Date()): number {
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+  return Math.min(1, Math.max(0, (now.getTime() - start) / Math.max(1, end - start)));
+}
+
+function getWeekElapsedRatio(now: Date = new Date()): number {
+  const start = new Date(now);
+  start.setDate(now.getDate() - now.getDay()); // Sunday local start
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 7);
+  end.setMilliseconds(-1);
+  return Math.min(1, Math.max(0, (now.getTime() - start.getTime()) / Math.max(1, end.getTime() - start.getTime())));
+}
+
+function applyProgressDecay(
+  goalKey: string,
+  currentProgress: number,
+  period: GoalPeriod,
+  carryover: DecayCarryoverSnapshot
+): number {
+  const carryMap = period === 'daily' ? carryover.daily : carryover.weekly;
+  const elapsed = period === 'daily' ? getDayElapsedRatio() : getWeekElapsedRatio();
+  const priorProgress = Math.min(1, Math.max(0, carryMap[goalKey] ?? 0));
+  // Decay-floor model:
+  // - At the start of the period, show prior-period progress.
+  // - As time passes, prior progress fades out.
+  // - If the user makes progress in the current period, it becomes the floor (so it doesn't
+  //   drop back down just because the day/week is moving forward).
+  const decayedPrior = priorProgress * (1 - elapsed);
+  const blended = Math.max(currentProgress, decayedPrior);
+  return Math.min(1, Math.max(0, blended));
+}
+
+type FardPrayerKey = keyof IbadahGoals['fardPrayers'];
+
+let dueFardCache:
+  | {
+      key: string; // YYYY-MM-DD-HH
+      due: FardPrayerKey[];
+    }
+  | null = null;
+
+function formatLocalHourCacheKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = `${d.getMonth() + 1}`.padStart(2, '0');
+  const day = `${d.getDate()}`.padStart(2, '0');
+  const h = `${d.getHours()}`.padStart(2, '0');
+  return `${y}-${m}-${day}-${h}`;
+}
+
+function dueFardFallbackFromClock(now: Date): FardPrayerKey[] {
+  const hour = now.getHours();
+  const due: FardPrayerKey[] = ['fajr'];
+  if (hour >= 12) due.push('dhuhr');
+  if (hour >= 15) due.push('asr');
+  if (hour >= 18) due.push('maghrib');
+  if (hour >= 20) due.push('isha');
+  return due;
+}
+
+/**
+ * Determine which fard prayers should currently affect score.
+ * A prayer only counts once its prayer time has begun.
+ */
+async function getDueFardPrayersNow(): Promise<FardPrayerKey[]> {
+  const now = new Date();
+  const cacheKey = formatLocalHourCacheKey(now);
+  if (dueFardCache?.key === cacheKey) return dueFardCache.due;
+
+  try {
+    const today = await getTodayPrayerTimes();
+    const due: FardPrayerKey[] = [];
+
+    const map: Record<FardPrayerKey, Date> = {
+      fajr: today.fajr.date,
+      dhuhr: today.dhuhr.date,
+      asr: today.asr.date,
+      maghrib: today.maghrib.date,
+      isha: today.isha.date,
+    };
+
+    (Object.keys(map) as FardPrayerKey[]).forEach((k) => {
+      if (now >= map[k]) due.push(k);
+    });
+
+    const normalized: FardPrayerKey[] = due.length > 0 ? due : ['fajr'];
+    dueFardCache = { key: cacheKey, due: normalized };
+    return normalized;
+  } catch {
+    const fallback = dueFardFallbackFromClock(now);
+    dueFardCache = { key: cacheKey, due: fallback };
+    return fallback;
+  }
+}
 
 // ============================================================================
 // CALCULATION FUNCTIONS
@@ -170,79 +399,93 @@ function weightedAverage(items: Array<{ progress: number; weight: number }>): nu
 /**
  * Calculate Ibadah (Worship) score
  */
-export function calculateIbadahScore(goals: IbadahGoals): number {
+export async function calculateIbadahScore(
+  goals: IbadahGoals,
+  carryover: DecayCarryoverSnapshot = EMPTY_DECAY_CARRYOVER
+): Promise<number> {
   const items: Array<{ progress: number; weight: number }> = [];
 
-  // Fard Prayers (always enabled, heavily weighted)
-  const fardCompleted = 
-    (goals.fardPrayers.fajr ? 1 : 0) +
-    (goals.fardPrayers.dhuhr ? 1 : 0) +
-    (goals.fardPrayers.asr ? 1 : 0) +
-    (goals.fardPrayers.maghrib ? 1 : 0) +
-    (goals.fardPrayers.isha ? 1 : 0);
-  const fardProgress = calculateProgress(fardCompleted, 5);
-  items.push({ progress: fardProgress, weight: IBADAH_WEIGHTS.fard });
+  // Fard prayers: only due prayers (time started) affect score.
+  const dueFard = await getDueFardPrayersNow();
+  const fardCompleted = dueFard.reduce(
+    (sum, p) => sum + (goals.fardPrayers[p] ? 1 : 0),
+    0
+  );
+  const fardProgress = calculateProgress(fardCompleted, Math.max(1, dueFard.length));
+  items.push({
+    progress: applyProgressDecay('ibadah.fard', fardProgress, 'daily', carryover),
+    weight: IBADAH_WEIGHTS.fard,
+  });
 
   // Optional goals (only if enabled)
   if (goals.sunnahDailyGoal > 0) {
+    const current = calculateProgress(goals.sunnahCompleted, goals.sunnahDailyGoal);
     items.push({
-      progress: calculateProgress(goals.sunnahCompleted, goals.sunnahDailyGoal),
+      progress: applyProgressDecay('ibadah.sunnah', current, 'daily', carryover),
       weight: IBADAH_WEIGHTS.normal,
     });
   }
 
   if (goals.tahajjudWeeklyGoal > 0) {
+    const current = calculateProgress(goals.tahajjudCompleted, goals.tahajjudWeeklyGoal);
     items.push({
-      progress: calculateProgress(goals.tahajjudCompleted, goals.tahajjudWeeklyGoal),
+      progress: applyProgressDecay('ibadah.tahajjud', current, 'weekly', carryover),
       weight: IBADAH_WEIGHTS.normal,
     });
   }
 
   if (goals.quranDailyPagesGoal > 0) {
+    const current = calculateProgress(goals.quranDailyPagesCompleted, goals.quranDailyPagesGoal);
     items.push({
-      progress: calculateProgress(goals.quranDailyPagesCompleted, goals.quranDailyPagesGoal),
+      progress: applyProgressDecay('ibadah.quranDailyPages', current, 'daily', carryover),
       weight: IBADAH_WEIGHTS.normal,
     });
   }
 
   if (goals.quranDailyVersesGoal > 0) {
+    const current = calculateProgress(goals.quranDailyVersesCompleted, goals.quranDailyVersesGoal);
     items.push({
-      progress: calculateProgress(goals.quranDailyVersesCompleted, goals.quranDailyVersesGoal),
+      progress: applyProgressDecay('ibadah.quranDailyVerses', current, 'daily', carryover),
       weight: IBADAH_WEIGHTS.normal,
     });
   }
 
   if (goals.quranWeeklyMemorizationGoal > 0) {
+    const current = calculateProgress(goals.quranWeeklyMemorizationCompleted, goals.quranWeeklyMemorizationGoal);
     items.push({
-      progress: calculateProgress(goals.quranWeeklyMemorizationCompleted, goals.quranWeeklyMemorizationGoal),
+      progress: applyProgressDecay('ibadah.quranWeeklyMemorization', current, 'weekly', carryover),
       weight: IBADAH_WEIGHTS.normal,
     });
   }
 
   if (goals.dhikrDailyGoal > 0) {
+    const current = calculateProgress(goals.dhikrDailyCompleted, goals.dhikrDailyGoal);
     items.push({
-      progress: calculateProgress(goals.dhikrDailyCompleted, goals.dhikrDailyGoal),
+      progress: applyProgressDecay('ibadah.dhikrDaily', current, 'daily', carryover),
       weight: IBADAH_WEIGHTS.normal,
     });
   }
 
   if (goals.dhikrWeeklyGoal > 0) {
+    const current = calculateProgress(goals.dhikrWeeklyCompleted, goals.dhikrWeeklyGoal);
     items.push({
-      progress: calculateProgress(goals.dhikrWeeklyCompleted, goals.dhikrWeeklyGoal),
+      progress: applyProgressDecay('ibadah.dhikrWeekly', current, 'weekly', carryover),
       weight: IBADAH_WEIGHTS.normal,
     });
   }
 
   if (goals.duaDailyGoal > 0) {
+    const current = calculateProgress(goals.duaDailyCompleted || 0, goals.duaDailyGoal);
     items.push({
-      progress: calculateProgress(goals.duaDailyCompleted || 0, goals.duaDailyGoal),
+      progress: applyProgressDecay('ibadah.duaDaily', current, 'daily', carryover),
       weight: IBADAH_WEIGHTS.normal,
     });
   }
 
   if (goals.fastingWeeklyGoal > 0) {
+    const current = calculateProgress(goals.fastingWeeklyCompleted, goals.fastingWeeklyGoal);
     items.push({
-      progress: calculateProgress(goals.fastingWeeklyCompleted, goals.fastingWeeklyGoal),
+      progress: applyProgressDecay('ibadah.fastingWeekly', current, 'weekly', carryover),
       weight: IBADAH_WEIGHTS.normal,
     });
   }
@@ -253,27 +496,49 @@ export function calculateIbadahScore(goals: IbadahGoals): number {
 /**
  * Calculate Ilm (Knowledge) score
  */
-export function calculateIlmScore(goals: IlmGoals): number {
+export async function calculateIlmScore(
+  goals: IlmGoals,
+  carryover: DecayCarryoverSnapshot = EMPTY_DECAY_CARRYOVER
+): Promise<number> {
   const items: Array<{ progress: number; weight: number }> = [];
 
   if (goals.weeklyLecturesGoal > 0) {
+    const current = calculateProgress(goals.weeklyLecturesCompleted, goals.weeklyLecturesGoal);
     items.push({
-      progress: calculateProgress(goals.weeklyLecturesCompleted, goals.weeklyLecturesGoal),
+      progress: applyProgressDecay('ilm.weeklyLectures', current, 'weekly', carryover),
       weight: 1,
     });
   }
 
 
   if (goals.weeklyQuizzesGoal > 0) {
+    const current = calculateProgress(goals.weeklyQuizzesCompleted, goals.weeklyQuizzesGoal);
     items.push({
-      progress: calculateProgress(goals.weeklyQuizzesCompleted, goals.weeklyQuizzesGoal),
+      progress: applyProgressDecay('ilm.weeklyQuizzes', current, 'weekly', carryover),
       weight: 1,
     });
   }
 
   if (goals.weeklyReflectionGoal > 0) {
+    const current = calculateProgress(goals.weeklyReflectionCompleted, goals.weeklyReflectionGoal);
     items.push({
-      progress: calculateProgress(goals.weeklyReflectionCompleted, goals.weeklyReflectionGoal),
+      progress: applyProgressDecay('ilm.weeklyReflection', current, 'weekly', carryover),
+      weight: 1,
+    });
+  }
+
+  if (goals.weeklyStoriesGoal > 0) {
+    const current = calculateProgress(goals.weeklyStoriesCompleted, goals.weeklyStoriesGoal);
+    items.push({
+      progress: applyProgressDecay('ilm.weeklyStories', current, 'weekly', carryover),
+      weight: 1,
+    });
+  }
+
+  if (goals.weeklyAllahNamesGoal > 0) {
+    const current = calculateProgress(goals.weeklyAllahNamesCompleted, goals.weeklyAllahNamesGoal);
+    items.push({
+      progress: applyProgressDecay('ilm.weeklyAllahNames', current, 'weekly', carryover),
       weight: 1,
     });
   }
@@ -283,68 +548,94 @@ export function calculateIlmScore(goals: IlmGoals): number {
 
 /**
  * Calculate Amanah (Well-Being) score
+ *
+ * Exercise: when workoutTypeGoals has any target, that is the only source for exercise/workout
+ * (avoids double-counting the same toggles as both dailyExerciseGoal and per-type rows).
+ * Per-type completion falls back to dailyExerciseCompleted / weeklyWorkoutCompleted when there is
+ * exactly one active daily or weekly workout target — those fields are what physical-health updates.
  */
-export function calculateAmanahScore(goals: AmanahGoals): number {
+export async function calculateAmanahScore(
+  goals: AmanahGoals,
+  carryover: DecayCarryoverSnapshot = EMPTY_DECAY_CARRYOVER
+): Promise<number> {
   const items: Array<{ progress: number; weight: number }> = [];
+  const useWorkoutTypeBreakdown = hasActiveWorkoutTypeTargets(goals);
+  const dailyWorkoutTargetCount = countAmanahDailyWorkoutTargets(goals);
+  const weeklyWorkoutTargetCount = countAmanahWeeklyWorkoutTargets(goals);
 
-  // Daily goals
-  if (goals.dailyExerciseGoal > 0) {
+  // Daily goals — aggregate exercise only when not using per-type workout goals
+  if (!useWorkoutTypeBreakdown && goals.dailyExerciseGoal > 0) {
+    const current = calculateProgress(goals.dailyExerciseCompleted, goals.dailyExerciseGoal);
     items.push({
-      progress: calculateProgress(goals.dailyExerciseCompleted, goals.dailyExerciseGoal),
+      progress: applyProgressDecay('amanah.dailyExercise', current, 'daily', carryover),
       weight: 1,
     });
   }
 
   if (goals.dailyWaterGoal > 0) {
+    const current = calculateProgress(goals.dailyWaterCompleted, goals.dailyWaterGoal);
     items.push({
-      progress: calculateProgress(goals.dailyWaterCompleted, goals.dailyWaterGoal),
+      progress: applyProgressDecay('amanah.dailyWater', current, 'daily', carryover),
       weight: 1,
     });
   }
 
   if (goals.dailySleepGoal > 0) {
+    const current = calculateProgress(goals.dailySleepCompleted, goals.dailySleepGoal);
     items.push({
-      progress: calculateProgress(goals.dailySleepCompleted, goals.dailySleepGoal),
+      progress: applyProgressDecay('amanah.dailySleep', current, 'daily', carryover),
       weight: 1,
     });
   }
 
-  // Weekly goals
-  if (goals.weeklyWorkoutGoal > 0) {
+  // Legacy weekly workout count — skip when using workout-type weekly targets
+  if (!useWorkoutTypeBreakdown && goals.weeklyWorkoutGoal > 0) {
+    const current = calculateProgress(goals.weeklyWorkoutCompleted, goals.weeklyWorkoutGoal);
     items.push({
-      progress: calculateProgress(goals.weeklyWorkoutCompleted, goals.weeklyWorkoutGoal),
+      progress: applyProgressDecay('amanah.weeklyWorkout', current, 'weekly', carryover),
       weight: 1,
     });
   }
 
   if (goals.weeklyMeditationGoal > 0) {
+    const current = calculateProgress(goals.weeklyMeditationCompleted, goals.weeklyMeditationGoal);
     items.push({
-      progress: calculateProgress(goals.weeklyMeditationCompleted, goals.weeklyMeditationGoal),
+      progress: applyProgressDecay('amanah.weeklyMeditation', current, 'weekly', carryover),
       weight: 1,
     });
   }
 
   if (goals.weeklyJournalGoal > 0) {
+    const current = calculateProgress(goals.weeklyJournalCompleted, goals.weeklyJournalGoal);
     items.push({
-      progress: calculateProgress(goals.weeklyJournalCompleted, goals.weeklyJournalGoal),
+      progress: applyProgressDecay('amanah.weeklyJournal', current, 'weekly', carryover),
       weight: 1,
     });
   }
 
-  // Workout type goals (if enabled)
-  if (goals.workoutTypeGoals) {
+  if (useWorkoutTypeBreakdown && goals.workoutTypeGoals) {
     for (const [type, typeGoals] of Object.entries(goals.workoutTypeGoals)) {
       if (typeGoals?.daily && typeGoals.daily > 0) {
-        const completed = goals.workoutTypeCompleted?.[type as keyof typeof goals.workoutTypeCompleted]?.daily || 0;
+        const fromType =
+          goals.workoutTypeCompleted?.[type as keyof NonNullable<typeof goals.workoutTypeCompleted>]?.daily ?? 0;
+        const completed =
+          fromType ||
+          (dailyWorkoutTargetCount === 1 ? (goals.dailyExerciseCompleted ?? 0) : 0);
+        const current = calculateProgress(completed, typeGoals.daily);
         items.push({
-          progress: calculateProgress(completed, typeGoals.daily),
+          progress: applyProgressDecay(`amanah.workoutTypeDaily.${type}`, current, 'daily', carryover),
           weight: 1,
         });
       }
       if (typeGoals?.weekly && typeGoals.weekly > 0) {
-        const completed = goals.workoutTypeCompleted?.[type as keyof typeof goals.workoutTypeCompleted]?.weekly || 0;
+        const fromType =
+          goals.workoutTypeCompleted?.[type as keyof NonNullable<typeof goals.workoutTypeCompleted>]?.weekly ?? 0;
+        const completed =
+          fromType ||
+          (weeklyWorkoutTargetCount === 1 ? (goals.weeklyWorkoutCompleted ?? 0) : 0);
+        const current = calculateProgress(completed, typeGoals.weekly);
         items.push({
-          progress: calculateProgress(completed, typeGoals.weekly),
+          progress: applyProgressDecay(`amanah.workoutTypeWeekly.${type}`, current, 'weekly', carryover),
           weight: 1,
         });
       }
@@ -363,10 +654,14 @@ export async function calculateAllSectionScores(
   amanahGoals: AmanahGoals,
   userId?: string | null
 ): Promise<SectionScores> {
+  const carryover = await loadDecayCarryover(userId);
+  const ibadahScore = await calculateIbadahScore(ibadahGoals, carryover);
+  const ilmScore = await calculateIlmScore(ilmGoals, carryover);
+  const amanahScore = await calculateAmanahScore(amanahGoals, carryover);
   const scores: SectionScores = {
-    ibadah: calculateIbadahScore(ibadahGoals),
-    ilm: calculateIlmScore(ilmGoals),
-    amanah: calculateAmanahScore(amanahGoals),
+    ibadah: ibadahScore,
+    ilm: ilmScore,
+    amanah: amanahScore,
   };
 
   // Save scores to storage
@@ -397,8 +692,8 @@ export async function getCurrentSectionScores(userId?: string | null, forceRecal
         const now = new Date();
         const hoursSinceUpdate = (now.getTime() - lastUpdateTime.getTime()) / (1000 * 60 * 60);
         
-        // Use cache if less than 1 hour old
-        if (hoursSinceUpdate < 1) {
+        // Scores are time-decayed; keep cache short so decay stays smooth.
+        if (hoursSinceUpdate < (5 / 60)) {
           return JSON.parse(cached);
         }
       }
@@ -417,17 +712,16 @@ export async function getCurrentSectionScores(userId?: string | null, forceRecal
 }
 
 /**
- * Get overall Iman score (weighted combination of sections)
+ * Get overall Iman score (weighted combination of active sections only)
  */
 export async function getOverallImanScore(userId?: string | null): Promise<number> {
-  const scores = await getCurrentSectionScores(userId);
-  
-  const overallScore = 
-    (scores.ibadah * SECTION_WEIGHTS.ibadah) +
-    (scores.ilm * SECTION_WEIGHTS.ilm) +
-    (scores.amanah * SECTION_WEIGHTS.amanah);
-  
-  return Math.round(overallScore);
+  const [ibadahGoals, ilmGoals, amanahGoals] = await Promise.all([
+    loadIbadahGoals(userId),
+    loadIlmGoals(userId),
+    loadAmanahGoals(userId),
+  ]);
+  const scores = await calculateAllSectionScores(ibadahGoals, ilmGoals, amanahGoals, userId);
+  return calculateOverallImanScore(scores, ibadahGoals, ilmGoals, amanahGoals);
 }
 
 /**
@@ -445,6 +739,36 @@ export async function resetDailyGoals(userId?: string | null): Promise<void> {
   try {
     const ibadahGoals = await loadIbadahGoals(userId);
     const amanahGoals = await loadAmanahGoals(userId);
+    const carryover = await loadDecayCarryover(userId);
+    const nextDailyCarryover: Record<string, number> = {};
+
+    const fardCompletedCount = Object.values(ibadahGoals.fardPrayers).reduce(
+      (sum, v) => sum + (v ? 1 : 0),
+      0
+    );
+    // Store as a ratio so scoring can treat it as progress (0..1).
+    nextDailyCarryover['ibadah.fard'] = fardCompletedCount / 5;
+
+    nextDailyCarryover['ibadah.sunnah'] = calculateProgress(ibadahGoals.sunnahCompleted, ibadahGoals.sunnahDailyGoal);
+    nextDailyCarryover['ibadah.quranDailyPages'] = calculateProgress(ibadahGoals.quranDailyPagesCompleted, ibadahGoals.quranDailyPagesGoal);
+    nextDailyCarryover['ibadah.quranDailyVerses'] = calculateProgress(ibadahGoals.quranDailyVersesCompleted, ibadahGoals.quranDailyVersesGoal);
+    nextDailyCarryover['ibadah.dhikrDaily'] = calculateProgress(ibadahGoals.dhikrDailyCompleted, ibadahGoals.dhikrDailyGoal);
+    nextDailyCarryover['ibadah.duaDaily'] = calculateProgress(ibadahGoals.duaDailyCompleted || 0, ibadahGoals.duaDailyGoal);
+    nextDailyCarryover['amanah.dailyExercise'] = calculateProgress(amanahGoals.dailyExerciseCompleted, amanahGoals.dailyExerciseGoal);
+    nextDailyCarryover['amanah.dailyWater'] = calculateProgress(amanahGoals.dailyWaterCompleted, amanahGoals.dailyWaterGoal);
+    nextDailyCarryover['amanah.dailySleep'] = calculateProgress(amanahGoals.dailySleepCompleted, amanahGoals.dailySleepGoal);
+    const dailyWorkoutTargetCount = countAmanahDailyWorkoutTargets(amanahGoals);
+    if (amanahGoals.workoutTypeGoals) {
+      for (const [type, typeGoals] of Object.entries(amanahGoals.workoutTypeGoals)) {
+        if (typeGoals?.daily && typeGoals.daily > 0) {
+          const completed =
+            amanahGoals.workoutTypeCompleted?.[type as keyof NonNullable<typeof amanahGoals.workoutTypeCompleted>]?.daily ??
+            (dailyWorkoutTargetCount === 1 ? (amanahGoals.dailyExerciseCompleted ?? 0) : 0);
+          nextDailyCarryover[`amanah.workoutTypeDaily.${type}`] = calculateProgress(completed, typeGoals.daily);
+        }
+      }
+    }
+    await saveDecayCarryover({ ...carryover, daily: nextDailyCarryover }, userId);
     
     // Reset daily counters
     ibadahGoals.fardPrayers = {
@@ -490,6 +814,38 @@ export async function resetWeeklyGoals(userId?: string | null): Promise<void> {
     const ibadahGoals = await loadIbadahGoals(userId);
     const ilmGoals = await loadIlmGoals(userId);
     const amanahGoals = await loadAmanahGoals(userId);
+    const carryover = await loadDecayCarryover(userId);
+    const nextWeeklyCarryover: Record<string, number> = {};
+    nextWeeklyCarryover['ibadah.tahajjud'] = calculateProgress(ibadahGoals.tahajjudCompleted, ibadahGoals.tahajjudWeeklyGoal);
+    nextWeeklyCarryover['ibadah.dhikrWeekly'] = calculateProgress(ibadahGoals.dhikrWeeklyCompleted, ibadahGoals.dhikrWeeklyGoal);
+    nextWeeklyCarryover['ibadah.quranWeeklyMemorization'] = calculateProgress(
+      ibadahGoals.quranWeeklyMemorizationCompleted,
+      ibadahGoals.quranWeeklyMemorizationGoal
+    );
+    nextWeeklyCarryover['ibadah.fastingWeekly'] = calculateProgress(ibadahGoals.fastingWeeklyCompleted, ibadahGoals.fastingWeeklyGoal);
+    nextWeeklyCarryover['ilm.weeklyLectures'] = calculateProgress(ilmGoals.weeklyLecturesCompleted, ilmGoals.weeklyLecturesGoal);
+    nextWeeklyCarryover['ilm.weeklyQuizzes'] = calculateProgress(ilmGoals.weeklyQuizzesCompleted, ilmGoals.weeklyQuizzesGoal);
+    nextWeeklyCarryover['ilm.weeklyReflection'] = calculateProgress(ilmGoals.weeklyReflectionCompleted, ilmGoals.weeklyReflectionGoal);
+    nextWeeklyCarryover['ilm.weeklyStories'] = calculateProgress(ilmGoals.weeklyStoriesCompleted, ilmGoals.weeklyStoriesGoal);
+    nextWeeklyCarryover['ilm.weeklyAllahNames'] = calculateProgress(ilmGoals.weeklyAllahNamesCompleted, ilmGoals.weeklyAllahNamesGoal);
+    nextWeeklyCarryover['amanah.weeklyWorkout'] = calculateProgress(amanahGoals.weeklyWorkoutCompleted, amanahGoals.weeklyWorkoutGoal);
+    const weeklyWorkoutTargetCount = countAmanahWeeklyWorkoutTargets(amanahGoals);
+    nextWeeklyCarryover['amanah.weeklyMeditation'] = calculateProgress(
+      amanahGoals.weeklyMeditationCompleted,
+      amanahGoals.weeklyMeditationGoal
+    );
+    nextWeeklyCarryover['amanah.weeklyJournal'] = calculateProgress(amanahGoals.weeklyJournalCompleted, amanahGoals.weeklyJournalGoal);
+    if (amanahGoals.workoutTypeGoals) {
+      for (const [type, typeGoals] of Object.entries(amanahGoals.workoutTypeGoals)) {
+        if (typeGoals?.weekly && typeGoals.weekly > 0) {
+          const completed =
+            amanahGoals.workoutTypeCompleted?.[type as keyof NonNullable<typeof amanahGoals.workoutTypeCompleted>]?.weekly ??
+            (weeklyWorkoutTargetCount === 1 ? (amanahGoals.weeklyWorkoutCompleted ?? 0) : 0);
+          nextWeeklyCarryover[`amanah.workoutTypeWeekly.${type}`] = calculateProgress(completed, typeGoals.weekly);
+        }
+      }
+    }
+    await saveDecayCarryover({ ...carryover, weekly: nextWeeklyCarryover }, userId);
     
     // Reset weekly counters
     ibadahGoals.tahajjudCompleted = 0;
@@ -500,6 +856,8 @@ export async function resetWeeklyGoals(userId?: string | null): Promise<void> {
     ilmGoals.weeklyLecturesCompleted = 0;
     ilmGoals.weeklyQuizzesCompleted = 0;
     ilmGoals.weeklyReflectionCompleted = 0;
+    ilmGoals.weeklyStoriesCompleted = 0;
+    ilmGoals.weeklyAllahNamesCompleted = 0;
     
     amanahGoals.weeklyWorkoutCompleted = 0;
     amanahGoals.weeklyMeditationCompleted = 0;
@@ -540,19 +898,15 @@ function getLocalMidnightDateString(): string {
 }
 
 function isNewDay(lastDateString: string | null, currentDateString: string): boolean {
-  if (!lastDateString) return true;
+  if (!lastDateString) return false;
   return lastDateString !== currentDateString;
 }
 
-function isSundayMidnight(now: Date): boolean {
-  const dayOfWeek = now.getDay();
-  const hours = now.getHours();
-  return dayOfWeek === 0 && hours === 0;
-}
-
-function hasResetThisWeek(lastWeeklyResetDate: string | null, currentSundayDate: string): boolean {
-  if (!lastWeeklyResetDate) return false;
-  return lastWeeklyResetDate === currentSundayDate;
+function getLocalWeekStartDateString(now: Date = new Date()): string {
+  const start = new Date(now);
+  start.setDate(now.getDate() - now.getDay());
+  start.setHours(0, 0, 0, 0);
+  return start.toDateString();
 }
 
 export async function checkAndHandleResets(userId?: string | null): Promise<void> {
@@ -562,20 +916,25 @@ export async function checkAndHandleResets(userId?: string | null): Promise<void
     
     const lastDateKey = userId ? `lastImanDate_${userId}` : 'lastImanDate';
     const lastDate = await AsyncStorage.getItem(lastDateKey);
+    if (!lastDate) {
+      await AsyncStorage.setItem(lastDateKey, today);
+    }
     
     if (isNewDay(lastDate, today)) {
       await resetDailyGoals(userId);
       await AsyncStorage.setItem(lastDateKey, today);
     }
     
+    const currentWeekStart = getLocalWeekStartDateString(now);
     const lastWeeklyResetKey = userId ? `lastWeeklyResetDate_${userId}` : 'lastWeeklyResetDate';
     const lastWeeklyReset = await AsyncStorage.getItem(lastWeeklyResetKey);
-    
-    if (isSundayMidnight(now)) {
-      if (!hasResetThisWeek(lastWeeklyReset, today)) {
-        await resetWeeklyGoals(userId);
-        await AsyncStorage.setItem(lastWeeklyResetKey, today);
-      }
+    if (!lastWeeklyReset) {
+      await AsyncStorage.setItem(lastWeeklyResetKey, currentWeekStart);
+      return;
+    }
+    if (lastWeeklyReset !== currentWeekStart) {
+      await resetWeeklyGoals(userId);
+      await AsyncStorage.setItem(lastWeeklyResetKey, currentWeekStart);
     }
   } catch (error) {
     console.error('Error checking and handling resets:', error);
@@ -632,27 +991,33 @@ export async function loadIbadahGoals(userId?: string | null): Promise<IbadahGoa
   };
 }
 
+const DEFAULT_ILM_GOALS: IlmGoals = {
+  weeklyLecturesGoal: 0,
+  weeklyLecturesCompleted: 0,
+  weeklyQuizzesGoal: 0,
+  weeklyQuizzesCompleted: 0,
+  weeklyReflectionGoal: 0,
+  weeklyReflectionCompleted: 0,
+  weeklyStoriesGoal: 0,
+  weeklyStoriesCompleted: 0,
+  weeklyAllahNamesGoal: 0,
+  weeklyAllahNamesCompleted: 0,
+  score: 0,
+};
+
 export async function loadIlmGoals(userId?: string | null): Promise<IlmGoals> {
   try {
     const storageKey = userId ? `ilmGoals_${userId}` : 'ilmGoals';
     const saved = await AsyncStorage.getItem(storageKey);
     if (saved) {
-      const parsed = JSON.parse(saved);
-      return parsed;
+      const parsed = JSON.parse(saved) as Partial<IlmGoals>;
+      return { ...DEFAULT_ILM_GOALS, ...parsed };
     }
   } catch (error) {
     console.error('Error loading ilm goals:', error);
   }
   
-  return {
-    weeklyLecturesGoal: 0,
-    weeklyLecturesCompleted: 0,
-    weeklyQuizzesGoal: 0,
-    weeklyQuizzesCompleted: 0,
-    weeklyReflectionGoal: 0,
-    weeklyReflectionCompleted: 0,
-    score: 0,
-  };
+  return { ...DEFAULT_ILM_GOALS };
 }
 
 export async function loadAmanahGoals(userId?: string | null): Promise<AmanahGoals> {

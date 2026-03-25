@@ -21,6 +21,7 @@ export type ActivityType =
   | 'recitation_listened'
   | 'quiz_completed'
   | 'reflection_written'
+  | 'story_read'
   | 'exercise_completed'
   | 'water_logged'
   | 'workout_completed'

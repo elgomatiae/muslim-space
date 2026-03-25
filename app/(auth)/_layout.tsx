@@ -12,7 +12,7 @@ export default function AuthLayout() {
   useEffect(() => {
     if (!loading && user) {
       console.log('✅ User already authenticated, redirecting from auth screen to home');
-      router.replace('/(tabs)/(home)/');
+      router.replace('/(tabs)/(home)');
     }
   }, [user, loading]);
 

@@ -33,12 +33,12 @@ export default function PrayerGoalsScreen() {
     const sunnahGoal = parseInt(sunnahInput) || 0;
     const tahajjudGoal = parseInt(tahajjudInput) || 0;
 
-    if (sunnahGoal < 0 || sunnahGoal > 20) {
+    if (sunnahGoal < 0 || sunnahGoal > 100) {
       Alert.alert(t('common.error'), t('iman.invalidSunnahPrayers'));
       return;
     }
 
-    if (tahajjudGoal < 0 || tahajjudGoal > 7) {
+    if (tahajjudGoal < 0 || tahajjudGoal > 50) {
       Alert.alert(t('common.error'), t('iman.invalidTahajjudGoal'));
       return;
     }
@@ -105,7 +105,7 @@ export default function PrayerGoalsScreen() {
 
   if (!goals) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['bottom']}>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading...</Text>
         </View>
@@ -116,23 +116,9 @@ export default function PrayerGoalsScreen() {
   const fardCompleted = Object.values(goals.fardPrayers).filter(Boolean).length;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.back();
-          }}
-          activeOpacity={0.7}
-        >
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow-back"
-            size={24}
-            color={colors.text}
-          />
-        </TouchableOpacity>
+        <View style={styles.backButton} />
         <Text style={styles.headerTitle}>Prayer Goals</Text>
         <TouchableOpacity
           style={styles.saveButton}

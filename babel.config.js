@@ -1,5 +1,9 @@
 module.exports = function (api) {
-  api.cache(true);
+  const isEasBuild =
+    process.env.EAS_BUILD === "true" || process.env.EAS_BUILD === "1";
+  const rewriteAdMobToReal =
+    process.env.EXPO_PUBLIC_USE_REAL_ADMOB === "true" && isEasBuild;
+  api.cache.using(() => `${rewriteAdMobToReal}-${isEasBuild}`);
 
   const EDITABLE_COMPONENTS =
     process.env.EXPO_PUBLIC_ENABLE_EDIT_MODE === "TRUE" &&
@@ -40,6 +44,7 @@ module.exports = function (api) {
       ],
       ...EDITABLE_COMPONENTS,
       "@babel/plugin-proposal-export-namespace-from",
+      "./babel-plugins/rewrite-admob-shim-import.js",
       "react-native-worklets/plugin", // react-native-worklets/plugin must be listed last!
     ],
   };

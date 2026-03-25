@@ -1,35 +1,108 @@
 
-import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity, RefreshControl, Alert } from "react-native";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  useWindowDimensions,
+  Pressable,
+} from "react-native";
+import { router } from "expo-router";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
-import Svg, { Circle } from 'react-native-svg';
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
+import ImanRingsDisplay from "@/components/iman/ImanRingsDisplay";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTranslation } from "@/contexts/I18nContext";
-import PrayerTimesWidget from '@/components/PrayerTimesWidget';
+import PrayerTimesWidget from "@/components/PrayerTimesWidget";
 
-import { getDailyVerse, getDailyHadith, type DailyVerse, type DailyHadith } from '@/services/DailyContentService';
-import DailyVerseWidget from '@/components/DailyVerseWidget';
-import DailyHadithWidget from '@/components/DailyHadithWidget';
-import AchievementsHomeWidget from '@/components/iman/AchievementsHomeWidget';
-import { useAchievementCelebration } from '@/contexts/AchievementCelebrationContext';
-import { checkAndUnlockAchievements } from '@/utils/achievementService';
-import StreakDisplay from '@/components/iman/StreakDisplay';
-import AllStreaksDisplay from '@/components/iman/AllStreaksDisplay';
+import { getDailyVerse, getDailyHadith, type DailyVerse, type DailyHadith } from "@/services/DailyContentService";
+import DailyVerseWidget from "@/components/DailyVerseWidget";
+import DailyHadithWidget from "@/components/DailyHadithWidget";
+import AchievementsHomeWidget from "@/components/iman/AchievementsHomeWidget";
+import { useAchievementCelebration } from "@/contexts/AchievementCelebrationContext";
+import { checkAndUnlockAchievements } from "@/utils/achievementService";
+import AllStreaksDisplay from "@/components/iman/AllStreaksDisplay";
+import { TabHubHeader, TabHubHeaderIconDecoration } from "@/components/navigation/TabHubHeader";
+import * as Haptics from "expo-haptics";
 
+const CONTENT_MAX = 600;
+
+/** On-gradient text (matches purple gradient headers elsewhere in the app). */
+const ON_GRADIENT_MUTED = "rgba(255,255,255,0.78)";
+const ON_GRADIENT_SUBTLE = "rgba(255,255,255,0.55)";
+
+function localeTagFor(locale: string): string {
+  const m: Record<string, string> = {
+    ar: "ar-SA",
+    es: "es-ES",
+    fr: "fr-FR",
+    de: "de-DE",
+    tr: "tr-TR",
+    ur: "ur-PK",
+    id: "id-ID",
+    ms: "ms-MY",
+  };
+  return m[locale] ?? "en-US";
+}
+
+type AndroidIconName = React.ComponentProps<typeof IconSymbol>["android_material_icon_name"];
+
+function SectionIndex({ n, title, subtitle }: { n: string; title: string; subtitle?: string }) {
+  return (
+    <View style={idxStyles.row}>
+      <Text style={idxStyles.num}>{n}</Text>
+      <View style={idxStyles.textCol}>
+        <Text style={idxStyles.title}>{title}</Text>
+        {subtitle ? <Text style={idxStyles.sub}>{subtitle}</Text> : null}
+      </View>
+    </View>
+  );
+}
+
+const idxStyles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  num: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: colors.textSecondary,
+    opacity: 0.55,
+    fontVariant: ["tabular-nums"],
+    marginTop: 2,
+    minWidth: 28,
+  },
+  textCol: { flex: 1, minWidth: 0 },
+  title: {
+    ...typography.h4,
+    fontSize: 20,
+    fontWeight: "800",
+    color: colors.text,
+    letterSpacing: -0.4,
+  },
+  sub: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 4,
+    lineHeight: 18,
+  },
+});
 
 export default function HomeScreen() {
   const { t, locale } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const { user } = useAuth();
-  const { 
-    ibadahGoals,
-    sectionScores, 
-    imanScore,
-    refreshScores,
-    updateIbadahGoals,
-  } = useImanTracker();
+  const { refreshScores, imanScore } = useImanTracker();
   const { checkForUncelebratedAchievements } = useAchievementCelebration();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -37,8 +110,36 @@ export default function HomeScreen() {
   const [dailyHadith, setDailyHadith] = useState<DailyHadith | null>(null);
   const [contentLoading, setContentLoading] = useState(true);
 
+  const tag = localeTagFor(locale);
+  const contentWidth = useMemo(
+    () => Math.min(CONTENT_MAX, Math.max(0, windowWidth - spacing.lg * 2)),
+    [windowWidth]
+  );
+  const { currentDate, dateCompact } = useMemo(() => {
+    const d = new Date();
+    return {
+      currentDate: d.toLocaleDateString(tag, {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
+      dateCompact: d.toLocaleDateString(tag, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      }),
+    };
+  }, [tag]);
 
-  // Load daily content
+  const displayName = useMemo(() => {
+    const meta = user?.user_metadata as { username?: string; full_name?: string } | undefined;
+    const raw = meta?.full_name?.trim() || meta?.username?.trim();
+    if (raw) return raw.split(/\s+/)[0];
+    const email = user?.email?.split("@")[0];
+    return email || "";
+  }, [user]);
+
   useEffect(() => {
     loadDailyContent();
   }, []);
@@ -53,7 +154,7 @@ export default function HomeScreen() {
       setDailyVerse(verse);
       setDailyHadith(hadith);
     } catch (error) {
-      console.error('Error loading daily content:', error);
+      console.error("Error loading daily content:", error);
     } finally {
       setContentLoading(false);
     }
@@ -61,489 +162,343 @@ export default function HomeScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([
-      refreshScores(),
-      loadDailyContent(),
-    ]);
+    await Promise.all([refreshScores(), loadDailyContent()]);
     setRefreshing(false);
   };
 
-  // Check for achievements when component mounts and after activities
   useEffect(() => {
     if (user?.id) {
-      // Check achievements on mount
       checkAchievementsAndCelebrate();
-      
-      // Also check for uncelebrated achievements from queue
       checkForUncelebratedAchievements(user.id);
     }
   }, [user?.id]);
 
   const checkAchievementsAndCelebrate = async () => {
     if (!user?.id) return;
-
     try {
-      // Check and unlock achievements
       await checkAndUnlockAchievements(user.id);
     } catch (error) {
-      console.log('Error checking achievements:', error);
+      console.log("Error checking achievements:", error);
     }
   };
-  const currentDate = new Date().toLocaleDateString(locale === 'ar' ? 'ar-SA' : locale === 'es' ? 'es-ES' : locale === 'fr' ? 'fr-FR' : locale === 'de' ? 'de-DE' : locale === 'tr' ? 'tr-TR' : locale === 'ur' ? 'ur-PK' : locale === 'id' ? 'id-ID' : locale === 'ms' ? 'ms-MY' : 'en-US', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
 
-  const renderImanRings = () => {
-    const centerX = 100;
-    const centerY = 100;
-    
-    const ibadahScore = typeof sectionScores.ibadah === 'number' && !isNaN(sectionScores.ibadah) ? sectionScores.ibadah : 0;
-    const ilmScore = typeof sectionScores.ilm === 'number' && !isNaN(sectionScores.ilm) ? sectionScores.ilm : 0;
-    const amanahScore = typeof sectionScores.amanah === 'number' && !isNaN(sectionScores.amanah) ? sectionScores.amanah : 0;
-    
-    // ʿIbādah ring (outer) - Green
-    const ibadahRadius = 85;
-    const ibadahStroke = 12;
-    const ibadahProgressValue = ibadahScore / 100;
-    const ibadahCircumference = 2 * Math.PI * ibadahRadius;
-    const ibadahOffset = ibadahCircumference * (1 - ibadahProgressValue);
-    
-    // ʿIlm ring (middle) - Blue
-    const ilmRadius = 62;
-    const ilmStroke = 10;
-    const ilmProgressValue = ilmScore / 100;
-    const ilmCircumference = 2 * Math.PI * ilmRadius;
-    const ilmOffset = ilmCircumference * (1 - ilmProgressValue);
-    
-    // Amanah ring (inner) - Amber/Gold
-    const amanahRadius = 39;
-    const amanahStroke = 8;
-    const amanahProgressValue = amanahScore / 100;
-    const amanahCircumference = 2 * Math.PI * amanahRadius;
-    const amanahOffset = amanahCircumference * (1 - amanahProgressValue);
+  const go = useCallback((path: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push(path as any);
+  }, []);
 
-    const ibadahColor = '#10B981'; // Green
-    const ilmColor = '#3B82F6'; // Blue
-    const amanahColor = '#F59E0B'; // Amber/Gold
+  const scrollBottomSpacer = Math.max(120, insets.bottom + 150);
+  const gutter = spacing.lg;
 
-    return (
-      <View style={styles.imanRingsContainer}>
-        <View style={styles.ringsWrapper}>
-          <Svg width={200} height={200}>
-            {/* ʿIbādah Ring (Outer) - GREEN */}
-            <Circle
-              cx={centerX}
-              cy={centerY}
-              r={ibadahRadius}
-              stroke="#808080"
-              strokeWidth={ibadahStroke}
-              fill="none"
-              opacity={0.6}
-            />
-            <Circle
-              cx={centerX}
-              cy={centerY}
-              r={ibadahRadius}
-              stroke={ibadahColor}
-              strokeWidth={ibadahStroke}
-              fill="none"
-              strokeDasharray={ibadahCircumference}
-              strokeDashoffset={ibadahOffset}
-              strokeLinecap="round"
-              rotation="-90"
-              origin={`${centerX}, ${centerY}`}
-            />
-            
-            {/* ʿIlm Ring (Middle) - BLUE */}
-            <Circle
-              cx={centerX}
-              cy={centerY}
-              r={ilmRadius}
-              stroke="#808080"
-              strokeWidth={ilmStroke}
-              fill="none"
-              opacity={0.6}
-            />
-            <Circle
-              cx={centerX}
-              cy={centerY}
-              r={ilmRadius}
-              stroke={ilmColor}
-              strokeWidth={ilmStroke}
-              fill="none"
-              strokeDasharray={ilmCircumference}
-              strokeDashoffset={ilmOffset}
-              strokeLinecap="round"
-              rotation="-90"
-              origin={`${centerX}, ${centerY}`}
-            />
-            
-            {/* Amanah Ring (Inner) - GOLD */}
-            <Circle
-              cx={centerX}
-              cy={centerY}
-              r={amanahRadius}
-              stroke="#808080"
-              strokeWidth={amanahStroke}
-              fill="none"
-              opacity={0.6}
-            />
-            <Circle
-              cx={centerX}
-              cy={centerY}
-              r={amanahRadius}
-              stroke={amanahColor}
-              strokeWidth={amanahStroke}
-              fill="none"
-              strokeDasharray={amanahCircumference}
-              strokeDashoffset={amanahOffset}
-              strokeLinecap="round"
-              rotation="-90"
-              origin={`${centerX}, ${centerY}`}
-            />
-          </Svg>
-          
-          {/* Center Content */}
-          <View style={styles.ringsCenterContent}>
-            <Text style={styles.ringsCenterTitle}>{t('home.iman')}</Text>
-            <Text style={styles.ringsCenterPercentage}>{imanScore}%</Text>
-          </View>
-        </View>
-        
-        {/* Ring Labels */}
-        <View style={styles.ringsLabels}>
-          <View style={styles.ringLabelItem}>
-            <View style={[styles.ringLabelDot, { backgroundColor: ibadahColor }]} />
-            <Text style={styles.ringLabelText}>{t('home.ibadah')}</Text>
-            <Text style={styles.ringLabelValue}>{Math.round(ibadahScore)}%</Text>
-          </View>
-          <View style={styles.ringLabelItem}>
-            <View style={[styles.ringLabelDot, { backgroundColor: ilmColor }]} />
-            <Text style={styles.ringLabelText}>{t('home.ilm')}</Text>
-            <Text style={styles.ringLabelValue}>{Math.round(ilmScore)}%</Text>
-          </View>
-          <View style={styles.ringLabelItem}>
-            <View style={[styles.ringLabelDot, { backgroundColor: amanahColor }]} />
-            <Text style={styles.ringLabelText}>{t('home.amanah')}</Text>
-            <Text style={styles.ringLabelValue}>{Math.round(amanahScore)}%</Text>
-          </View>
-        </View>
-      </View>
-    );
-  };
-
+  const dock: { label: string; path: string; ios: string; android: AndroidIconName; dot: string }[] = [
+    { label: t("tabs.iman"), path: "/(tabs)/(iman)", ios: "sparkles", android: "auto-awesome", dot: colors.primary },
+    { label: t("tabs.wellness"), path: "/(tabs)/(wellness)", ios: "leaf.fill", android: "spa", dot: colors.secondary },
+    { label: t("tabs.learning"), path: "/(tabs)/(learning)", ios: "book.fill", android: "menu-book", dot: colors.info },
+    { label: t("tabs.profile"), path: "/(tabs)/profile", ios: "person.crop.circle.fill", android: "person", dot: colors.primaryDark },
+  ];
 
   return (
-    <View style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-        }
-      >
-        {/* Header with Enhanced Gradient */}
-        <LinearGradient
-          colors={colors.gradientPrimary as unknown as readonly [string, string, ...string[]]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerGradient}
+    <SafeAreaView style={styles.safe} edges={["top"]}>
+      <View style={[styles.root, { paddingBottom: insets.bottom > 0 ? Math.min(insets.bottom, 8) : 4 }]}>
+        <TabHubHeader
+          title={t("tabs.home")}
+          subtitle={dateCompact}
+          left={
+            <TabHubHeaderIconDecoration>
+              <IconSymbol ios_icon_name="moon.stars.fill" android_material_icon_name="nightlight" size={22} color={colors.primary} />
+            </TabHubHeaderIconDecoration>
+          }
+        />
+
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.scrollInner,
+            {
+              paddingBottom: scrollBottomSpacer,
+              paddingHorizontal: gutter,
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         >
-          <View style={styles.headerContent}>
-            <View style={styles.headerIconContainer}>
-              <IconSymbol
-                ios_icon_name="moon.stars.fill"
-                android_material_icon_name="nightlight"
-                size={28}
-                color={colors.card}
+          <View style={[styles.column, { maxWidth: contentWidth, alignSelf: "center", width: "100%" }]}>
+            {/* —— Iman hero: same purple system as Iman tab / tracker —— */}
+            <View style={styles.imanHero}>
+              <LinearGradient
+                colors={colors.gradientPrimary as unknown as readonly [string, string, ...string[]]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
               />
-            </View>
-            <View style={styles.headerTextSection}>
-              <Text style={styles.greeting}>{t('home.greeting')}</Text>
-              <Text style={styles.date}>{currentDate}</Text>
-            </View>
-          </View>
-        </LinearGradient>
-
-        {/* Prayer Times Widget - Uses exact GPS location */}
-        <PrayerTimesWidget />
-
-        {/* Daily Quran Verse Widget */}
-        <DailyVerseWidget verse={dailyVerse} loading={contentLoading} />
-
-        {/* Iman Score Rings */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionIconContainer}>
-              <IconSymbol
-                ios_icon_name="chart.pie.fill"
-                android_material_icon_name="pie-chart"
-                size={18}
-                color={colors.primary}
+              <LinearGradient
+                colors={["rgba(255,255,255,0.14)", "transparent", "rgba(20,184,166,0.08)"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
               />
+              <View style={styles.heroVeil} />
+              <Text style={styles.heroKicker}>{currentDate.toUpperCase()}</Text>
+              <Text style={styles.heroGreeting}>{t("home.greeting")}</Text>
+              {displayName ? <Text style={styles.heroName}>{displayName}</Text> : null}
+              <View style={styles.heroScoreRow}>
+                <Text style={styles.heroScoreLabel}>{t("home.imanScore")}</Text>
+                <Text style={styles.heroScoreValue}>{Math.round(imanScore)}</Text>
+                <Text style={styles.heroScorePct}>%</Text>
+              </View>
+              <View style={styles.heroRingsFrame}>
+                <ImanRingsDisplay embedded hideBreakdownToggle onRefresh={refreshScores} />
+              </View>
+              <Pressable
+                style={({ pressed }) => [styles.heroCta, pressed && { opacity: 0.88 }]}
+                onPress={() => go("/(tabs)/(iman)")}
+                android_ripple={{ color: "rgba(255,255,255,0.12)" }}
+              >
+                <Text style={styles.heroCtaText}>{t("home.openFullTracker")}</Text>
+                <IconSymbol ios_icon_name="arrow.up.right" android_material_icon_name="north-east" size={18} color={colors.card} />
+              </Pressable>
             </View>
-            <Text style={styles.sectionTitle}>{t('home.imanScore')}</Text>
-          </View>
-          <View style={styles.imanScoreCard}>
-            {renderImanRings()}
-          </View>
-        </View>
 
-        {/* All Streaks Display */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionIconContainer}>
-              <IconSymbol
-                ios_icon_name="flame.fill"
-                android_material_icon_name="local-fire-department"
-                size={18}
-                color={colors.error}
-              />
+            {/* —— Dock —— */}
+            <View style={styles.dockCard}>
+              <Text style={styles.dockTitle}>{t("home.exploreHubs")}</Text>
+              <View style={styles.dockRow}>
+                {dock.map((d) => (
+                  <TouchableOpacity key={d.path} style={styles.dockItem} activeOpacity={0.85} onPress={() => go(d.path)}>
+                    <View style={[styles.dockGlyph, { borderColor: d.dot + "40" }]}>
+                      <View style={[styles.dockDot, { backgroundColor: d.dot }]} />
+                      <IconSymbol ios_icon_name={d.ios} android_material_icon_name={d.android} size={22} color={colors.primaryDark} />
+                    </View>
+                    <Text style={styles.dockLabel} numberOfLines={2}>
+                      {d.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
-            <Text style={styles.sectionTitle}>{t('home.yourStreaks')}</Text>
+
+            {/* —— 01 Prayer —— */}
+            <View style={styles.sectionBlock}>
+              <SectionIndex n="01" title={t("home.todaySection")} subtitle={t("prayer.prayerTimes")} />
+              <View style={[styles.surfaceCard, styles.accentPrayer]}>
+                <PrayerTimesWidget />
+              </View>
+            </View>
+
+            {/* —— 02 Streaks —— */}
+            <View style={styles.sectionBlock}>
+              <SectionIndex n="02" title={t("home.yourStreaks")} subtitle={t("home.progressPulse")} />
+              <View style={[styles.surfaceCard, styles.accentStreaks]}>
+                <AllStreaksDisplay />
+              </View>
+            </View>
+
+            {/* —— 03 Achievements —— */}
+            <View style={styles.sectionBlock}>
+              <SectionIndex n="03" title={t("home.achievements")} />
+              <View style={[styles.surfaceCard, styles.accentAchieve]}>
+                <AchievementsHomeWidget />
+              </View>
+            </View>
+
+            {/* —— 04 Guidance —— */}
+            <View style={styles.sectionBlock}>
+              <SectionIndex n="04" title={t("home.dailyGuidance")} />
+              <View style={styles.guidanceBlock}>
+                <DailyVerseWidget verse={dailyVerse} loading={contentLoading} />
+                <View style={styles.guidanceSpacer} />
+                <DailyHadithWidget hadith={dailyHadith} loading={contentLoading} />
+              </View>
+            </View>
           </View>
-          <AllStreaksDisplay />
-        </View>
-        
-        {/* Achievements Widget */}
-        <AchievementsHomeWidget />
-
-
-        {/* Daily Hadith Widget */}
-        <View style={styles.section}>
-          <DailyHadithWidget hadith={dailyHadith} loading={contentLoading} />
-        </View>
-
-        <View style={styles.bottomPadding} />
-      </ScrollView>
-    </View>
+        </ScrollView>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safe: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  scrollView: {
+  root: {
     flex: 1,
+    backgroundColor: colors.background,
   },
-  contentContainer: {
-    paddingTop: Platform.OS === 'android' ? 48 : 56,
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xxl,
+  scroll: {
+    flex: 1,
+    backgroundColor: colors.background,
   },
-  headerGradient: {
+  scrollInner: {
+    flexGrow: 1,
+    paddingTop: spacing.md,
+  },
+  column: {
+    gap: 0,
+  },
+  imanHero: {
     borderRadius: borderRadius.xl,
-    padding: spacing.xl,
+    padding: spacing.lg,
     marginBottom: spacing.xl,
+    overflow: "hidden",
     ...shadows.emphasis,
-    overflow: 'hidden',
+    shadowColor: colors.shadowDark,
   },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
+  heroVeil: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255,255,255,0.06)",
   },
-  headerIconContainer: {
+  heroKicker: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 2,
+    color: ON_GRADIENT_SUBTLE,
+    marginBottom: spacing.sm,
+  },
+  heroGreeting: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: ON_GRADIENT_MUTED,
+  },
+  heroName: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: colors.card,
+    letterSpacing: -1,
+    marginTop: 4,
+    marginBottom: spacing.lg,
+  },
+  heroScoreRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 6,
+    marginBottom: spacing.md,
+  },
+  heroScoreLabel: {
+    ...typography.caption,
+    color: ON_GRADIENT_MUTED,
+    fontWeight: "600",
+    marginRight: 4,
+  },
+  heroScoreValue: {
+    fontSize: 42,
+    fontWeight: "800",
+    color: colors.card,
+    fontVariant: ["tabular-nums"],
+    letterSpacing: -2,
+  },
+  heroScorePct: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: ON_GRADIENT_MUTED,
+  },
+  heroRingsFrame: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xl,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.45)",
+  },
+  heroCta: {
+    marginTop: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: 14,
+    borderRadius: borderRadius.round,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.45)",
+    backgroundColor: "rgba(255,255,255,0.18)",
+  },
+  heroCtaText: {
+    ...typography.bodyBold,
+    color: colors.card,
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
+  dockCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.xl + spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
+  },
+  dockTitle: {
+    ...typography.captionBold,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
+    textTransform: "uppercase",
+  },
+  dockRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
+  dockItem: {
+    flex: 1,
+    alignItems: "center",
+    minWidth: 0,
+  },
+  dockGlyph: {
     width: 56,
     height: 56,
-    borderRadius: borderRadius.round,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  headerTextSection: {
-    flex: 1,
-  },
-  greeting: {
-    ...typography.h3,
-    color: colors.card,
-    marginBottom: spacing.xs,
-  },
-  date: {
-    ...typography.caption,
-    color: colors.card,
-    opacity: 0.95,
-  },
-  section: {
-    marginBottom: spacing.xl,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-    gap: spacing.sm,
-  },
-  sectionIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.highlightPurple,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sectionTitle: {
-    ...typography.bodyBold,
-    fontSize: 18,
-    color: colors.text,
-  },
-  imanScoreCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    ...shadows.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  imanRingsContainer: {
-    alignItems: 'center',
-  },
-  ringsWrapper: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 200,
-    height: 200,
-    marginBottom: spacing.md,
-  },
-  ringsCenterContent: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ringsCenterTitle: {
-    ...typography.caption,
-    color: colors.text,
-    fontWeight: '600',
-    marginBottom: spacing.xs,
-  },
-  ringsCenterPercentage: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: colors.primary,
-  },
-  ringsLabels: {
-    width: '100%',
-    gap: spacing.xs,
-  },
-  ringLabelItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  ringLabelDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  ringLabelText: {
-    ...typography.caption,
-    color: colors.text,
-    flex: 1,
-  },
-  ringLabelValue: {
-    ...typography.captionBold,
-    color: colors.text,
-  },
-  contentCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    ...shadows.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  loadingCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-  },
-  loadingText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  quoteIconContainer: {
-    alignSelf: 'flex-start',
+    borderRadius: 18,
+    backgroundColor: colors.highlight,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: spacing.sm,
-    opacity: 0.3,
+    position: "relative",
   },
-  hadithArabic: {
-    fontSize: 16,
-    fontWeight: '600',
+  dockDot: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  dockLabel: {
+    ...typography.small,
+    fontSize: 10,
+    fontWeight: "700",
     color: colors.text,
-    textAlign: 'right',
-    marginBottom: spacing.md,
-    lineHeight: 26,
+    textAlign: "center",
+    lineHeight: 13,
   },
-  contentText: {
-    ...typography.body,
-    lineHeight: 22,
-    color: colors.text,
-    fontStyle: 'italic',
-    marginBottom: spacing.md,
+  sectionBlock: {
+    marginBottom: spacing.xl + spacing.sm,
   },
-  sourceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  sourceDivider: {
-    width: 32,
-    height: 3,
-    backgroundColor: colors.accent,
-    borderRadius: borderRadius.sm,
-  },
-  contentSource: {
-    ...typography.captionBold,
-    color: colors.textSecondary,
-  },
-  verseCard: {
+  surfaceCard: {
+    backgroundColor: colors.card,
     borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    ...shadows.emphasis,
-    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: "hidden",
+    ...shadows.card,
   },
-  verseArabic: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.card,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-    lineHeight: 32,
+  accentPrayer: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.secondary,
   },
-  verseDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    marginBottom: spacing.md,
+  accentStreaks: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.error,
   },
-  verseText: {
-    ...typography.body,
-    lineHeight: 22,
-    color: colors.card,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    marginBottom: spacing.sm,
+  accentAchieve: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
   },
-  verseReference: {
-    ...typography.captionBold,
-    color: colors.card,
-    textAlign: 'center',
-    opacity: 0.95,
-  },
-  bottomPadding: {
-    height: 100,
+  guidanceBlock: {},
+  guidanceSpacer: {
+    height: spacing.md,
   },
 });

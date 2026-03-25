@@ -1,11 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { useAccessGate } from '@/hooks/useAccessGate';
+import { AccessGate } from '@/components/access/AccessGate';
 
 interface QuizCategory {
   id: string;
@@ -23,11 +26,25 @@ interface QuizStats {
   bestScore: number;
 }
 
+type QuizAttemptRow = {
+  quiz_id?: string | null;
+  category_id?: string | null;
+  score: number;
+  percentage: number;
+};
+
+/** expo-linear-gradient expects a tuple, not `string[]` (commonStyles gradients are typed as arrays). */
+function gradient3(c: readonly string[]): readonly [string, string, string] {
+  return c as unknown as readonly [string, string, string];
+}
+
 export default function QuizzesScreen() {
   const router = useRouter();
+  const { checkAccess, showGate, gateVisible, onGateClose, onGateGranted } = useAccessGate();
   const [categories, setCategories] = useState<QuizCategory[]>([]);
   const [stats, setStats] = useState<Record<string, QuizStats>>({});
   const [loading, setLoading] = useState(true);
+  const [pendingCategory, setPendingCategory] = useState<QuizCategory | null>(null);
 
   useEffect(() => {
     loadCategories();
@@ -105,7 +122,7 @@ export default function QuizzesScreen() {
       }
 
       const statsMap: Record<string, QuizStats> = {};
-      data?.forEach((attempt) => {
+      (data as QuizAttemptRow[] | null | undefined)?.forEach((attempt) => {
         // Use quiz_id if available, fallback to category_id for backwards compatibility
         const statKey = attempt.quiz_id || attempt.category_id;
         if (!statKey) return;
@@ -130,11 +147,32 @@ export default function QuizzesScreen() {
     }
   };
 
-  const handleCategoryPress = (category: QuizCategory) => {
-    router.push({
-      pathname: '/(tabs)/(learning)/quiz-take',
-      params: { quizId: category.quiz_id, categoryName: category.title },
-    });
+  const handleCategoryPress = async (category: QuizCategory) => {
+    // Check if user has access
+    if (await checkAccess()) {
+      // User has access, navigate directly
+      router.push({
+        pathname: '/(tabs)/(learning)/quiz-take',
+        params: { quizId: category.quiz_id, categoryName: category.title },
+      });
+    } else {
+      // No access, show gate and store the category
+      setPendingCategory(category);
+      showGate();
+    }
+  };
+
+  // Handle access granted - navigate to pending quiz
+  const handleGateGranted = () => {
+    onGateGranted();
+    if (pendingCategory) {
+      const category = pendingCategory;
+      setPendingCategory(null);
+      router.push({
+        pathname: '/(tabs)/(learning)/quiz-take',
+        params: { quizId: category.quiz_id, categoryName: category.title },
+      });
+    }
   };
 
   const getGradientForIndex = (index: number): string[] => {
@@ -149,14 +187,14 @@ export default function QuizzesScreen() {
     return gradients[index % gradients.length];
   };
 
-  const getIconForQuizId = (quizId: string): { ios: string; android: string } => {
-    const iconMap: Record<string, { ios: string; android: string }> = {
-      'quran': { ios: 'book.fill', android: 'menu-book' },
-      'seerah': { ios: 'person.circle.fill', android: 'account-circle' },
-      'history': { ios: 'clock.fill', android: 'history' },
-      'pillars': { ios: 'star.fill', android: 'star' },
-      'fiqh': { ios: 'scale.3d', android: 'balance' },
-      'prophets': { ios: 'person.3.fill', android: 'groups' },
+  const getIconForQuizId = (quizId: string): { ios: string; android: keyof typeof MaterialIcons.glyphMap } => {
+    const iconMap: Record<string, { ios: string; android: keyof typeof MaterialIcons.glyphMap }> = {
+      quran: { ios: 'book.fill', android: 'menu-book' },
+      seerah: { ios: 'person.circle.fill', android: 'account-circle' },
+      history: { ios: 'clock.fill', android: 'history' },
+      pillars: { ios: 'star.fill', android: 'star' },
+      fiqh: { ios: 'scale.3d', android: 'balance' },
+      prophets: { ios: 'person.3.fill', android: 'groups' },
     };
     return iconMap[quizId] || { ios: 'questionmark.circle.fill', android: 'quiz' };
   };
@@ -181,7 +219,7 @@ export default function QuizzesScreen() {
 
         {/* Featured Banner */}
         <LinearGradient
-          colors={colors.gradientOcean}
+          colors={gradient3(colors.gradientOcean)}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.featuredBanner}
@@ -214,7 +252,7 @@ export default function QuizzesScreen() {
                   onPress={() => handleCategoryPress(category)}
                 >
                   <LinearGradient
-                    colors={getGradientForIndex(index)}
+                    colors={gradient3(getGradientForIndex(index))}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.categoryGradient}
@@ -295,6 +333,15 @@ export default function QuizzesScreen() {
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      {/* Access Gate Modal */}
+      <AccessGate
+        visible={gateVisible}
+        onClose={onGateClose}
+        onAccessGranted={handleGateGranted}
+        title="Unlock Quizzes"
+        description="Watch a short ad to unlock access to Islamic quizzes"
+      />
     </View>
   );
 }

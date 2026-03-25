@@ -1,465 +1,330 @@
-
-import React, { useState, useEffect, useMemo } from "react";
-import { View, Text, StyleSheet, Animated, TouchableOpacity, ActivityIndicator } from "react-native";
+import React, { useState, useMemo } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  Platform,
+  LayoutAnimation,
+  UIManager,
+} from "react-native";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
-import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
-import * as Haptics from 'expo-haptics';
+import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from "react-native-svg";
+import * as Haptics from "expo-haptics";
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
+import { getScreenWidth } from "@/utils/screenDimensions";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const SCREEN_W = getScreenWidth();
+const BOARD = 400;
+const CX = 200;
+const CY = 200;
+
+const IBADAH = { key: "ibadah" as const, label: "ʿIbādah", c: "#10B981", cd: "#047857" };
+const ILM = { key: "ilm" as const, label: "ʿIlm", c: "#3B82F6", cd: "#1D4ED8" };
+const AMANAH = { key: "amanah" as const, label: "Amanah", c: "#F59E0B", cd: "#B45309" };
 
 interface ImanRingsDisplayProps {
   onRefresh?: () => void;
+  /**
+   * Renders the same rings UI without the outer tracker card chrome — for Home hero inset.
+   * Optional breakdown toggle can be hidden to keep the hero minimal.
+   */
+  embedded?: boolean;
+  /** Max width (px) used to scale the ring board when embedded (default ~min(screen-48, 320)). */
+  embeddedMaxBoardWidth?: number;
+  /** When embedded: hide chevron + expandable pillar breakdown (tap “open tracker” instead). */
+  hideBreakdownToggle?: boolean;
 }
 
-export default function ImanRingsDisplay({ onRefresh }: ImanRingsDisplayProps) {
-  const pulseAnim = useMemo(() => new Animated.Value(1), []);
-  const glowAnim = useMemo(() => new Animated.Value(0), []);
-  const rotateAnim = useMemo(() => new Animated.Value(0), []);
-  
+export default function ImanRingsDisplay({
+  onRefresh,
+  embedded = false,
+  embeddedMaxBoardWidth,
+  hideBreakdownToggle = false,
+}: ImanRingsDisplayProps) {
   const { sectionScores, imanScore, isLoading, error } = useImanTracker();
   const [showBreakdown, setShowBreakdown] = useState(false);
 
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.08,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
+  const ringScale = useMemo(() => {
+    if (embedded) {
+      const cap = embeddedMaxBoardWidth ?? Math.min(SCREEN_W - 48, 320);
+      return Math.min(1, cap / BOARD);
+    }
+    return Math.min(1, (SCREEN_W - 56) / BOARD);
+  }, [embedded, embeddedMaxBoardWidth]);
 
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowAnim, {
-          toValue: 1,
-          duration: 3000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(glowAnim, {
-          toValue: 0,
-          duration: 3000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
+  const ibadahRadius = 168;
+  const ibadahStroke = 22;
+  const ilmRadius = 124;
+  const ilmStroke = 20;
+  const amanahRadius = 82;
+  const amanahStroke = 18;
 
-    Animated.loop(
-      Animated.timing(rotateAnim, {
-        toValue: 1,
-        duration: 60000,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, [pulseAnim, glowAnim, rotateAnim]);
+  const ibC = 2 * Math.PI * ibadahRadius;
+  const ilC = 2 * Math.PI * ilmRadius;
+  const amC = 2 * Math.PI * amanahRadius;
 
-  const getAchievementBadge = (percentage: number) => {
-    if (percentage >= 100) return { icon: "star.fill", color: colors.accent, label: "Perfect" };
-    if (percentage >= 80) return { icon: "flame.fill", color: colors.warning, label: "On Fire" };
-    if (percentage >= 60) return { icon: "bolt.fill", color: colors.info, label: "Strong" };
-    return { icon: "leaf.fill", color: colors.primary, label: "Growing" };
-  };
+  const ibP = sectionScores.ibadah / 100;
+  const ilP = sectionScores.ilm / 100;
+  const amP = sectionScores.amanah / 100;
+  const ibProgress = Math.max(0, Math.min(1, ibP || 0));
+  const ilProgress = Math.max(0, Math.min(1, ilP || 0));
+  const amProgress = Math.max(0, Math.min(1, amP || 0));
+  const useGradientStroke = Platform.OS !== "web";
 
-  const getMotivationalMessage = (percentage: number) => {
-    if (percentage >= 100) return "Masha'Allah! Perfect! 🌟";
-    if (percentage >= 90) return "Outstanding! Almost there! 💪";
-    if (percentage >= 80) return "Excellent progress! ✨";
-    if (percentage >= 70) return "Great effort! Keep going! 🌟";
-    if (percentage >= 60) return "Good progress! Stay consistent! 💫";
-    if (percentage >= 50) return "Halfway there! 🌱";
-    if (percentage >= 40) return "Keep pushing forward! 🚀";
-    if (percentage >= 30) return "Every action counts! 💪";
-    if (percentage >= 20) return "Start small, grow big! 🌱";
-    return "Begin your journey today! 🌙";
-  };
+  const ibadahColor = IBADAH.c;
+  const ibadahColorDeep = IBADAH.cd;
+  const ilmColor = ILM.c;
+  const ilmColorDeep = ILM.cd;
+  const amanahColor = AMANAH.c;
+  const amanahColorDeep = AMANAH.cd;
 
   const getDecayWarning = () => {
-    if (imanScore < 30) {
-      return { text: "⚠️ Low Iman score! Complete goals to increase.", color: colors.error };
-    }
-    if (imanScore < 50) {
-      return { text: "⏰ Score decaying. Stay active!", color: colors.warning };
-    }
+    if (imanScore < 30) return { text: "Score low — add goals.", color: colors.error };
+    if (imanScore < 50) return { text: "Stay active this week.", color: colors.warning };
     return null;
   };
 
-  const badge = getAchievementBadge(imanScore);
   const decayWarning = getDecayWarning();
 
-  // Ring configuration - LARGER SIZES
-  const centerX = 200;
-  const centerY = 200;
-  
-  // ʿIbādah ring (outer) - GREEN
-  const ibadahRadius = 170;
-  const ibadahStroke = 24;
-  const ibadahCircumference = 2 * Math.PI * ibadahRadius;
-  const ibadahProgress = sectionScores.ibadah / 100;
-  const ibadahOffset = ibadahCircumference * (1 - ibadahProgress);
-  
-  // ʿIlm ring (middle) - BLUE
-  const ilmRadius = 125;
-  const ilmStroke = 22;
-  const ilmCircumference = 2 * Math.PI * ilmRadius;
-  const ilmProgress = sectionScores.ilm / 100;
-  const ilmOffset = ilmCircumference * (1 - ilmProgress);
-  
-  // Amanah ring (inner) - YELLOW/GOLD
-  const amanahRadius = 80;
-  const amanahStroke = 20;
-  const amanahCircumference = 2 * Math.PI * amanahRadius;
-  const amanahProgress = sectionScores.amanah / 100;
-  const amanahOffset = amanahCircumference * (1 - amanahProgress);
-
-  const spin = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
-  const glowOpacity = glowAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.3, 0.7],
-  });
+  const pillars = [
+    { meta: IBADAH, score: sectionScores.ibadah },
+    { meta: ILM, score: sectionScores.ilm },
+    { meta: AMANAH, score: sectionScores.amanah },
+  ];
 
   const toggleBreakdown = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setShowBreakdown(!showBreakdown);
+    setShowBreakdown((v) => !v);
   };
 
-  // Ring colors
-  const ibadahColor = '#10B981'; // Green
-  const ilmColor = '#3B82F6'; // Blue
-  const amanahColor = '#F59E0B'; // Amber/Gold
-
-  // Show loading state
   if (isLoading) {
     return (
-      <LinearGradient
-        colors={['#FFFFFF', '#F5F7FA', '#FFFFFF']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.container}
-      >
-        <View style={styles.loadingContainer}>
+      <View style={styles.card}>
+        <View style={[styles.cardInner, styles.centered]}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading Iman Tracker...</Text>
+          <Text style={styles.loadingText}>Loading…</Text>
         </View>
-      </LinearGradient>
+      </View>
     );
   }
 
-  // Show error state
   if (error) {
     return (
-      <LinearGradient
-        colors={['#FFFFFF', '#F5F7FA', '#FFFFFF']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.container}
-      >
-        <View style={styles.errorContainer}>
-          <IconSymbol
-            ios_icon_name="exclamationmark.triangle.fill"
-            android_material_icon_name="warning"
-            size={48}
-            color={colors.error}
-          />
+      <View style={styles.card}>
+        <View style={[styles.cardInner, styles.centered]}>
+          <IconSymbol ios_icon_name="exclamationmark.triangle.fill" android_material_icon_name="warning" size={48} color={colors.error} />
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={onRefresh}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity style={styles.retryButton} onPress={onRefresh} activeOpacity={0.7}>
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
-      </LinearGradient>
+      </View>
     );
   }
 
   return (
-    <LinearGradient
-      colors={['#FFFFFF', '#F5F7FA', '#FFFFFF']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.container}
-    >
-      <View style={styles.ringsWrapper}>
-        <Animated.View style={{ transform: [{ rotate: spin }] }}>
-          <Svg width={400} height={400}>
+    <View style={styles.card}>
+      <View style={styles.cardInner}>
+      <View style={[styles.ringsWrapper, { width: BOARD * ringScale, height: BOARD * ringScale }]}>
+        <View style={{ width: BOARD, height: BOARD, transform: [{ scale: ringScale }] }}>
+          <Svg width={BOARD} height={BOARD}>
             <Defs>
-              <RadialGradient id="glow" cx="50%" cy="50%">
-                <Stop offset="0%" stopColor={badge.color} stopOpacity="0.3" />
-                <Stop offset="100%" stopColor={badge.color} stopOpacity="0" />
-              </RadialGradient>
+              <SvgLinearGradient id="gradIbadah" x1="0%" y1="0%" x2="100%" y2="100%">
+                <Stop offset="0%" stopColor="#6EE7B7" />
+                <Stop offset="100%" stopColor={ibadahColorDeep} />
+              </SvgLinearGradient>
+              <SvgLinearGradient id="gradIlm" x1="0%" y1="100%" x2="100%" y2="0%">
+                <Stop offset="0%" stopColor="#93C5FD" />
+                <Stop offset="100%" stopColor={ilmColorDeep} />
+              </SvgLinearGradient>
+              <SvgLinearGradient id="gradAmanah" x1="100%" y1="0%" x2="0%" y2="100%">
+                <Stop offset="0%" stopColor="#FDE68A" />
+                <Stop offset="100%" stopColor={amanahColorDeep} />
+              </SvgLinearGradient>
             </Defs>
-            
-            <Animated.View style={{ opacity: glowOpacity }}>
-              <Circle
-                cx={centerX}
-                cy={centerY}
-                r={180}
-                fill="url(#glow)"
-              />
-            </Animated.View>
-            
-            {/* ʿIbādah Ring (Outer) - GREEN */}
+
+            <Circle cx={CX} cy={CY} r={ibadahRadius} stroke={colors.border} strokeWidth={ibadahStroke} fill="none" />
             <Circle
-              cx={centerX}
-              cy={centerY}
+              cx={CX}
+              cy={CY}
               r={ibadahRadius}
-              stroke="#E5E7EB"
+              stroke={useGradientStroke ? "url(#gradIbadah)" : ibadahColor}
               strokeWidth={ibadahStroke}
               fill="none"
-              opacity={0.3}
-            />
-            <Circle
-              cx={centerX}
-              cy={centerY}
-              r={ibadahRadius}
-              stroke={ibadahColor}
-              strokeWidth={ibadahStroke}
-              fill="none"
-              strokeDasharray={ibadahCircumference}
-              strokeDashoffset={ibadahOffset}
+              strokeDasharray={`${ibC} ${ibC}`}
+              strokeDashoffset={ibC * (1 - ibProgress)}
               strokeLinecap="round"
-              rotation="-90"
-              origin={`${centerX}, ${centerY}`}
+              transform={`rotate(-90 ${CX} ${CY})`}
             />
-            
-            {/* ʿIlm Ring (Middle) - BLUE */}
+
+            <Circle cx={CX} cy={CY} r={ilmRadius} stroke={colors.border} strokeWidth={ilmStroke} fill="none" />
             <Circle
-              cx={centerX}
-              cy={centerY}
+              cx={CX}
+              cy={CY}
               r={ilmRadius}
-              stroke="#E5E7EB"
+              stroke={useGradientStroke ? "url(#gradIlm)" : ilmColor}
               strokeWidth={ilmStroke}
               fill="none"
-              opacity={0.3}
-            />
-            <Circle
-              cx={centerX}
-              cy={centerY}
-              r={ilmRadius}
-              stroke={ilmColor}
-              strokeWidth={ilmStroke}
-              fill="none"
-              strokeDasharray={ilmCircumference}
-              strokeDashoffset={ilmOffset}
+              strokeDasharray={`${ilC} ${ilC}`}
+              strokeDashoffset={ilC * (1 - ilProgress)}
               strokeLinecap="round"
-              rotation="-90"
-              origin={`${centerX}, ${centerY}`}
+              transform={`rotate(-90 ${CX} ${CY})`}
             />
-            
-            {/* Amanah Ring (Inner) - GOLD */}
+
+            <Circle cx={CX} cy={CY} r={amanahRadius} stroke={colors.border} strokeWidth={amanahStroke} fill="none" />
             <Circle
-              cx={centerX}
-              cy={centerY}
+              cx={CX}
+              cy={CY}
               r={amanahRadius}
-              stroke="#E5E7EB"
+              stroke={useGradientStroke ? "url(#gradAmanah)" : amanahColor}
               strokeWidth={amanahStroke}
               fill="none"
-              opacity={0.3}
-            />
-            <Circle
-              cx={centerX}
-              cy={centerY}
-              r={amanahRadius}
-              stroke={amanahColor}
-              strokeWidth={amanahStroke}
-              fill="none"
-              strokeDasharray={amanahCircumference}
-              strokeDashoffset={amanahOffset}
+              strokeDasharray={`${amC} ${amC}`}
+              strokeDashoffset={amC * (1 - amProgress)}
               strokeLinecap="round"
-              rotation="-90"
-              origin={`${centerX}, ${centerY}`}
+              transform={`rotate(-90 ${CX} ${CY})`}
             />
           </Svg>
-        </Animated.View>
-        
-        <TouchableOpacity 
-          style={styles.centerContentWrapper}
-          onPress={toggleBreakdown}
-          activeOpacity={0.8}
-        >
-          <Animated.View 
-            style={[
-              styles.centerContent,
-              {
-                transform: [{ scale: pulseAnim }],
-              }
-            ]}
-          >
-            <Text style={styles.centerTitle}>Iman Score</Text>
-            <Text style={[styles.centerPercentage, { color: badge.color }]}>
-              {Math.round(imanScore)}%
-            </Text>
-            <Text style={styles.centerHint}>Tap for details</Text>
-          </Animated.View>
-        </TouchableOpacity>
-      </View>
-      
-      {decayWarning && (
-        <LinearGradient
-          colors={[decayWarning.color + '20', decayWarning.color + '10']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.warningContainer}
-        >
-          <IconSymbol
-            ios_icon_name="exclamationmark.triangle.fill"
-            android_material_icon_name="warning"
-            size={20}
-            color={decayWarning.color}
-          />
-          <Text style={[styles.warningText, { color: decayWarning.color }]}>
-            {decayWarning.text}
-          </Text>
-        </LinearGradient>
-      )}
-      
-      <View style={styles.motivationalContainer}>
-        <Text style={styles.motivationalText}>
-          {getMotivationalMessage(imanScore)}
-        </Text>
-      </View>
-      
-      {showBreakdown && (
-        <View style={styles.breakdownContainer}>
-          <Text style={styles.breakdownTitle}>Score Breakdown</Text>
-          
-          <View style={styles.breakdownSection}>
-            <View style={styles.breakdownRow}>
-              <View style={styles.breakdownLabelRow}>
-                <View style={[styles.colorDot, { backgroundColor: ibadahColor }]} />
-                <View>
-                  <Text style={styles.breakdownLabel}>ʿIbādah (Worship)</Text>
-                  <Text style={styles.breakdownSubLabel}>العبادة</Text>
-                </View>
-              </View>
-              <Text style={[styles.breakdownValue, { color: ibadahColor }]}>
-                {Math.round(sectionScores.ibadah)}%
-              </Text>
-            </View>
-            <View style={styles.breakdownRow}>
-              <View style={styles.breakdownLabelRow}>
-                <View style={[styles.colorDot, { backgroundColor: ilmColor }]} />
-                <View>
-                  <Text style={styles.breakdownLabel}>ʿIlm (Knowledge)</Text>
-                  <Text style={styles.breakdownSubLabel}>العلم</Text>
-                </View>
-              </View>
-              <Text style={[styles.breakdownValue, { color: ilmColor }]}>
-                {Math.round(sectionScores.ilm)}%
-              </Text>
-            </View>
-            <View style={styles.breakdownRow}>
-              <View style={styles.breakdownLabelRow}>
-                <View style={[styles.colorDot, { backgroundColor: amanahColor }]} />
-                <View>
-                  <Text style={styles.breakdownLabel}>Amanah (Well-Being)</Text>
-                  <Text style={styles.breakdownSubLabel}>الأمانة</Text>
-                </View>
-              </View>
-              <Text style={[styles.breakdownValue, { color: amanahColor }]}>
-                {Math.round(sectionScores.amanah)}%
-              </Text>
-            </View>
-          </View>
+        </View>
 
-          <View style={styles.breakdownDivider} />
-          <View style={styles.breakdownRow}>
-            <Text style={styles.breakdownTotalLabel}>Overall Score</Text>
-            <Text style={[styles.breakdownTotalValue, { color: badge.color }]}>
-              {Math.round(imanScore)}%
-            </Text>
+        {hideBreakdownToggle ? (
+          <View style={styles.centerHit} pointerEvents="box-none">
+            <View style={styles.centerDisc}>
+              <LinearGradient colors={["#FFFFFF", "#F8FAFF"]} style={StyleSheet.absoluteFillObject} start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }} />
+              <View style={styles.centerInner}>
+                <View style={styles.centerScoreRow}>
+                  <Text style={styles.centerScoreNum}>{Math.round(imanScore)}</Text>
+                  <Text style={styles.centerScorePct}>%</Text>
+                </View>
+              </View>
+            </View>
           </View>
-          
-          <Text style={styles.breakdownNote}>
-            Each ring reaches 100% when all daily and weekly goals are met.
-          </Text>
+        ) : (
+          <TouchableOpacity style={styles.centerHit} onPress={toggleBreakdown} activeOpacity={0.85}>
+            <View style={styles.centerDisc}>
+              <LinearGradient colors={["#FFFFFF", "#F8FAFF"]} style={StyleSheet.absoluteFillObject} start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }} />
+              <View style={styles.centerInner}>
+                <View style={styles.centerScoreRow}>
+                  <Text style={styles.centerScoreNum}>{Math.round(imanScore)}</Text>
+                  <Text style={styles.centerScorePct}>%</Text>
+                </View>
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <View style={styles.legendRow}>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendSwatch, { backgroundColor: ibadahColor }]} />
+          <Text style={styles.legendText}>ʿIbādah</Text>
         </View>
-      )}
-      
-      <View style={styles.ringLabelsContainer}>
-        <View style={styles.ringLabel}>
-          <View style={[styles.ringLabelDot, { backgroundColor: ibadahColor }]} />
-          <View style={styles.ringLabelContent}>
-            <Text style={styles.ringLabelText}>ʿIbādah (العبادة)</Text>
-            <Text style={styles.ringLabelProgress}>Ṣalāh • Qur&apos;an • Dhikr • Duʿāʾ • Fasting</Text>
-          </View>
-          <View style={styles.ringLabelPercentage}>
-            <Text style={[styles.ringLabelPercentText, { color: ibadahColor }]}>
-              {Math.round(sectionScores.ibadah)}%
-            </Text>
-          </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendSwatch, { backgroundColor: ilmColor }]} />
+          <Text style={styles.legendText}>ʿIlm</Text>
         </View>
-        
-        <View style={styles.ringLabel}>
-          <View style={[styles.ringLabelDot, { backgroundColor: ilmColor }]} />
-          <View style={styles.ringLabelContent}>
-            <Text style={styles.ringLabelText}>ʿIlm (العلم)</Text>
-            <Text style={styles.ringLabelProgress}>Learning • Lectures • Quizzes • Reflection</Text>
-          </View>
-          <View style={styles.ringLabelPercentage}>
-            <Text style={[styles.ringLabelPercentText, { color: ilmColor }]}>
-              {Math.round(sectionScores.ilm)}%
-            </Text>
-          </View>
-        </View>
-        
-        <View style={styles.ringLabel}>
-          <View style={[styles.ringLabelDot, { backgroundColor: amanahColor }]} />
-          <View style={styles.ringLabelContent}>
-            <Text style={styles.ringLabelText}>Amanah (الأمانة)</Text>
-            <Text style={styles.ringLabelProgress}>Physical • Mental • Sleep • Balance</Text>
-          </View>
-          <View style={styles.ringLabelPercentage}>
-            <Text style={[styles.ringLabelPercentText, { color: amanahColor }]}>
-              {Math.round(sectionScores.amanah)}%
-            </Text>
-          </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendSwatch, { backgroundColor: amanahColor }]} />
+          <Text style={styles.legendText}>Amanah</Text>
         </View>
       </View>
-    </LinearGradient>
+
+      <View style={styles.strip}>
+        {pillars.map(({ meta, score }) => (
+          <View key={meta.key} style={styles.stripSeg}>
+            <View style={[styles.stripFill, { width: `${Math.min(100, score)}%`, backgroundColor: meta.c }]} />
+          </View>
+        ))}
+      </View>
+
+      {decayWarning && (
+        <View style={[styles.warningBox, { borderColor: decayWarning.color + "35" }]}>
+          <IconSymbol ios_icon_name="exclamationmark.triangle.fill" android_material_icon_name="warning" size={18} color={decayWarning.color} />
+          <Text style={[styles.warningText, { color: decayWarning.color }]}>{decayWarning.text}</Text>
+        </View>
+      )}
+
+      {!hideBreakdownToggle && (
+        <TouchableOpacity style={styles.detailsBtn} onPress={toggleBreakdown} hitSlop={12} accessibilityLabel={showBreakdown ? "Hide details" : "Show details"}>
+          <IconSymbol
+            ios_icon_name={showBreakdown ? "chevron.up" : "chevron.down"}
+            android_material_icon_name={showBreakdown ? "expand-less" : "expand-more"}
+            size={26}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
+      )}
+
+      {showBreakdown && !hideBreakdownToggle && (
+        <View style={styles.breakdown}>
+          {pillars.map(({ meta, score }) => (
+            <View key={meta.key} style={styles.breakRow}>
+              <View style={styles.breakLeft}>
+                <View style={[styles.breakDot, { backgroundColor: meta.c }]} />
+                <Text style={styles.breakLabel}>{meta.label}</Text>
+              </View>
+              <Text style={[styles.breakVal, { color: meta.c }]}>{Math.round(score)}%</Text>
+            </View>
+          ))}
+          <View style={styles.breakDivider} />
+          <View style={styles.breakRow}>
+            <Text style={styles.breakTotal}>Total</Text>
+            <Text style={[styles.breakVal, { color: colors.text }]}>{Math.round(imanScore)}%</Text>
+          </View>
+        </View>
+      )}
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    marginBottom: spacing.xxl,
+  card: {
+    backgroundColor: colors.card,
     borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    ...shadows.large,
+    marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: "hidden",
+    ...shadows.card,
   },
-  loadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xxxl * 2,
+  /** Home hero: no second card frame — parent supplies the inset surface */
+  embeddedShell: {
+    backgroundColor: "transparent",
+    marginBottom: 0,
+    overflow: "visible",
+  },
+  cardInner: {
+    flex: 1,
+    padding: spacing.lg,
+  },
+  embeddedInner: {
+    padding: 0,
+  },
+  centered: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 200,
     gap: spacing.md,
+    width: "100%",
   },
   loadingText: {
     ...typography.body,
     color: colors.textSecondary,
   },
-  errorContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xxxl * 2,
-    gap: spacing.md,
-  },
   errorText: {
     ...typography.body,
     color: colors.error,
-    textAlign: 'center',
+    textAlign: "center",
     paddingHorizontal: spacing.xl,
   },
   retryButton: {
@@ -474,173 +339,140 @@ const styles = StyleSheet.create({
     color: colors.card,
   },
   ringsWrapper: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 400,
-    height: 400,
+    position: "relative",
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  centerContentWrapper: {
-    position: 'absolute',
-    top: 0,
+  centerHit: {
+    position: "absolute",
     left: 0,
     right: 0,
+    top: 0,
     bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
-  centerContent: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  centerDisc: {
+    width: 108,
+    height: 108,
+    borderRadius: 54,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.small,
   },
-  centerTitle: {
-    ...typography.h3,
+  centerInner: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  centerScoreRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+  },
+  centerScoreNum: {
+    fontSize: Platform.OS === "ios" ? 34 : 32,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
     color: colors.text,
-    fontWeight: '700',
-    marginBottom: spacing.xs,
+    letterSpacing: -1,
   },
-  centerPercentage: {
-    fontSize: 56,
-    fontWeight: 'bold',
-    lineHeight: 64,
-  },
-  centerHint: {
-    ...typography.small,
+  centerScorePct: {
+    fontSize: 18,
+    fontWeight: "700",
     color: colors.textSecondary,
-    marginTop: spacing.xs,
+    marginLeft: 1,
   },
-  warningContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  legendRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: spacing.lg,
+    marginTop: spacing.md,
+    flexWrap: "wrap",
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  legendSwatch: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
+    ...typography.smallBold,
+    color: colors.textSecondary,
+    fontSize: 11,
+  },
+  strip: {
+    flexDirection: "row",
+    gap: 4,
+    marginTop: spacing.md,
+    height: 5,
+    borderRadius: 3,
+    overflow: "hidden",
+    backgroundColor: colors.highlight,
+  },
+  stripSeg: {
+    flex: 1,
+    backgroundColor: colors.border,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  stripFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  warningBox: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
-    width: '100%',
+    borderWidth: 1,
+    backgroundColor: colors.backgroundAlt,
   },
   warningText: {
     ...typography.bodyBold,
     flex: 1,
+    fontSize: 13,
   },
-  motivationalContainer: {
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
+  detailsBtn: {
+    alignSelf: "center",
+    marginTop: spacing.xs,
+    paddingVertical: spacing.xs,
   },
-  motivationalText: {
-    ...typography.body,
-    color: colors.primary,
-    fontWeight: '600',
-    textAlign: 'center',
+  breakdown: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
-  breakdownContainer: {
-    marginTop: spacing.lg,
-    width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
-    ...shadows.medium,
-  },
-  breakdownTitle: {
-    ...typography.h4,
-    color: colors.text,
-    marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-  breakdownSection: {
-    marginBottom: spacing.md,
-  },
-  breakdownRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  breakRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: spacing.sm,
   },
-  breakdownLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  breakLeft: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
   },
-  colorDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+  breakDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  breakdownLabel: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  breakdownSubLabel: {
-    ...typography.small,
-    color: colors.textSecondary,
-    fontStyle: 'italic',
-  },
-  breakdownValue: {
-    ...typography.bodyBold,
-    fontSize: 18,
-  },
-  breakdownDivider: {
-    height: 1,
+  breakLabel: { ...typography.body, color: colors.text },
+  breakVal: { ...typography.bodyBold, fontSize: 17, fontVariant: ["tabular-nums"] },
+  breakDivider: {
+    height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    marginVertical: spacing.md,
+    marginVertical: spacing.sm,
   },
-  breakdownTotalLabel: {
-    ...typography.h4,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  breakdownTotalValue: {
-    ...typography.h3,
-    fontWeight: '700',
-  },
-  breakdownNote: {
-    ...typography.small,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: spacing.md,
-    fontStyle: 'italic',
-  },
-  ringLabelsContainer: {
-    marginTop: spacing.xl,
-    gap: spacing.md,
-    width: '100%',
-  },
-  ringLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    ...shadows.small,
-  },
-  ringLabelDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  ringLabelContent: {
-    flex: 1,
-  },
-  ringLabelText: {
-    ...typography.caption,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  ringLabelProgress: {
-    ...typography.small,
-    color: colors.textSecondary,
-  },
-  ringLabelPercentage: {
-    paddingHorizontal: spacing.sm,
-  },
-  ringLabelPercentText: {
-    ...typography.captionBold,
-    fontSize: 16,
-  },
+  breakTotal: { ...typography.bodyBold, color: colors.textSecondary, fontSize: 14 },
 });

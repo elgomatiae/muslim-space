@@ -1,44 +1,15 @@
-
 import { Stack } from 'expo-router';
+import { miniTabStackScreenOptions, TAB_ROOT_HREFS } from '@/components/navigation/miniTabStack';
 
 export default function ProfileLayout() {
   return (
     <Stack
-      screenOptions={{
-        headerShown: false,
-      }}
+      screenOptions={miniTabStackScreenOptions(TAB_ROOT_HREFS.profile)}
+      initialRouteName="index"
     >
-      <Stack.Screen name="index" />
-      <Stack.Screen 
-        name="notification-settings"
-        options={{
-          presentation: 'modal',
-          headerShown: true,
-          title: 'Notification Settings',
-        }}
-      />
-      <Stack.Screen 
-        name="health-check"
-        options={{
-          presentation: 'modal',
-          headerShown: true,
-          title: 'Health Check',
-        }}
-      />
-      <Stack.Screen 
-        name="about"
-        options={{
-          presentation: 'modal',
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen 
-        name="language-settings"
-        options={{
-          presentation: 'modal',
-          headerShown: false,
-        }}
-      />
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="notification-settings" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="health-check" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }
