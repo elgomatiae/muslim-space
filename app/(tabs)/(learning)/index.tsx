@@ -9,6 +9,7 @@ import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useAccessGate } from "@/hooks/useAccessGate";
 import { AccessGate } from "@/components/access/AccessGate";
+import { markLearningSectionUnlocked } from "@/utils/learningSectionUnlock";
 import { useTranslation } from "@/contexts/I18nContext";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { TabHubHeader, TabHubHeaderIconDecoration } from "@/components/navigation/TabHubHeader";
@@ -29,7 +30,7 @@ export default function LearningScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t, locale } = useTranslation();
-  const { checkAccess, showGate, gateVisible, onGateClose, onGateGranted } = useAccessGate();
+  const { showGate, gateVisible, onGateClose, onGateDismissOnly, onGateGranted } = useAccessGate();
   const isRTL = I18nManager.isRTL || locale === "ar" || locale === "ur";
 
   const scrollBottomSpacer = Math.max(120, insets.bottom + 150);
@@ -77,14 +78,17 @@ export default function LearningScreen() {
 
     if (!section.route) return;
 
-    if (section.route === "/(tabs)/(learning)/lectures") {
-      const hasAccess = await checkAccess();
-      if (!hasAccess) {
-        showGate(() => {
-          router.push(section.route as any);
-        });
-        return;
-      }
+    const gatedHubRoutes = ["/(tabs)/(learning)/lectures", "/(tabs)/(learning)/quizzes"] as const;
+    if (gatedHubRoutes.includes(section.route as (typeof gatedHubRoutes)[number])) {
+      showGate(() => {
+        if (section.route === "/(tabs)/(learning)/lectures") {
+          markLearningSectionUnlocked("lectures");
+        } else {
+          markLearningSectionUnlocked("quizzes");
+        }
+        router.push(section.route as any);
+      });
+      return;
     }
 
     router.push(section.route as any);
@@ -202,7 +206,10 @@ export default function LearningScreen() {
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-              router.push("/(tabs)/(learning)/stories" as any);
+              showGate(() => {
+                markLearningSectionUnlocked("stories");
+                router.push("/(tabs)/(learning)/stories" as any);
+              });
             }}
             style={({ pressed }) => [styles.storiesWide, pressed && styles.pressedCard]}
             android_ripple={{ color: "rgba(245, 158, 11, 0.15)" }}
@@ -244,7 +251,10 @@ export default function LearningScreen() {
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-              router.push("/(tabs)/(learning)/allah-names" as any);
+              showGate(() => {
+                markLearningSectionUnlocked("allah_names");
+                router.push("/(tabs)/(learning)/allah-names" as any);
+              });
             }}
             style={({ pressed }) => [styles.storiesWide, pressed && styles.pressedCard]}
             android_ripple={{ color: "rgba(14, 165, 233, 0.15)" }}
@@ -304,9 +314,10 @@ export default function LearningScreen() {
       <AccessGate
         visible={gateVisible}
         onClose={onGateClose}
+        onDismissModalOnly={onGateDismissOnly}
         onAccessGranted={onGateGranted}
-        title="Unlock Islamic Lectures"
-        description="Watch a short ad to access premium Islamic lectures for 24 hours"
+        title="Continue"
+        description="Watch a short ad to open this section."
       />
     </SafeAreaView>
   );

@@ -8,6 +8,7 @@ import { useTranslation } from '@/contexts/I18nContext';
 import { BannerAdBar } from '@/components/ads/BannerAdBar';
 import { FLOATING_TAB_BAR_OFFSET_FROM_BOTTOM } from '@/components/FloatingTabBar';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { WelcomeMuslimSpaceHost } from '@/components/welcome-tour/WelcomeMuslimSpaceHost';
 
 /**
  * Single tabs layout for iOS, Android, and web — same native-style tab bar everywhere.
@@ -18,6 +19,7 @@ export default function TabLayout() {
 
   return (
     <ProtectedRoute>
+      <WelcomeMuslimSpaceHost />
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <Tabs
           screenOptions={{

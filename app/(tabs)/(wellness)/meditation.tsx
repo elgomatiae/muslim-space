@@ -48,7 +48,7 @@ export default function MeditationScreen() {
     updateAmanahGoals, 
     refreshScores 
   } = useImanTracker();
-  const { checkAccess, showGate, gateVisible, onGateClose, onGateGranted } = useAccessGate();
+  const { checkAccess, showGate, gateVisible, onGateClose, onGateDismissOnly, onGateGranted } = useAccessGate();
   const [sessions, setSessions] = useState<MeditationSession[]>([]);
   const [todayCount, setTodayCount] = useState(0);
   const [dailyGoal, setDailyGoal] = useState(1);
@@ -58,7 +58,7 @@ export default function MeditationScreen() {
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [timerInterval, setTimerInterval] = useState<NodeJS.Timeout | null>(null);
-  const [pendingPractice, setPendingPractice] = useState<MeditationPractice | null>(null);
+  const pendingPracticeRef = useRef<MeditationPractice | null>(null);
   
   // Breathing animation
   const breatheAnim = useRef(new Animated.Value(0)).current;
@@ -221,17 +221,17 @@ export default function MeditationScreen() {
       setShowSessionModal(true);
     } else {
       // No access, show gate and store the practice
-      setPendingPractice(practice);
+      pendingPracticeRef.current = practice;
       showGate();
     }
   };
 
-  // Handle access granted - start pending practice
-  const handleGateGranted = () => {
-    onGateGranted();
-    if (pendingPractice) {
-      const practice = pendingPractice;
-      setPendingPractice(null);
+  // Handle access granted - open session after hook finishes (avoids jank / ordering issues).
+  const handleGateGranted = async () => {
+    await onGateGranted();
+    const practice = pendingPracticeRef.current;
+    pendingPracticeRef.current = null;
+    if (practice) {
       setSelectedPractice(practice);
       setTimeRemaining(practice.duration * 60);
       setIsTimerActive(false);
@@ -998,9 +998,10 @@ export default function MeditationScreen() {
       <AccessGate
         visible={gateVisible}
         onClose={onGateClose}
+        onDismissModalOnly={onGateDismissOnly}
         onAccessGranted={handleGateGranted}
         title="Unlock Meditation"
-        description="Watch a short ad to unlock access to meditation sessions"
+        description="Watch a short ad to start this session."
       />
     </SafeAreaView>
   );

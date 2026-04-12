@@ -575,6 +575,61 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   }
 }
 
+const INITIAL_NOTIFICATION_PROMPT_KEY_PREFIX = 'initial_notification_prompt_shown';
+
+function initialNotificationPromptStorageKey(userId: string): string {
+  return `${INITIAL_NOTIFICATION_PROMPT_KEY_PREFIX}_${userId}`;
+}
+
+export async function hasShownInitialNotificationPrompt(userId: string): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(initialNotificationPromptStorageKey(userId))) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export async function markInitialNotificationPromptShown(userId: string): Promise<void> {
+  await AsyncStorage.setItem(initialNotificationPromptStorageKey(userId), '1');
+}
+
+/**
+ * One-time OS notification prompt after sign-in on Home (paired with prayer/location flow).
+ * Staggered so it typically runs after the location dialog from prayer times.
+ */
+export async function promptNotificationPermissionAfterSignIn(userId: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    return;
+  }
+  try {
+    if (await hasShownInitialNotificationPrompt(userId)) {
+      return;
+    }
+
+    configureNotificationHandler();
+
+    if (!Notifications || typeof Notifications.getPermissionsAsync !== 'function') {
+      return;
+    }
+
+    const { status: existing } = await Notifications.getPermissionsAsync();
+    if (existing === 'granted') {
+      await markInitialNotificationPromptShown(userId);
+      return;
+    }
+
+    await requestNotificationPermissions();
+    await markInitialNotificationPromptShown(userId);
+  } catch (error) {
+    console.warn('promptNotificationPermissionAfterSignIn:', error);
+    try {
+      await markInitialNotificationPromptShown(userId);
+    } catch {
+      /* no-op */
+    }
+  }
+}
+
 // Request location permissions
 export async function requestLocationPermissions(): Promise<boolean> {
   try {
@@ -1028,7 +1083,12 @@ export async function scheduleDailyGoalReminders(userId?: string): Promise<void>
     await cancelDailyGoalNotifications();
 
     // Load goals
-    const { loadIbadahGoals, loadAmanahGoals } = await import('./imanScoreCalculator');
+    const {
+      loadIbadahGoals,
+      loadAmanahGoals,
+      getQuranMemorizationPeriod,
+      getQuranPagesPeriod,
+    } = await import('./imanScoreCalculator');
     const ibadahGoals = await loadIbadahGoals(userId);
     const amanahGoals = await loadAmanahGoals(userId);
 
@@ -1046,8 +1106,12 @@ export async function scheduleDailyGoalReminders(userId?: string): Promise<void>
       });
     }
 
-    // Check Quran pages
-    if (ibadahGoals.quranDailyPagesGoal > 0 && ibadahGoals.quranDailyPagesCompleted < ibadahGoals.quranDailyPagesGoal) {
+    // Quran reading (pages) — daily period only
+    if (
+      getQuranPagesPeriod(ibadahGoals) === 'daily' &&
+      ibadahGoals.quranDailyPagesGoal > 0 &&
+      ibadahGoals.quranDailyPagesCompleted < ibadahGoals.quranDailyPagesGoal
+    ) {
       incompleteGoals.push({
         type: 'quran_pages',
         title: 'Quran Reading Reminder',
@@ -1057,14 +1121,18 @@ export async function scheduleDailyGoalReminders(userId?: string): Promise<void>
       });
     }
 
-    // Check Quran verses
-    if (ibadahGoals.quranDailyVersesGoal > 0 && ibadahGoals.quranDailyVersesCompleted < ibadahGoals.quranDailyVersesGoal) {
+    // Quran memorization — daily period only
+    if (
+      getQuranMemorizationPeriod(ibadahGoals) === 'daily' &&
+      ibadahGoals.quranWeeklyMemorizationGoal > 0 &&
+      ibadahGoals.quranWeeklyMemorizationCompleted < ibadahGoals.quranWeeklyMemorizationGoal
+    ) {
       incompleteGoals.push({
-        type: 'quran_verses',
-        title: 'Quran Verses Reminder',
-        message: `You have ${ibadahGoals.quranDailyVersesGoal - ibadahGoals.quranDailyVersesCompleted} verse${ibadahGoals.quranDailyVersesGoal - ibadahGoals.quranDailyVersesCompleted > 1 ? 's' : ''} remaining to read today.`,
-        goal: ibadahGoals.quranDailyVersesGoal,
-        completed: ibadahGoals.quranDailyVersesCompleted,
+        type: 'quran_memorization_daily',
+        title: 'Quran Memorization Reminder',
+        message: `You have ${ibadahGoals.quranWeeklyMemorizationGoal - ibadahGoals.quranWeeklyMemorizationCompleted} verse${ibadahGoals.quranWeeklyMemorizationGoal - ibadahGoals.quranWeeklyMemorizationCompleted > 1 ? 's' : ''} left to memorize today.`,
+        goal: ibadahGoals.quranWeeklyMemorizationGoal,
+        completed: ibadahGoals.quranWeeklyMemorizationCompleted,
       });
     }
 
@@ -1304,7 +1372,13 @@ export async function scheduleWeeklyGoalReminders(userId?: string): Promise<void
     await cancelWeeklyGoalNotifications();
 
     // Load goals
-    const { loadIbadahGoals, loadIlmGoals, loadAmanahGoals } = await import('./imanScoreCalculator');
+    const {
+      loadIbadahGoals,
+      loadIlmGoals,
+      loadAmanahGoals,
+      getQuranMemorizationPeriod,
+      getQuranPagesPeriod,
+    } = await import('./imanScoreCalculator');
     const ibadahGoals = await loadIbadahGoals(userId);
     const ilmGoals = await loadIlmGoals(userId);
     const amanahGoals = await loadAmanahGoals(userId);
@@ -1323,8 +1397,27 @@ export async function scheduleWeeklyGoalReminders(userId?: string): Promise<void
       });
     }
 
-    // Check Quran Memorization
-    if (ibadahGoals.quranWeeklyMemorizationGoal > 0 && ibadahGoals.quranWeeklyMemorizationCompleted < ibadahGoals.quranWeeklyMemorizationGoal) {
+    // Quran reading (pages) — weekly period only
+    if (
+      getQuranPagesPeriod(ibadahGoals) === 'weekly' &&
+      ibadahGoals.quranDailyPagesGoal > 0 &&
+      ibadahGoals.quranDailyPagesCompleted < ibadahGoals.quranDailyPagesGoal
+    ) {
+      incompleteGoals.push({
+        type: 'quran_pages_weekly',
+        title: 'Quran Reading Reminder',
+        message: `You have ${ibadahGoals.quranDailyPagesGoal - ibadahGoals.quranDailyPagesCompleted} page${ibadahGoals.quranDailyPagesGoal - ibadahGoals.quranDailyPagesCompleted > 1 ? 's' : ''} of Quran remaining to read this week.`,
+        goal: ibadahGoals.quranDailyPagesGoal,
+        completed: ibadahGoals.quranDailyPagesCompleted,
+      });
+    }
+
+    // Quran memorization — weekly period only
+    if (
+      getQuranMemorizationPeriod(ibadahGoals) === 'weekly' &&
+      ibadahGoals.quranWeeklyMemorizationGoal > 0 &&
+      ibadahGoals.quranWeeklyMemorizationCompleted < ibadahGoals.quranWeeklyMemorizationGoal
+    ) {
       incompleteGoals.push({
         type: 'quran_memorization',
         title: 'Quran Memorization Reminder',

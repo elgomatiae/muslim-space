@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Modal, TextInput } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Modal, TextInput, Animated } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
@@ -187,13 +187,15 @@ const WORKOUT_TYPES = [
   { value: 'sports', label: 'Sports', icon: { ios: 'sportscourt.fill', android: 'sports' } },
 ];
 
-const FARD_PRAYERS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+const GOALS_LIST_COLLAPSE_SCROLL = 100;
 
 export default function GoalsSettingsScreen() {
   const { t } = useTranslation();
   const params = useLocalSearchParams();
   const { user } = useAuth();
   const { ibadahGoals, ilmGoals, amanahGoals, updateIbadahGoals, updateIlmGoals, updateAmanahGoals, refreshScores } = useImanTracker();
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const listScrollRef = useRef<ScrollView>(null);
   
   const [activeSection, setActiveSection] = useState<SectionType>((params.section as SectionType) || 'ibadah');
   const [localIbadahGoals, setLocalIbadahGoals] = useState<IbadahGoals | null>(null);
@@ -204,6 +206,11 @@ export default function GoalsSettingsScreen() {
   const [exerciseGoals, setExerciseGoals] = useState<ExerciseGoal[]>([]);
   const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
   const [editingExerciseGoal, setEditingExerciseGoal] = useState<ExerciseGoal | null>(null);
+
+  useEffect(() => {
+    scrollY.setValue(0);
+    listScrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [activeSection]);
 
   useEffect(() => {
     if (ibadahGoals) setLocalIbadahGoals({ ...ibadahGoals });
@@ -267,7 +274,6 @@ export default function GoalsSettingsScreen() {
       if (data.sunnah_goal_frequency) frequencies.sunnah = data.sunnah_goal_frequency;
       if (data.tahajjud_goal_frequency) frequencies.tahajjud = data.tahajjud_goal_frequency;
       if (data.quran_pages_goal_frequency) frequencies.quranPages = data.quran_pages_goal_frequency;
-      if (data.quran_verses_goal_frequency) frequencies.quranVerses = data.quran_verses_goal_frequency;
       if (data.quran_memorization_goal_frequency) frequencies.memorization = data.quran_memorization_goal_frequency;
       if (data.dhikr_goal_frequency) frequencies.dhikrDaily = data.dhikr_goal_frequency;
       if (data.dua_goal_frequency) frequencies.dua = data.dua_goal_frequency;
@@ -284,6 +290,14 @@ export default function GoalsSettingsScreen() {
       if (data.sleep_goal_frequency) frequencies.sleep = data.sleep_goal_frequency;
       
       setGoalFrequencies(frequencies);
+      setLocalIbadahGoals(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          quranPagesFrequency: frequencies.quranPages === 'weekly' ? 'weekly' : 'daily',
+          quranMemorizationFrequency: frequencies.memorization === 'daily' ? 'daily' : 'weekly',
+        };
+      });
     }
   };
 
@@ -451,8 +465,8 @@ export default function GoalsSettingsScreen() {
     },
     {
       id: 'quranPages',
-      label: 'Quran Pages',
-      description: 'Quran reading goal',
+      label: 'Quran Reading',
+      description: 'Pages read per day or week',
       goalField: 'quranDailyPagesGoal',
       completedField: 'quranDailyPagesCompleted',
       frequencyField: 'quran_pages_goal_frequency',
@@ -466,25 +480,9 @@ export default function GoalsSettingsScreen() {
       currentFrequency: goalFrequencies.quranPages || 'daily',
     },
     {
-      id: 'quranVerses',
-      label: 'Quran Verses',
-      description: 'Quran verses goal',
-      goalField: 'quranDailyVersesGoal',
-      completedField: 'quranDailyVersesCompleted',
-      frequencyField: 'quran_verses_goal_frequency',
-      min: 0,
-      max: 6236,
-      step: 1,
-      unit: 'verses',
-      enabled: (localIbadahGoals?.quranDailyVersesGoal ?? 0) > 0,
-      canDisable: true,
-      defaultFrequency: 'daily',
-      currentFrequency: goalFrequencies.quranVerses || 'daily',
-    },
-    {
       id: 'memorization',
       label: 'Quran Memorization',
-      description: 'Memorization goal',
+      description: 'Verses memorized per day or week',
       goalField: 'quranWeeklyMemorizationGoal',
       completedField: 'quranWeeklyMemorizationCompleted',
       frequencyField: 'quran_memorization_goal_frequency',
@@ -805,7 +803,6 @@ export default function GoalsSettingsScreen() {
       sunnahDailyGoal: 5,
       tahajjudWeeklyGoal: 2,
       quranDailyPagesGoal: 2,
-      quranDailyVersesGoal: 10,
       quranWeeklyMemorizationGoal: 5,
       dhikrDailyGoal: 100,
       dhikrWeeklyGoal: 1000,
@@ -856,7 +853,12 @@ export default function GoalsSettingsScreen() {
       // Update state immediately (optimistic UI updates)
       // The update functions update state synchronously first, then save in background
       if (localIbadahGoals) {
-        updateIbadahGoals(localIbadahGoals).catch(err => console.log('Background save error:', err));
+        const ibadahWithQuranFreq: IbadahGoals = {
+          ...localIbadahGoals,
+          quranPagesFrequency: goalFrequencies.quranPages === 'weekly' ? 'weekly' : 'daily',
+          quranMemorizationFrequency: goalFrequencies.memorization === 'daily' ? 'daily' : 'weekly',
+        };
+        updateIbadahGoals(ibadahWithQuranFreq).catch(err => console.log('Background save error:', err));
       }
       if (localIlmGoals) {
         updateIlmGoals(localIlmGoals).catch(err => console.log('Background save error:', err));
@@ -1051,33 +1053,82 @@ export default function GoalsSettingsScreen() {
     }
   };
 
+  const headerPadV = scrollY.interpolate({
+    inputRange: [0, GOALS_LIST_COLLAPSE_SCROLL],
+    outputRange: [spacing.md, 6],
+    extrapolate: 'clamp',
+  });
+  const headerTitleSize = scrollY.interpolate({
+    inputRange: [0, GOALS_LIST_COLLAPSE_SCROLL],
+    outputRange: [22, 17],
+    extrapolate: 'clamp',
+  });
+  const infoBannerMaxH = scrollY.interpolate({
+    inputRange: [0, GOALS_LIST_COLLAPSE_SCROLL + 32],
+    outputRange: [320, 0],
+    extrapolate: 'clamp',
+  });
+  const infoBannerOpacity = scrollY.interpolate({
+    inputRange: [0, GOALS_LIST_COLLAPSE_SCROLL * 0.5],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+  const infoBannerMarginTop = scrollY.interpolate({
+    inputRange: [0, GOALS_LIST_COLLAPSE_SCROLL],
+    outputRange: [spacing.lg, 0],
+    extrapolate: 'clamp',
+  });
+  const saveBtnScale = scrollY.interpolate({
+    inputRange: [0, GOALS_LIST_COLLAPSE_SCROLL],
+    outputRange: [1, 0.92],
+    extrapolate: 'clamp',
+  });
+  const sectionTabsPadTop = scrollY.interpolate({
+    inputRange: [0, GOALS_LIST_COLLAPSE_SCROLL],
+    outputRange: [spacing.lg, spacing.sm],
+    extrapolate: 'clamp',
+  });
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <View style={styles.header}>
+      <Animated.View style={[styles.header, { paddingVertical: headerPadV }]}>
         <View style={styles.backButton} />
-        <Text style={styles.headerTitle}>Customize Goals</Text>
-        <TouchableOpacity
-          style={styles.saveButton}
-          onPress={saveGoals}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.saveButtonText}>Save</Text>
-        </TouchableOpacity>
-      </View>
+        <Animated.Text style={[styles.headerTitle, { fontSize: headerTitleSize }]}>Customize Goals</Animated.Text>
+        <Animated.View style={{ transform: [{ scale: saveBtnScale }] }}>
+          <TouchableOpacity
+            style={styles.saveButton}
+            onPress={saveGoals}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.saveButtonText}>Save</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </Animated.View>
 
-      <View style={styles.infoCard}>
-        <IconSymbol
-          ios_icon_name="info.circle.fill"
-          android_material_icon_name="info"
-          size={24}
-          color={colors.info}
-        />
-        <Text style={styles.infoText}>
-          Customize your spiritual and wellness goals. Toggle any goal off to exclude it from your Iman Tracker score. Switch between daily and weekly frequencies for each goal. Tap the number to type any amount within the allowed range; +/− adjusts by one (sleep uses half-hour steps).
-        </Text>
-      </View>
+      <Animated.View
+        style={[
+          styles.infoBannerWrap,
+          {
+            maxHeight: infoBannerMaxH,
+            opacity: infoBannerOpacity,
+            marginTop: infoBannerMarginTop,
+          },
+        ]}
+      >
+        <View style={styles.infoCard}>
+          <IconSymbol
+            ios_icon_name="info.circle.fill"
+            android_material_icon_name="info"
+            size={24}
+            color={colors.info}
+          />
+          <Text style={styles.infoText}>
+            Toggle any goal off to exclude it from your Iman Tracker score. Switch between daily and weekly frequencies for each goal. Tap the number to type any amount within the allowed range; +/− adjusts by one (sleep uses half-hour steps).
+          </Text>
+        </View>
+      </Animated.View>
 
-      <View style={styles.sectionTabs}>
+      <Animated.View style={[styles.sectionTabs, { paddingTop: sectionTabsPadTop }]}>
         {(['ibadah', 'ilm', 'amanah'] as SectionType[]).map((section) => {
           const isActive = activeSection === section;
           const icon = getSectionIcon(section);
@@ -1122,44 +1173,19 @@ export default function GoalsSettingsScreen() {
             </TouchableOpacity>
           );
         })}
-      </View>
+      </Animated.View>
 
-      <ScrollView
+      <Animated.ScrollView
+        ref={listScrollRef}
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
-      >
-        {activeSection === 'ibadah' && (
-          <View style={styles.fardPrayersInfo}>
-            <View style={styles.fardHeader}>
-              <IconSymbol
-                ios_icon_name="lock.fill"
-                android_material_icon_name="lock"
-                size={20}
-                color={colors.primary}
-              />
-              <Text style={styles.fardTitle}>Five Daily Prayers (Fard)</Text>
-            </View>
-            <Text style={styles.fardDescription}>
-              The five daily prayers are obligatory for every Muslim and cannot be disabled. They are:
-            </Text>
-            <View style={styles.fardList}>
-              {FARD_PRAYERS.map((prayer, index) => (
-                <View key={`fard-prayer-${prayer}-${index}`} style={styles.fardItem}>
-                  <IconSymbol
-                    ios_icon_name="checkmark.circle.fill"
-                    android_material_icon_name="check-circle"
-                    size={16}
-                    color={colors.primary}
-                  />
-                  <Text style={styles.fardItemText}>{prayer}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
         )}
-
-
+      >
         {activeSection === 'amanah' && (
           <View style={styles.exerciseGoalsSection}>
             <View style={styles.exerciseGoalsHeader}>
@@ -1266,7 +1292,7 @@ export default function GoalsSettingsScreen() {
         </View>
 
         <View style={styles.bottomPadding} />
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* Add/Edit Exercise Goal Modal */}
       <Modal
@@ -1505,6 +1531,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...typography.h3,
+    fontSize: 22,
     color: colors.text,
     flex: 1,
     textAlign: 'center',
@@ -1519,14 +1546,16 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.card,
   },
+  infoBannerWrap: {
+    marginHorizontal: spacing.lg,
+    overflow: 'hidden',
+  },
   infoCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
     backgroundColor: colors.info + '10',
     padding: spacing.md,
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.lg,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.info + '30',
@@ -1539,7 +1568,6 @@ const styles = StyleSheet.create({
   sectionTabs: {
     flexDirection: 'row',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
     gap: spacing.sm,
   },
   sectionTab: {
@@ -1585,49 +1613,6 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
-  },
-  fardPrayersInfo: {
-    backgroundColor: colors.primary + '10',
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
-    borderWidth: 1,
-    borderColor: colors.primary + '30',
-  },
-  fardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  fardTitle: {
-    ...typography.bodyBold,
-    color: colors.text,
-    fontSize: 16,
-  },
-  fardDescription: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginBottom: spacing.md,
-  },
-  fardList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  fardItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.card,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-  },
-  fardItemText: {
-    ...typography.small,
-    color: colors.text,
-    fontWeight: '600',
   },
   workoutTypeSection: {
     backgroundColor: colors.accent + '10',

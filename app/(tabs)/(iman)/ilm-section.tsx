@@ -9,10 +9,15 @@ import * as Haptics from 'expo-haptics';
 import { useImanTracker } from '@/contexts/ImanTrackerContext';
 import { useAccessGate } from '@/hooks/useAccessGate';
 import { AccessGate } from '@/components/access/AccessGate';
+import { markLearningSectionUnlocked } from '@/utils/learningSectionUnlock';
 
 export default function IlmSection() {
   const { ilmGoals, updateIlmGoals } = useImanTracker();
-  const { checkAccess, showGate, gateVisible, onGateClose, onGateGranted } = useAccessGate();
+  const { checkAccess, showGate, gateVisible, onGateClose, onGateDismissOnly, onGateGranted } = useAccessGate();
+  const [gateCopy, setGateCopy] = useState({
+    title: "Continue",
+    description: "Watch a short ad to continue.",
+  });
 
   if (!ilmGoals) return null;
 
@@ -167,8 +172,12 @@ export default function IlmSection() {
                 // Check access before navigating to lectures
                 const hasAccess = await checkAccess();
                 if (!hasAccess) {
-                  // Show access gate, navigate after ad is watched
+                  setGateCopy({
+                    title: "Unlock Lectures",
+                    description: "Watch a short ad to open Islamic lectures.",
+                  });
                   showGate(() => {
+                    markLearningSectionUnlocked('lectures');
                     router.push('/(tabs)/(learning)/lectures' as any);
                   });
                   return;
@@ -257,8 +266,20 @@ export default function IlmSection() {
 
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => {
+              onPress={async () => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                const hasAccess = await checkAccess();
+                if (!hasAccess) {
+                  setGateCopy({
+                    title: "Unlock Stories",
+                    description: "Watch a short ad to read Islamic stories.",
+                  });
+                  showGate(() => {
+                    markLearningSectionUnlocked('stories');
+                    router.push('/(tabs)/(learning)/stories' as any);
+                  });
+                  return;
+                }
                 router.push('/(tabs)/(learning)/stories' as any);
               }}
               activeOpacity={0.7}
@@ -340,6 +361,42 @@ export default function IlmSection() {
                 </LinearGradient>
               </TouchableOpacity>
             </View>
+
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={async () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                const hasAccess = await checkAccess();
+                if (!hasAccess) {
+                  setGateCopy({
+                    title: "Unlock Quizzes",
+                    description: "Watch a short ad to take knowledge quizzes.",
+                  });
+                  showGate(() => {
+                    markLearningSectionUnlocked('quizzes');
+                    router.push('/(tabs)/(learning)/quizzes' as any);
+                  });
+                  return;
+                }
+                router.push('/(tabs)/(learning)/quizzes' as any);
+              }}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={['#3B82F6', '#2563EB']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.actionGradient}
+              >
+                <IconSymbol
+                  ios_icon_name="questionmark.circle.fill"
+                  android_material_icon_name="quiz"
+                  size={18}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.actionText}>Take Quizzes</Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
         </View>
       )}
@@ -497,9 +554,10 @@ export default function IlmSection() {
       <AccessGate
         visible={gateVisible}
         onClose={onGateClose}
+        onDismissModalOnly={onGateDismissOnly}
         onAccessGranted={onGateGranted}
-        title="Unlock Islamic Lectures"
-        description="Watch a short ad to access premium Islamic lectures for 24 hours"
+        title={gateCopy.title}
+        description={gateCopy.description}
       />
     </View>
   );

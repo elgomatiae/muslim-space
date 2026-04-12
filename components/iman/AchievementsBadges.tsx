@@ -18,6 +18,9 @@ import {
   getCurrentValueForRequirement,
   syncLocalAchievementHistoryCache,
 } from '@/utils/achievementService';
+import { useAccessGate } from '@/hooks/useAccessGate';
+import { AccessGate } from '@/components/access/AccessGate';
+import { markLearningSectionUnlocked } from '@/utils/learningSectionUnlock';
 
 interface Achievement {
   id: string;
@@ -40,6 +43,11 @@ interface Achievement {
 export default function AchievementsBadges() {
   const { user } = useAuth();
   const { celebrateAchievement } = useAchievementCelebration();
+  const { showGate, gateVisible, onGateClose, onGateDismissOnly, onGateGranted } = useAccessGate();
+  const [gateCopy, setGateCopy] = useState({
+    title: 'Continue',
+    description: 'Watch a short ad to continue.',
+  });
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [recentAchievements, setRecentAchievements] = useState<Achievement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -393,7 +401,7 @@ export default function AchievementsBadges() {
   });
 
   // Navigate to relevant action based on achievement requirement type
-  const navigateToAction = (requirementType: string) => {
+  const navigateToAction = async (requirementType: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     switch (requirementType) {
       case 'total_prayers':
@@ -405,12 +413,28 @@ export default function AchievementsBadges() {
       case 'total_quran_pages':
         router.push('/(tabs)/(iman)' as any);
         break;
-      case 'lectures_watched':
-        router.push('/(tabs)/(learning)/lectures' as any);
+      case 'lectures_watched': {
+        setGateCopy({
+          title: 'Unlock Lectures',
+          description: 'Watch a short ad to open Islamic lectures.',
+        });
+        showGate(() => {
+          markLearningSectionUnlocked('lectures');
+          router.push('/(tabs)/(learning)/lectures' as any);
+        });
         break;
-      case 'quizzes_completed':
-        router.push('/(tabs)/(learning)/quizzes' as any);
+      }
+      case 'quizzes_completed': {
+        setGateCopy({
+          title: 'Unlock Quizzes',
+          description: 'Watch a short ad to take knowledge quizzes.',
+        });
+        showGate(() => {
+          markLearningSectionUnlocked('quizzes');
+          router.push('/(tabs)/(learning)/quizzes' as any);
+        });
         break;
+      }
       case 'workouts_completed':
         router.push('/(tabs)/(wellness)/physical-health' as any);
         break;
@@ -829,7 +853,7 @@ export default function AchievementsBadges() {
                           style={[styles.modalActionButton, { backgroundColor: getTierColor(selectedAchievement.tier) }]}
                           onPress={() => {
                             closeAchievementDetails();
-                            navigateToAction(selectedAchievement.requirement_type);
+                            void navigateToAction(selectedAchievement.requirement_type);
                           }}
                           activeOpacity={0.8}
                         >
@@ -876,6 +900,15 @@ export default function AchievementsBadges() {
           </View>
         </View>
       </Modal>
+
+      <AccessGate
+        visible={gateVisible}
+        onClose={onGateClose}
+        onDismissModalOnly={onGateDismissOnly}
+        onAccessGranted={onGateGranted}
+        title={gateCopy.title}
+        description={gateCopy.description}
+      />
     </View>
   );
 }

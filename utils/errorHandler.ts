@@ -37,7 +37,7 @@ export function getErrorMessage(error: any): string {
     }
 
     if (message.includes('Email not confirmed')) {
-      return 'Please verify your email address before logging in. Check your inbox for the verification link.';
+      return 'This project still requires a confirmed email. Your administrator can disable “Confirm email” in Supabase (Authentication → Providers → Email) for password sign-in without inbox verification.';
     }
 
     if (message.includes('User already registered')) {

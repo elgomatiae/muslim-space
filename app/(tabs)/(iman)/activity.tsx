@@ -342,7 +342,9 @@ export default function ActivityScreen() {
                           </Text>
                         )}
                         <View style={styles.activityMeta}>
-                          {activity.activity_value && activity.activity_unit && (
+                          {activity.activity_unit != null &&
+                            activity.activity_unit !== '' &&
+                            activity.activity_value != null && (
                             <View style={styles.activityMetaItem}>
                               <IconSymbol
                                 ios_icon_name="chart.bar.fill"
@@ -355,7 +357,7 @@ export default function ActivityScreen() {
                               </Text>
                             </View>
                           )}
-                          {activity.points_earned && activity.points_earned > 0 && (
+                          {(activity.points_earned ?? 0) > 0 && (
                             <View style={styles.activityMetaItem}>
                               <IconSymbol
                                 ios_icon_name="star.fill"

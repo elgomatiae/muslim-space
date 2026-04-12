@@ -1,25 +1,18 @@
-
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native';
 import { router } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
-import { IconSymbol } from '@/components/IconSymbol';
+import { spacing, typography } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
+import { getAuthEmailRedirectTo } from '@/utils/authEmailRedirectTo';
 import * as Haptics from 'expo-haptics';
 import { initializeUserProfile } from '@/utils/profileSupabaseSync';
 import { useTranslation } from '@/contexts/I18nContext';
+import { getErrorMessage } from '@/utils/errorHandler';
+import { AuthMarketingShell } from '@/components/auth/AuthMarketingShell';
+import { AuthField } from '@/components/auth/AuthField';
+import { AuthPrimaryButton } from '@/components/auth/AuthPrimaryButton';
+import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton';
+import { signInWithGoogle } from '@/utils/googleSignIn';
 
 export default function SignupScreen() {
   const { t } = useTranslation();
@@ -28,32 +21,29 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   const handleSignup = async () => {
-    // Clear any previous error messages
     setErrorMessage('');
-
     if (!username || !email || !password || !confirmPassword) {
-      const errorMsg = t('auth.fillAllFields');
-      setErrorMessage(errorMsg);
-      Alert.alert(t('common.error'), errorMsg);
+      const msg = t('auth.fillAllFields');
+      setErrorMessage(msg);
+      Alert.alert(t('common.error'), msg);
       return;
     }
-
     if (password !== confirmPassword) {
-      const errorMsg = t('auth.passwordsDoNotMatch');
-      setErrorMessage(errorMsg);
-      Alert.alert(t('common.error'), errorMsg);
+      const msg = t('auth.passwordsDoNotMatch');
+      setErrorMessage(msg);
+      Alert.alert(t('common.error'), msg);
       return;
     }
-
     if (password.length < 6) {
-      const errorMsg = t('auth.passwordMinLength');
-      setErrorMessage(errorMsg);
-      Alert.alert(t('common.error'), errorMsg);
+      const msg = t('auth.passwordMinLength');
+      setErrorMessage(msg);
+      Alert.alert(t('common.error'), msg);
       return;
     }
 
@@ -62,426 +52,237 @@ export default function SignupScreen() {
     }
 
     setLoading(true);
-
     try {
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
-        password: password,
+        password,
         options: {
-          emailRedirectTo: 'https://natively.dev/email-confirmed',
-          data: {
-            username: username.trim(),
-          },
+          emailRedirectTo: getAuthEmailRedirectTo(),
+          data: { username: username.trim() },
         },
       });
 
       if (error) {
-        console.log('Signup error:', error);
-        
-        // Use error handler for user-friendly messages
-        const { getErrorMessage } = require('@/utils/errorHandler');
-        const errorMessage = getErrorMessage(error);
-        
-        setErrorMessage(errorMessage);
-        Alert.alert(t('auth.signupFailed'), errorMessage);
+        const msg = getErrorMessage(error);
+        setErrorMessage(msg);
+        Alert.alert(t('auth.signupFailed'), msg);
         setLoading(false);
         return;
       }
 
       if (data.user) {
-        console.log('Signup successful:', data.user.id);
-        console.log('Username from form:', username.trim());
-
         if (Platform.OS !== 'web') {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
-
-        // Clear error message on success
         setErrorMessage('');
 
-        // If Supabase returned a session, the user is already signed in and RLS permits profile upserts.
-        // If email confirmation is required, `data.session` will be null; in that case we must NOT
-        // attempt to write to `profiles` yet, because `auth.uid()` is null and RLS will reject it.
-        if (!data.session) {
-          Alert.alert(
-            t('auth.verifyYourEmail'),
-            t('auth.verificationEmailSent'),
-            [
-              {
-                text: t('common.ok'),
-                onPress: () => router.replace('/(auth)/login'),
-              },
-            ]
-          );
-        } else {
-          // Now that we have an authenticated session, initialize/update the profile row.
+        if (data.session) {
           try {
-            console.log('📝 Initializing user profile in Supabase...');
-            await initializeUserProfile(
-              data.user.id,
-              username.trim(),
-              email.trim()
-            );
-            console.log('✅ Profile initialized');
+            await initializeUserProfile(data.user.id, username.trim(), email.trim());
           } catch (profileError) {
-            console.error('⚠️ Error initializing profile (non-critical):', profileError);
-            // Continue: profile will also be initialized on login via AuthContext.
+            console.error('Profile init after signup:', profileError);
           }
-
-          // Navigation is normally handled by AuthContext, but we can also move the user forward.
           try {
-            // Keep route consistent with other parts of the app/AuthContext
-            router.replace('/(tabs)/(home)/');
+            router.replace('/(tabs)/(home)');
           } catch (navError) {
-            console.error('Navigation error after signup:', navError);
+            console.error('Navigation after signup:', navError);
           }
+        } else {
+          Alert.alert(t('auth.signupAlmostThere'), t('auth.signupEnableAutoConfirm'), [
+            { text: t('common.ok'), onPress: () => router.replace('/(auth)/login') },
+          ]);
         }
-
-        setLoading(false);
       }
-    } catch (error: any) {
-      console.error('Signup error:', error);
-      const errorMsg = t('auth.unexpectedError');
-      setErrorMessage(errorMsg);
-      Alert.alert(t('common.error'), errorMsg);
+    } catch (error: unknown) {
+      const msg = t('auth.unexpectedError');
+      setErrorMessage(msg);
+      Alert.alert(t('common.error'), getErrorMessage(error) || msg);
+    } finally {
       setLoading(false);
     }
   };
 
+  const handleGoogle = async () => {
+    setErrorMessage('');
+    setGoogleLoading(true);
+    try {
+      if (Platform.OS !== 'web') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      const result = await signInWithGoogle();
+      if (!result.ok) {
+        setErrorMessage(result.error.message);
+        Alert.alert(t('common.error'), result.error.message);
+        return;
+      }
+      if (result.cancelled) {
+        return;
+      }
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (e: unknown) {
+      const msg = getErrorMessage(e);
+      setErrorMessage(msg);
+      Alert.alert(t('common.error'), msg);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const busy = loading || googleLoading;
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    <AuthMarketingShell
+      eyebrow={t('auth.brandEyebrow')}
+      title={t('auth.createAccount')}
+      subtitle={t('auth.signupSubtitle')}
     >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      {errorMessage ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        </View>
+      ) : null}
+
+      <GoogleAuthButton
+        label={t('auth.signUpWithGoogle')}
+        onPress={handleGoogle}
+        loading={googleLoading}
+        disabled={loading}
+      />
+
+      <View style={styles.divider}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerLabel}>{t('auth.orUseEmail')}</Text>
+        <View style={styles.dividerLine} />
+      </View>
+
+      <AuthField
+        label={t('auth.username')}
+        value={username}
+        onChangeText={(x) => {
+          setUsername(x);
+          setErrorMessage('');
+        }}
+        placeholder={t('auth.usernamePlaceholder')}
+        iconIos="person.fill"
+        iconAndroid="person"
+        editable={!busy}
+      />
+
+      <AuthField
+        label={t('auth.email')}
+        value={email}
+        onChangeText={(x) => {
+          setEmail(x);
+          setErrorMessage('');
+        }}
+        placeholder="you@example.com"
+        keyboardType="email-address"
+        autoComplete="email"
+        iconIos="envelope.fill"
+        iconAndroid="email"
+        editable={!busy}
+      />
+
+      <AuthField
+        label={t('auth.password')}
+        value={password}
+        onChangeText={(x) => {
+          setPassword(x);
+          setErrorMessage('');
+        }}
+        placeholder={t('auth.passwordPlaceholder')}
+        secureTextEntry={!showPassword}
+        showSecureToggle
+        onToggleSecure={() => setShowPassword((s) => !s)}
+        iconIos="lock.fill"
+        iconAndroid="lock"
+        editable={!busy}
+      />
+
+      <AuthField
+        label={t('auth.confirmPassword')}
+        value={confirmPassword}
+        onChangeText={(x) => {
+          setConfirmPassword(x);
+          setErrorMessage('');
+        }}
+        placeholder={t('auth.passwordPlaceholder')}
+        secureTextEntry={!showConfirmPassword}
+        showSecureToggle
+        onToggleSecure={() => setShowConfirmPassword((s) => !s)}
+        iconIos="lock.fill"
+        iconAndroid="lock"
+        editable={!busy}
+      />
+
+      <AuthPrimaryButton
+        label={t('auth.createAccountCta')}
+        onPress={handleSignup}
+        loading={loading}
+        disabled={googleLoading}
+      />
+
+      <TouchableOpacity
+        style={styles.switchRow}
+        onPress={() => {
+          if (Platform.OS !== 'web') {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }
+          router.back();
+        }}
+        disabled={busy}
       >
-        <View style={styles.header}>
-          <LinearGradient
-            colors={colors.gradientPrimary}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.iconContainer}
-          >
-            <IconSymbol
-              ios_icon_name="person.badge.plus.fill"
-              android_material_icon_name="person-add"
-              size={60}
-              color={colors.card}
-            />
-          </LinearGradient>
-          <Text style={styles.title}>{t('auth.createAccount')}</Text>
-          <Text style={styles.subtitle}>{t('auth.joinUs')}</Text>
-        </View>
-
-        <View style={styles.form}>
-          {errorMessage ? (
-            <View style={styles.errorContainer}>
-              <IconSymbol
-                ios_icon_name="exclamationmark.triangle.fill"
-                android_material_icon_name="error"
-                size={20}
-                color={colors.error}
-              />
-              <Text style={styles.errorText}>{errorMessage}</Text>
-            </View>
-          ) : null}
-
-          <View style={styles.inputContainer}>
-            <View style={styles.inputIconContainer}>
-              <IconSymbol
-                ios_icon_name="person.fill"
-                android_material_icon_name="person"
-                size={20}
-                color={colors.primary}
-              />
-            </View>
-            <TextInput
-              style={styles.input}
-              placeholder={t('auth.username')}
-              placeholderTextColor={colors.textSecondary}
-              value={username}
-              onChangeText={(text) => {
-                setUsername(text);
-                setErrorMessage(''); // Clear error when user starts typing
-              }}
-              autoCapitalize="none"
-              editable={!loading}
-              textAlignVertical="center"
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <View style={styles.inputIconContainer}>
-              <IconSymbol
-                ios_icon_name="envelope.fill"
-                android_material_icon_name="email"
-                size={20}
-                color={colors.primary}
-              />
-            </View>
-            <TextInput
-              style={styles.input}
-              placeholder={t('auth.email')}
-              placeholderTextColor={colors.textSecondary}
-              value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                setErrorMessage(''); // Clear error when user starts typing
-              }}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-              editable={!loading}
-              textAlignVertical="center"
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <View style={styles.inputIconContainer}>
-              <IconSymbol
-                ios_icon_name="lock.fill"
-                android_material_icon_name="lock"
-                size={20}
-                color={colors.primary}
-              />
-            </View>
-            <TextInput
-              style={styles.input}
-              placeholder={t('auth.password')}
-              placeholderTextColor={colors.textSecondary}
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                setErrorMessage(''); // Clear error when user starts typing
-              }}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              editable={!loading}
-              textAlignVertical="center"
-            />
-            <TouchableOpacity
-              style={styles.eyeIcon}
-              onPress={() => setShowPassword(!showPassword)}
-              disabled={loading}
-            >
-              <IconSymbol
-                ios_icon_name={showPassword ? 'eye.slash.fill' : 'eye.fill'}
-                android_material_icon_name={showPassword ? 'visibility-off' : 'visibility'}
-                size={20}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.inputContainer}>
-            <View style={styles.inputIconContainer}>
-              <IconSymbol
-                ios_icon_name="lock.fill"
-                android_material_icon_name="lock"
-                size={20}
-                color={colors.primary}
-              />
-            </View>
-            <TextInput
-              style={styles.input}
-              placeholder={t('auth.confirmPassword')}
-              placeholderTextColor={colors.textSecondary}
-              value={confirmPassword}
-              onChangeText={(text) => {
-                setConfirmPassword(text);
-                setErrorMessage(''); // Clear error when user starts typing
-              }}
-              secureTextEntry={!showConfirmPassword}
-              autoCapitalize="none"
-              editable={!loading}
-              textAlignVertical="center"
-            />
-            <TouchableOpacity
-              style={styles.eyeIcon}
-              onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-              disabled={loading}
-            >
-              <IconSymbol
-                ios_icon_name={showConfirmPassword ? 'eye.slash.fill' : 'eye.fill'}
-                android_material_icon_name={showConfirmPassword ? 'visibility-off' : 'visibility'}
-                size={20}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.signupButton, loading && styles.signupButtonDisabled]}
-            onPress={handleSignup}
-            disabled={loading}
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={loading ? [colors.textSecondary, colors.textSecondary] : colors.gradientPrimary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.signupButtonGradient}
-            >
-              {loading ? (
-                <ActivityIndicator color={colors.card} />
-              ) : (
-                <Text style={styles.signupButtonText}>{t('auth.createAccount')}</Text>
-              )}
-            </LinearGradient>
-          </TouchableOpacity>
-
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>{t('common.or')}</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <TouchableOpacity
-            style={styles.loginButton}
-            onPress={() => {
-              if (Platform.OS !== 'web') {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }
-              router.back();
-            }}
-            disabled={loading}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.loginButtonText}>
-              {t('auth.alreadyHaveAccount')} <Text style={styles.loginButtonTextBold}>{t('auth.signInLink')}</Text>
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        <Text style={styles.switchMuted}>{t('auth.alreadyHaveAccount')} </Text>
+        <Text style={styles.switchAccent}>{t('auth.signInLink')}</Text>
+      </TouchableOpacity>
+    </AuthMarketingShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xxxl,
-    paddingVertical: spacing.xxxl,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: spacing.xxxl,
-  },
-  iconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: borderRadius.round,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xl,
-    ...shadows.large,
-  },
-  title: {
-    ...typography.h1,
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  form: {
-    width: '100%',
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.errorBackground || '#fee',
-    borderRadius: borderRadius.md,
+  errorBanner: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(248, 113, 113, 0.45)',
+    borderRadius: 14,
     padding: spacing.md,
     marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.error,
   },
   errorText: {
     ...typography.caption,
-    color: colors.error,
-    marginLeft: spacing.sm,
-    flex: 1,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.small,
-  },
-  inputIconContainer: {
-    paddingLeft: spacing.lg,
-  },
-  input: {
-    flex: 1,
-    ...typography.body,
-    color: colors.text,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 0,
-    minHeight: 56,
-    textAlignVertical: 'center',
-  },
-  eyeIcon: {
-    paddingRight: spacing.lg,
-  },
-  signupButton: {
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    marginBottom: spacing.xl,
-    ...shadows.medium,
-  },
-  signupButtonDisabled: {
-    opacity: 0.6,
-  },
-  signupButtonGradient: {
-    paddingVertical: spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  signupButtonText: {
-    ...typography.h4,
-    color: colors.card,
-    fontWeight: '700',
+    color: '#fecaca',
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginVertical: spacing.xl,
+    gap: spacing.md,
   },
   dividerLine: {
     flex: 1,
-    height: 1,
-    backgroundColor: colors.border,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(148, 163, 184, 0.35)',
   },
-  dividerText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginHorizontal: spacing.md,
+  dividerLabel: {
+    ...typography.small,
+    color: 'rgba(148, 163, 184, 0.9)',
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
   },
-  loginButton: {
-    alignItems: 'center',
-    paddingVertical: spacing.md,
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: spacing.xl,
+    paddingVertical: spacing.sm,
   },
-  loginButtonText: {
+  switchMuted: {
     ...typography.body,
-    color: colors.textSecondary,
+    color: 'rgba(148, 163, 184, 0.95)',
   },
-  loginButtonTextBold: {
-    color: colors.primary,
-    fontWeight: '700',
+  switchAccent: {
+    ...typography.bodyBold,
+    color: 'rgba(94, 234, 212, 0.95)',
   },
 });

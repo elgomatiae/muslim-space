@@ -26,18 +26,24 @@
     "tryAgain": "Please try again"
   },
   "auth": {
-    "welcomeBack": "Welcome Back",
+    "brandEyebrow": "Muslim-Space",
+    "welcomeBack": "Welcome back",
     "signInToContinue": "Sign in to continue your spiritual journey",
+    "signInSubtitle": "Pick up where you left off — dhikr, prayer, and learning in one calm space.",
+    "signupSubtitle": "Create your space in a minute. No clutter, no noise — just you and your goals.",
     "email": "Email",
     "password": "Password",
-    "forgotPassword": "Forgot Password?",
-    "signIn": "Sign In",
-    "dontHaveAccount": "Don't have an account?",
-    "signUp": "Sign Up",
-    "createAccount": "Create Account",
+    "forgotPassword": "Forgot password?",
+    "signIn": "Sign in",
+    "dontHaveAccount": "New here?",
+    "signUp": "Create an account",
+    "createAccount": "Start your journey",
+    "createAccountCta": "Create account",
     "joinUs": "Join us on your spiritual journey",
-    "username": "Username",
-    "confirmPassword": "Confirm Password",
+    "username": "Display name",
+    "usernamePlaceholder": "How should we greet you?",
+    "confirmPassword": "Confirm password",
+    "passwordPlaceholder": "At least 6 characters",
     "fillAllFields": "Please fill in all fields",
     "passwordsDoNotMatch": "Passwords do not match",
     "passwordMinLength": "Password must be at least 6 characters long",
@@ -53,7 +59,12 @@
     "verificationEmailSent": "We have sent you a verification email. Please check your inbox and verify your email address before logging in.",
     "unexpectedError": "An unexpected error occurred. Please try again.",
     "alreadyHaveAccount": "Already have an account?",
-    "signInLink": "Sign In"
+    "signInLink": "Sign in",
+    "continueWithGoogle": "Continue with Google",
+    "signUpWithGoogle": "Sign up with Google",
+    "orUseEmail": "or email",
+    "signupAlmostThere": "Almost there",
+    "signupEnableAutoConfirm": "Your account was created, but this project still requires email confirmation before sign-in. In Supabase Dashboard go to Authentication → Providers → Email and turn off “Confirm email”, then sign up again (or sign in after confirming from your inbox)."
   },
   "profile": {
     "title": "Profile",
@@ -83,6 +94,7 @@
     "failedToDeleteAccount": "Failed to delete account. Please try again.",
     "failedToSaveProfile": "Failed to save profile",
     "language": "Language",
+    "welcomeMuslimSpace": "Welcome to Muslim-Space",
     "navigationError": "Failed to open screen. Please try again."
   },
   "tabs": {
@@ -326,6 +338,8 @@
     "qaTrendsHint": "Insights",
     "qaGoals": "Goals",
     "qaGoalsHint": "Targets",
+    "qaWelcomeTour": "Welcome tour",
+    "qaWelcomeTourHint": "Muslim-Space in 10 quick steps",
     "sectionGoals": "Goals by pillar",
     "loadingTracker": "Loading..."
   },
@@ -433,5 +447,93 @@
   "charity": {
     "amountPlaceholder": "0.00",
     "descriptionPlaceholder": "e.g., Masjid donation"
+  },
+  "welcomeMuslimSpace": {
+    "headerEyebrow": "Welcome to",
+    "headerTitle": "Muslim Space",
+    "chapterKicker": "Tour",
+    "skip": "Skip",
+    "prev": "Back",
+    "next": "Next",
+    "finish": "Let's go",
+    "progress": "{{current}} / {{total}}",
+    "stepA11y": "Step {{n}}",
+    "goalsSetupIntro": "Fard prayer is always tracked elsewhere. Turn on one optional goal per ring and set numbers — tune anytime in Iman → Goals.",
+    "goalsSetupStatus": {
+      "ok": "At least one goal on",
+      "needOne": "Turn on at least one"
+    },
+    "goalsSetupIncompleteTitle": "Finish your goals",
+    "goalsSetupIncompleteBody": "Enable at least one goal in Worship, Knowledge, and Trust & wellbeing to continue.",
+    "goalsSetupFineTune": "Adjust targets anytime: Iman tab → Goals.",
+    "ringLabels": {
+      "outer": "Worship",
+      "mid": "Knowledge",
+      "inner": "Trust & wellbeing"
+    },
+    "goalTargets": {
+      "sunnahDaily": "Sunnah / day",
+      "tahajjudWeekly": "Tahajjud / week",
+      "quranPages": "Qur'an pages",
+      "quranVerses": "Memorize (verses)",
+      "dhikr": "Dhikr / day",
+      "dua": "Du'a / day",
+      "fastingDays": "Fast days / week",
+      "perWeek": "Target / week",
+      "minutes": "Minutes / day",
+      "glasses": "Glasses / day",
+      "hoursSleep": "Sleep (hours)",
+      "workoutsWeek": "Workouts / week",
+      "meditationWeek": "Sessions / week",
+      "journalWeek": "Entries / week"
+    },
+    "goalTiles": {
+      "sunnahTahajjud": "Sunnah & night prayer",
+      "quran": "Qur'an read & memorize",
+      "dhikrDua": "Dhikr & du'a",
+      "fasting": "Voluntary fasting",
+      "lectures": "Lectures",
+      "quizzes": "Quizzes",
+      "reflection": "Reflection",
+      "stories": "Islamic stories",
+      "allahNames": "Names of Allah",
+      "exercise": "Daily movement",
+      "water": "Water intake",
+      "sleep": "Sleep",
+      "workouts": "Workouts",
+      "meditation": "Meditation",
+      "journal": "Journaling"
+    },
+    "chapters": {
+      "welcome": {
+        "mood": "Start",
+        "title": "Welcome to Muslim Space",
+        "tagline": "Faith, learning, and wellbeing — together.",
+        "b1": "Home: Iman score, verse & hadith, streaks, shortcuts",
+        "b2": "Use the bottom tabs: Iman · Learning · Wellness · Profile",
+        "b3": "Set goals next so your rings match how you live"
+      },
+      "imanTracker": {
+        "mood": "Core",
+        "title": "Iman Tracker",
+        "tagline": "Three rings. One score.",
+        "b1": "Worship · Knowledge · Trust & wellbeing — one glance",
+        "b2": "Only goals you turn on affect your score",
+        "b3": "The five daily prayers stay tracked in Iman (outside this list)"
+      },
+      "goalSetup": {
+        "mood": "Goals",
+        "title": "Set your goals",
+        "tagline": "At least one goal per ring to continue."
+      },
+      "resources": {
+        "mood": "Explore",
+        "title": "Learning & wellness",
+        "tagline": "Dig deeper when you're ready.",
+        "b1": "Learning: lectures, quizzes, stories, reflection",
+        "b2": "Wellness: journal, duʿāʾ, sleep, workouts, mood",
+        "b3": "Profile: prayer settings, language, replay this tour"
+      }
+    }
   }
 }

@@ -236,6 +236,16 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleWelcomeMuslimSpace = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      router.push('/(tabs)/profile/welcome-muslim-space');
+    } catch (error) {
+      console.error('Navigation error:', error);
+      Alert.alert(t('common.error'), t('profile.navigationError'));
+    }
+  };
+
   const handleLogout = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert(
@@ -320,6 +330,13 @@ export default function ProfileScreen() {
       androidIcon: 'language', 
       color: colors.secondary,
       action: handleLanguage
+    },
+    {
+      title: t('profile.welcomeMuslimSpace'),
+      iosIcon: 'sparkles',
+      androidIcon: 'auto-awesome',
+      color: colors.primaryDark,
+      action: handleWelcomeMuslimSpace
     },
     { 
       title: t('profile.about'), 
@@ -427,8 +444,8 @@ export default function ProfileScreen() {
                   <View style={styles.optionLeft}>
                     <View style={[styles.optionIconContainer, { backgroundColor: option.color }]}>
                       <IconSymbol
-                        ios_icon_name={option.iosIcon}
-                        android_material_icon_name={option.androidIcon}
+                        ios_icon_name={option.iosIcon as any}
+                        android_material_icon_name={option.androidIcon as any}
                         size={24}
                         color={colors.card}
                       />

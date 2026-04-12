@@ -114,6 +114,7 @@ export default function ImanTrackerScreen() {
   };
 
   return (
+    <>
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.flex}>
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
@@ -190,6 +191,15 @@ export default function ImanTrackerScreen() {
 
               <View style={styles.groupCard}>
                 <QuickLinkRow
+                  title={t("iman.qaWelcomeTour")}
+                  subtitle={t("iman.qaWelcomeTourHint")}
+                  icon="sparkles"
+                  androidIcon="auto-awesome"
+                  tint={colors.primary}
+                  onPress={() => open("/(tabs)/profile/welcome-muslim-space")}
+                />
+                <View style={styles.rowDivider} />
+                <QuickLinkRow
                   title={t("iman.qaActivity")}
                   subtitle={t("iman.qaActivityHint")}
                   icon="list.bullet.clipboard.fill"
@@ -222,6 +232,7 @@ export default function ImanTrackerScreen() {
               <IbadahSection />
               <IlmSection />
               <AmanahSection />
+
             </Animated.ScrollView>
           )}
 
@@ -240,8 +251,10 @@ export default function ImanTrackerScreen() {
             </Animated.ScrollView>
           )}
         </View>
+
       </View>
     </SafeAreaView>
+    </>
   );
 }
 

@@ -51,7 +51,11 @@ class SimpleI18n {
   t(key: string, options?: any): string {
     const translation = translations[this.locale] || translations.en;
     let value = getNestedValue(translation, key);
-    
+
+    if ((value === key || value === undefined) && this.locale !== 'en') {
+      value = getNestedValue(translations.en, key);
+    }
+
     // Simple interpolation
     if (options && typeof value === 'string') {
       Object.keys(options).forEach((optionKey) => {

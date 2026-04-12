@@ -1,60 +1,39 @@
-import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { useAccessGate } from '@/hooks/useAccessGate';
-import { AccessGate } from './AccessGate';
-import { colors } from '@/styles/commonStyles';
+import React, { useEffect, useState } from "react";
+import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { useAccessGate } from "@/hooks/useAccessGate";
+import { AccessGate } from "./AccessGate";
+import { colors } from "@/styles/commonStyles";
 
 interface WithAccessGateProps {
   children: React.ReactNode;
   featureName?: string;
   featureDescription?: string;
-  onAccessGranted?: () => void;
+  onAccessGranted?: () => void | Promise<void>;
 }
 
 /**
- * Higher-order component that wraps content with an access gate.
- * Shows the access gate modal if user doesn't have access, otherwise shows children.
+ * Wraps children and mounts an AccessGate for manual `showGate()` use.
+ * Does not auto-open the gate on mount (global unlock was removed — gating is per tap in screens).
  */
 export function WithAccessGate({
   children,
-  featureName = 'Premium Feature',
-  featureDescription = 'Watch a short ad to unlock this feature',
+  featureName = "Premium Feature",
+  featureDescription = "Watch a short ad to continue.",
   onAccessGranted,
 }: WithAccessGateProps) {
-  const { checkAccess, showGate, gateVisible, onGateClose, onGateGranted } = useAccessGate();
-  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
-  const [checking, setChecking] = useState(true);
+  const { gateVisible, onGateClose, onGateDismissOnly, onGateGranted } = useAccessGate();
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    checkAccessStatus();
+    setReady(true);
   }, []);
 
-  const checkAccessStatus = async () => {
-    setChecking(true);
-    const access = await checkAccess();
-    setHasAccess(access);
-    setChecking(false);
-
-    if (!access) {
-      // Show gate if no access
-      showGate(() => {
-        setHasAccess(true);
-        if (onAccessGranted) {
-          onAccessGranted();
-        }
-      });
-    }
+  const handleGateGranted = async () => {
+    await onGateGranted();
+    onAccessGranted?.();
   };
 
-  const handleGateGranted = () => {
-    onGateGranted();
-    setHasAccess(true);
-    if (onAccessGranted) {
-      onAccessGranted();
-    }
-  };
-
-  if (checking) {
+  if (!ready) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -62,30 +41,13 @@ export function WithAccessGate({
     );
   }
 
-  if (hasAccess) {
-    return (
-      <>
-        {children}
-        <AccessGate
-          visible={gateVisible}
-          onClose={onGateClose}
-          onAccessGranted={handleGateGranted}
-          title={featureName}
-          description={featureDescription}
-        />
-      </>
-    );
-  }
-
-  // No access - gate will be shown by the hook
   return (
     <>
-      <View style={styles.lockedContainer}>
-        {children}
-      </View>
+      {children}
       <AccessGate
         visible={gateVisible}
         onClose={onGateClose}
+        onDismissModalOnly={onGateDismissOnly}
         onAccessGranted={handleGateGranted}
         title={featureName}
         description={featureDescription}
@@ -97,10 +59,7 @@ export function WithAccessGate({
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  lockedContainer: {
-    opacity: 0.3,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

@@ -1,13 +1,20 @@
 
 import "react-native-reanimated";
+import * as WebBrowser from "expo-web-browser";
 import React, { useEffect, useRef } from "react";
+
+WebBrowser.maybeCompleteAuthSession();
 import { useFonts } from "expo-font";
 import { Stack, router, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
-import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaProvider,
+  initialWindowMetrics,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useColorScheme, Alert, Platform, View } from "react-native";
+import { useColorScheme, Alert, Platform, View, LogBox } from "react-native";
 import { useNetworkState } from "expo-network";
 import {
   DarkTheme,
@@ -81,10 +88,14 @@ function LazyNotificationProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync().catch(() => {
-  // Ignore errors if splash screen is already prevented
-});
+/** Await this before calling hideAsync so iOS always has a registered splash controller. */
+const splashPreventPromise = SplashScreen.preventAutoHideAsync().catch(() => null);
+
+if (__DEV__) {
+  LogBox.ignoreLogs([
+    "No native splash screen registered for given view controller",
+  ]);
+}
 
 /** Minimum time the native splash stays visible so it doesn’t flash away instantly. */
 const SPLASH_MIN_VISIBLE_MS = 900;
@@ -169,20 +180,31 @@ export default function RootLayout() {
       return;
     }
 
-    const elapsed = Date.now() - splashClockStart;
-    const remaining = Math.max(0, SPLASH_MIN_VISIBLE_MS - elapsed);
+    let cancelled = false;
 
-    const id = setTimeout(() => {
-      if (splashScreenHidden.current) return;
+    void (async () => {
+      await splashPreventPromise;
+      if (cancelled || splashScreenHidden.current) return;
+
+      const elapsed = Date.now() - splashClockStart;
+      const remaining = Math.max(0, SPLASH_MIN_VISIBLE_MS - elapsed);
+      await new Promise<void>((resolve) => setTimeout(resolve, remaining));
+
+      if (cancelled || splashScreenHidden.current) return;
       splashScreenHidden.current = true;
-      SplashScreen.hideAsync().catch((error) => {
-        if (__DEV__) {
-          console.log('Splash screen hide error (ignored):', error.message);
-        }
-      });
-    }, remaining);
 
-    return () => clearTimeout(id);
+      if (Platform.OS === "web") return;
+
+      try {
+        await SplashScreen.hideAsync();
+      } catch {
+        /* Native splash may be unavailable after fast refresh */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [loaded, fontError]);
 
   React.useEffect(() => {
@@ -228,7 +250,7 @@ export default function RootLayout() {
   };
   return (
     <ErrorBoundary>
-      <SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <StatusBar style="auto" animated />
         <AdMobProvider>
           <ThemeProvider
@@ -254,6 +276,11 @@ export default function RootLayout() {
                               {/* Auth screens */}
                               <Stack.Screen
                                 name="(auth)"
+                                options={{ headerShown: false }}
+                              />
+
+                              <Stack.Screen
+                                name="email-confirmed"
                                 options={{ headerShown: false }}
                               />
 

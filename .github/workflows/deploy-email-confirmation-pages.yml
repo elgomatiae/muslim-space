@@ -1,0 +1,46 @@
+# Publishes web/email-confirmation/ to GitHub Pages (static email-confirm landing).
+#
+# One-time repo setup:
+# 1. GitHub repo → Settings → Pages → Build and deployment → Source: "GitHub Actions"
+# 2. Push to the branch below (default: main). The site URL will be:
+#    https://<username>.github.io/<repository>/
+#
+# Set EXPO_PUBLIC_AUTH_REDIRECT_URL in your app to that URL (trailing slash optional but be consistent with Supabase allow list).
+
+name: Deploy email confirmation page to GitHub Pages
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "web/email-confirmation/**"
+      - ".github/workflows/deploy-email-confirmation-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/email-confirmation
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,5 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, TextInput, Keyboard, Alert, Image } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  FlatList,
+  ActivityIndicator,
+  TouchableOpacity,
+  TextInput,
+  Keyboard,
+  Alert,
+  Image,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -22,7 +34,11 @@ import * as Linking from 'expo-linking';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAccessGate } from '@/hooks/useAccessGate';
 import { AccessGate } from '@/components/access/AccessGate';
-import { router } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
+import {
+  isLearningSectionUnlocked,
+  markLearningSectionUnlocked,
+} from '@/utils/learningSectionUnlock';
 
 // Helper functions
 function isSupabaseConfigured(): boolean {
@@ -92,7 +108,7 @@ export default function LecturesScreen() {
   const { t } = useTranslation();
   const { ilmGoals, updateIlmGoals } = useImanTracker();
   const insets = useSafeAreaInsets();
-  const { checkAccess, showGate, gateVisible, onGateClose, onGateGranted: originalOnGateGranted } = useAccessGate();
+  const { showGate, gateVisible, onGateClose, onGateDismissOnly, onGateGranted } = useAccessGate();
   const [categories, setCategories] = useState<string[]>([]);
   const [lecturesByCategory, setLecturesByCategory] = useState<{ [key: string]: LectureDisplay[] }>({});
   const [uncategorizedLectures, setUncategorizedLectures] = useState<LectureDisplay[]>([]);
@@ -105,25 +121,12 @@ export default function LecturesScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [pendingLecture, setPendingLecture] = useState<LectureDisplay | null>(null);
-  const [accessChecked, setAccessChecked] = useState(false);
+  const pendingLectureRef = useRef<LectureDisplay | null>(null);
 
-  // Custom handler for when access is granted - opens pending lecture
-  const onGateGranted = async () => {
-    await originalOnGateGranted();
-    // If there's a pending lecture, open it after access is granted
-    if (pendingLecture) {
-      const lecture = pendingLecture;
-      setPendingLecture(null);
-      await incrementLectureViews(lecture.id);
-      
-      if (isYouTubeUrl(lecture.url)) {
-        setPendingLecture(lecture);
-        setShowTrackingModal(true);
-      } else {
-        setSelectedLecture(lecture);
-      }
-    }
-  };
+  const setPendingLectureBoth = useCallback((lec: LectureDisplay | null) => {
+    pendingLectureRef.current = lec;
+    setPendingLecture(lec);
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -153,12 +156,17 @@ export default function LecturesScreen() {
       const categorized: { [key: string]: LectureDisplay[] } = {};
       const uncategorized: LectureDisplay[] = [];
       
-      allLectures.forEach(lecture => {
-        if (lecture.category && lecture.category.trim() !== '') {
-          if (!categorized[lecture.category]) {
-            categorized[lecture.category] = [];
+      allLectures.forEach((lecture) => {
+        const rawCategory = lecture.category?.trim();
+        // Treat "Short clips" as non-category so it doesn't show as its own section.
+        const normalized = rawCategory?.toLowerCase();
+        const category = normalized && normalized !== "short clips" ? rawCategory : null;
+
+        if (category) {
+          if (!categorized[category]) {
+            categorized[category] = [];
           }
-          categorized[lecture.category].push(lecture);
+          categorized[category].push(lecture);
         } else {
           uncategorized.push(lecture);
         }
@@ -184,20 +192,19 @@ export default function LecturesScreen() {
     }
   }, []);
 
-  // Check access when component mounts (don't block, just check)
   useEffect(() => {
-    const checkAccessOnMount = async () => {
-      await checkAccess();
-      setAccessChecked(true);
-    };
-    checkAccessOnMount();
-  }, []);
+    void loadData();
+  }, [loadData]);
 
-  useEffect(() => {
-    if (accessChecked) {
-      loadData();
-    }
-  }, [loadData, accessChecked]);
+  /** One ad per session when opening this screen without prior unlock (e.g. deep link). */
+  useFocusEffect(
+    useCallback(() => {
+      if (isLearningSectionUnlocked('lectures')) return;
+      showGate(() => {
+        markLearningSectionUnlocked('lectures');
+      });
+    }, [showGate])
+  );
 
   const performSearch = useCallback(async () => {
     if (!searchQuery.trim()) {
@@ -296,32 +303,77 @@ export default function LecturesScreen() {
     }
   };
 
-  const handleLecturePress = async (lecture: LectureDisplay) => {
-    // Check access before allowing lecture viewing
-    const hasAccess = await checkAccess();
-    if (!hasAccess) {
-      // Show access gate, store the lecture to open after ad is watched
-      setPendingLecture(lecture);
-      showGate();
-      return;
-    }
+  const handleLecturePress = useCallback(
+    async (lecture: LectureDisplay) => {
+      await incrementLectureViews(lecture.id);
 
-    // User has access, proceed with lecture
-    await incrementLectureViews(lecture.id);
+      if (isYouTubeUrl(lecture.url)) {
+        setPendingLectureBoth(lecture);
+        setShowTrackingModal(true);
+      } else {
+        setSelectedLecture(lecture);
+      }
+    },
+    [setPendingLectureBoth]
+  );
 
-    if (isYouTubeUrl(lecture.url)) {
-      setPendingLecture(lecture);
-      setShowTrackingModal(true);
-    } else {
-      setSelectedLecture(lecture);
-    }
-  };
+  const renderLectureCard = useCallback(
+    (lecture: LectureDisplay) => {
+      const thumbnailUrl = lecture.thumbnail_url || (lecture.url ? getYouTubeThumbnailUrl(lecture.url) : "");
+      return (
+        <TouchableOpacity
+          style={styles.lectureCard}
+          onPress={() => void handleLecturePress(lecture)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.lectureCardImageContainer}>
+            {thumbnailUrl ? (
+              <Image source={{ uri: thumbnailUrl }} style={styles.lectureThumbnail} resizeMode="cover" />
+            ) : (
+              <LinearGradient
+                colors={colors.gradientPurple}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.lectureThumbnail}
+              >
+                <IconSymbol ios_icon_name="video.fill" android_material_icon_name="videocam" size={40} color={colors.card} />
+              </LinearGradient>
+            )}
+            <View style={styles.playButtonOverlay}>
+              <LinearGradient
+                colors={["rgba(0, 0, 0, 0.5)", "rgba(0, 0, 0, 0.3)"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.playButtonGradient}
+              >
+                <IconSymbol ios_icon_name="play.circle.fill" android_material_icon_name="play-circle-filled" size={36} color={colors.card} />
+              </LinearGradient>
+            </View>
+          </View>
+          <View style={styles.lectureCardContent}>
+            <Text style={styles.lectureCardTitle} numberOfLines={2}>
+              {lecture.title}
+            </Text>
+            {lecture.scholar_name && (
+              <View style={styles.scholarInfo}>
+                <IconSymbol ios_icon_name="person.fill" android_material_icon_name="person" size={14} color={colors.textSecondary} />
+                <Text style={styles.lectureCardSubtitle} numberOfLines={1}>
+                  {lecture.scholar_name}
+                </Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+      );
+    },
+    [handleLecturePress]
+  );
 
   const handleTrackAndWatch = async () => {
     if (pendingLecture) {
       setShowTrackingModal(false);
       const lecture = pendingLecture;
-      setPendingLecture(null);
+      setPendingLectureBoth(null);
       await trackLecture(lecture);
       await openYouTubeVideo(lecture);
     }
@@ -331,7 +383,7 @@ export default function LecturesScreen() {
     if (pendingLecture) {
       setShowTrackingModal(false);
       const lecture = pendingLecture;
-      setPendingLecture(null);
+      setPendingLectureBoth(null);
       await openYouTubeVideo(lecture);
     }
   };
@@ -415,7 +467,15 @@ export default function LecturesScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        nestedScrollEnabled
+        removeClippedSubviews={false}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Hero Header Section */}
         <LinearGradient
           colors={colors.gradientPurple}
@@ -551,53 +611,17 @@ export default function LecturesScreen() {
                     </View>
                   </View>
                 </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll} contentContainerStyle={styles.horizontalScrollContent}>
-                  {uncategorizedLectures.map((lecture) => {
-                    const thumbnailUrl = lecture.thumbnail_url || (lecture.url ? getYouTubeThumbnailUrl(lecture.url) : '');
-                    return (
-                      <TouchableOpacity
-                        key={lecture.id}
-                        style={styles.lectureCard}
-                        onPress={() => handleLecturePress(lecture)}
-                        activeOpacity={0.8}
-                      >
-                        <View style={styles.lectureCardImageContainer}>
-                          {thumbnailUrl ? (
-                            <Image source={{ uri: thumbnailUrl }} style={styles.lectureThumbnail} resizeMode="cover" />
-                          ) : (
-                            <LinearGradient
-                              colors={colors.gradientPurple}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 1, y: 1 }}
-                              style={styles.lectureThumbnail}
-                            >
-                              <IconSymbol ios_icon_name="video.fill" android_material_icon_name="videocam" size={40} color={colors.card} />
-                            </LinearGradient>
-                          )}
-                          <View style={styles.playButtonOverlay}>
-                            <LinearGradient
-                              colors={['rgba(0, 0, 0, 0.5)', 'rgba(0, 0, 0, 0.3)']}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 0, y: 1 }}
-                              style={styles.playButtonGradient}
-                            >
-                              <IconSymbol ios_icon_name="play.circle.fill" android_material_icon_name="play-circle-filled" size={36} color={colors.card} />
-                            </LinearGradient>
-                          </View>
-                        </View>
-                        <View style={styles.lectureCardContent}>
-                          <Text style={styles.lectureCardTitle} numberOfLines={2}>{lecture.title}</Text>
-                          {lecture.scholar_name && (
-                            <View style={styles.scholarInfo}>
-                              <IconSymbol ios_icon_name="person.fill" android_material_icon_name="person" size={14} color={colors.textSecondary} />
-                              <Text style={styles.lectureCardSubtitle} numberOfLines={1}>{lecture.scholar_name}</Text>
-                            </View>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
+                <FlatList
+                  horizontal
+                  data={uncategorizedLectures}
+                  keyExtractor={(item) => String(item.id)}
+                  renderItem={({ item }) => renderLectureCard(item)}
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.horizontalScroll}
+                  contentContainerStyle={styles.horizontalScrollContent}
+                  nestedScrollEnabled
+                  removeClippedSubviews={false}
+                />
               </View>
             )}
 
@@ -625,53 +649,17 @@ export default function LecturesScreen() {
                       </View>
                     </View>
                   </View>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll} contentContainerStyle={styles.horizontalScrollContent}>
-                    {lectures.map((lecture) => {
-                      const thumbnailUrl = lecture.thumbnail_url || (lecture.url ? getYouTubeThumbnailUrl(lecture.url) : '');
-                      return (
-                        <TouchableOpacity
-                          key={lecture.id}
-                          style={styles.lectureCard}
-                          onPress={() => handleLecturePress(lecture)}
-                          activeOpacity={0.8}
-                        >
-                          <View style={styles.lectureCardImageContainer}>
-                            {thumbnailUrl ? (
-                              <Image source={{ uri: thumbnailUrl }} style={styles.lectureThumbnail} resizeMode="cover" />
-                            ) : (
-                              <LinearGradient
-                                colors={colors.gradientPurple}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 1 }}
-                                style={styles.lectureThumbnail}
-                              >
-                                <IconSymbol ios_icon_name="video.fill" android_material_icon_name="videocam" size={40} color={colors.card} />
-                              </LinearGradient>
-                            )}
-                            <View style={styles.playButtonOverlay}>
-                              <LinearGradient
-                                colors={['rgba(0, 0, 0, 0.5)', 'rgba(0, 0, 0, 0.3)']}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 0, y: 1 }}
-                                style={styles.playButtonGradient}
-                              >
-                                <IconSymbol ios_icon_name="play.circle.fill" android_material_icon_name="play-circle-filled" size={36} color={colors.card} />
-                              </LinearGradient>
-                            </View>
-                          </View>
-                          <View style={styles.lectureCardContent}>
-                            <Text style={styles.lectureCardTitle} numberOfLines={2}>{lecture.title}</Text>
-                            {lecture.scholar_name && (
-                              <View style={styles.scholarInfo}>
-                                <IconSymbol ios_icon_name="person.fill" android_material_icon_name="person" size={14} color={colors.textSecondary} />
-                                <Text style={styles.lectureCardSubtitle} numberOfLines={1}>{lecture.scholar_name}</Text>
-                              </View>
-                            )}
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
+                  <FlatList
+                    horizontal
+                    data={lectures}
+                    keyExtractor={(item) => String(item.id)}
+                    renderItem={({ item }) => renderLectureCard(item)}
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.horizontalScroll}
+                    contentContainerStyle={styles.horizontalScrollContent}
+                    nestedScrollEnabled
+                    removeClippedSubviews={false}
+                  />
                 </View>
               );
             })}
@@ -703,9 +691,10 @@ export default function LecturesScreen() {
       <AccessGate
         visible={gateVisible}
         onClose={onGateClose}
+        onDismissModalOnly={onGateDismissOnly}
         onAccessGranted={onGateGranted}
-        title="Unlock Islamic Lectures"
-        description="Watch a short ad to access premium Islamic lectures for 24 hours"
+        title="Unlock Lectures"
+        description="Watch a short ad to browse Islamic lectures."
       />
     </View>
   );

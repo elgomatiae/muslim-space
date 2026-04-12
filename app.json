@@ -2,7 +2,7 @@
   "expo": {
     "name": "Muslim-Space",
     "slug": "muslim-space",
-    "version": "1.04",
+    "version": "1.05",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon.png",
     "userInterfaceStyle": "automatic",

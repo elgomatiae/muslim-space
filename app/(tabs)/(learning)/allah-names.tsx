@@ -1,11 +1,16 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect } from "expo-router";
 import { ALLAH_NAMES_99, type AllahNameEntry } from "@/data/allahNames";
+import {
+  isLearningSectionUnlocked,
+  markLearningSectionUnlocked,
+} from "@/utils/learningSectionUnlock";
 import { useImanTracker } from "@/contexts/ImanTrackerContext";
 import * as Haptics from "expo-haptics";
 import { useAccessGate } from "@/hooks/useAccessGate";
@@ -14,7 +19,7 @@ import { AccessGate } from "@/components/access/AccessGate";
 export default function AllahNamesScreen() {
   const insets = useSafeAreaInsets();
   const { ilmGoals, updateIlmGoals } = useImanTracker();
-  const { checkAccess, showGate, gateVisible, onGateClose, onGateGranted } = useAccessGate();
+  const { showGate, gateVisible, onGateClose, onGateDismissOnly, onGateGranted } = useAccessGate();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<AllahNameEntry | null>(null);
 
@@ -31,6 +36,15 @@ export default function AllahNamesScreen() {
   const completed = ilmGoals?.weeklyAllahNamesCompleted ?? 0;
   const capped = goal > 0 && completed >= goal;
 
+  useFocusEffect(
+    useCallback(() => {
+      if (isLearningSectionUnlocked("allah_names")) return;
+      showGate(() => {
+        markLearningSectionUnlocked("allah_names");
+      });
+    }, [showGate])
+  );
+
   const onTrackReview = async () => {
     if (!ilmGoals || goal <= 0 || capped) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -40,14 +54,9 @@ export default function AllahNamesScreen() {
     });
   };
 
-  const onSelectName = async (name: AllahNameEntry) => {
+  const onSelectName = (name: AllahNameEntry) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    const hasAccess = await checkAccess();
-    if (hasAccess) {
-      setSelected(name);
-      return;
-    }
-    showGate(() => setSelected(name));
+    setSelected(name);
   };
 
   return (
@@ -188,9 +197,10 @@ export default function AllahNamesScreen() {
       <AccessGate
         visible={gateVisible}
         onClose={onGateClose}
+        onDismissModalOnly={onGateDismissOnly}
         onAccessGranted={onGateGranted}
-        title="Unlock Allah Names"
-        description="Watch a short ad to unlock Asma ul Husna for 24 hours"
+        title="Unlock 99 Names"
+        description="Watch a short ad to browse Asma ul Husna."
       />
     </SafeAreaView>
   );

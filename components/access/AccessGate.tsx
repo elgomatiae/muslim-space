@@ -12,6 +12,7 @@ import {
 import { RewardedInterstitialAd, AdEventType, RewardedAdEventType } from '@/shims/react-native-google-mobile-ads.js';
 import { colors } from '@/styles/commonStyles';
 import { useAdMob } from '@/contexts/AdMobContext';
+import { runAfterRewardGateTeardown } from '@/utils/runAfterRewardGateTeardown';
 
 // Test ad unit ID for rewarded interstitial (use your production ID in production)
 const ACCESS_GATE_AD_UNIT_ID = __DEV__
@@ -21,7 +22,9 @@ const ACCESS_GATE_AD_UNIT_ID = __DEV__
 interface AccessGateProps {
   visible: boolean;
   onClose: () => void;
-  onAccessGranted: () => void;
+  /** If set, called instead of `onClose` when the modal is dismissed right after a reward (keeps pending `showGate` callback). */
+  onDismissModalOnly?: () => void;
+  onAccessGranted: () => void | Promise<void>;
   title?: string;
   description?: string;
 }
@@ -29,6 +32,7 @@ interface AccessGateProps {
 export function AccessGate({
   visible,
   onClose,
+  onDismissModalOnly,
   onAccessGranted,
   title = 'Unlock Access',
   description = 'Watch a short ad to unlock this feature',
@@ -38,8 +42,21 @@ export function AccessGate({
   const [adLoading, setAdLoading] = useState(false);
   // Use a ref for the ad instance to avoid stale closures
   const adRef = useRef<RewardedInterstitialAd | null>(null);
-  const unsubscribeFunctionsRef = useRef<Array<() => void>>([]);
+  const unsubscribeFunctionsRef = useRef<(() => void)[]>([]);
   const webAutoGrantedRef = useRef(false);
+  const onAccessGrantedRef = useRef(onAccessGranted);
+  const onCloseRef = useRef(onClose);
+  const onDismissModalOnlyRef = useRef(onDismissModalOnly);
+  const visibleRef = useRef(visible);
+  /** True after EARNED_REWARD until CLOSED — grant only on CLOSED so we never tear down the ad while fullscreen is still up. */
+  const rewardPendingRef = useRef(false);
+
+  useLayoutEffect(() => {
+    onAccessGrantedRef.current = onAccessGranted;
+    onCloseRef.current = onClose;
+    onDismissModalOnlyRef.current = onDismissModalOnly;
+    visibleRef.current = visible;
+  });
 
   // Cleanup function to remove all event listeners
   const cleanupAdListeners = useCallback(() => {
@@ -53,10 +70,11 @@ export function AccessGate({
     unsubscribeFunctionsRef.current = [];
   }, []);
 
-  const loadAd = async () => {
+  const loadAd = useCallback(async () => {
     try {
       // Clean up any existing listeners first
       cleanupAdListeners();
+      rewardPendingRef.current = false;
 
       setAdLoading(true);
       setAdLoaded(false);
@@ -78,23 +96,22 @@ export function AccessGate({
         (reward) => {
           console.log('✅ User earned reward:', reward);
           console.log(`Reward: ${reward.type} - ${reward.amount}`);
-          cleanupAdListeners();
-          adRef.current = null;
-          setAdLoaded(false);
-          onAccessGranted();
-          onClose();
+          // Do not dismiss Modal or unsubscribe here — the native ad is often still on screen;
+          // doing so freezes the app. Wait for AdEventType.CLOSED.
+          rewardPendingRef.current = true;
         }
       );
 
       const unsubError = ad.addAdEventListener(AdEventType.ERROR, (error) => {
         console.error('❌ Ad error:', error);
         const errorMessage = (error as any)?.message || (error as any)?.code || 'Unknown error';
+        rewardPendingRef.current = false;
         setAdLoading(false);
         setAdLoaded(false);
         cleanupAdListeners();
         adRef.current = null;
 
-        if (visible) {
+        if (visibleRef.current) {
           Alert.alert(
             'Ad Error',
             `Unable to load ad: ${errorMessage}\n\nPlease check your internet connection and try again.`,
@@ -105,9 +122,28 @@ export function AccessGate({
 
       const unsubClosed = ad.addAdEventListener(AdEventType.CLOSED, () => {
         console.log('📺 Ad closed');
+        const earned = rewardPendingRef.current;
+        rewardPendingRef.current = false;
         cleanupAdListeners();
         setAdLoaded(false);
         adRef.current = null;
+
+        if (earned) {
+          const dismissOnly = onDismissModalOnlyRef.current;
+          (dismissOnly ?? onCloseRef.current)?.();
+          runAfterRewardGateTeardown(() => {
+            try {
+              const result = onAccessGrantedRef.current?.();
+              if (result != null && typeof (result as Promise<unknown>).then === 'function') {
+                void (result as Promise<unknown>).catch((e) =>
+                  console.error('AccessGate onAccessGranted', e)
+                );
+              }
+            } catch (e) {
+              console.error('AccessGate onAccessGranted (sync)', e);
+            }
+          });
+        }
       });
 
       unsubscribeFunctionsRef.current.push(
@@ -123,12 +159,13 @@ export function AccessGate({
     } catch (error) {
       console.error('❌ Error loading ad:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
+      rewardPendingRef.current = false;
       setAdLoading(false);
       setAdLoaded(false);
       cleanupAdListeners();
       adRef.current = null;
 
-      if (visible) {
+      if (visibleRef.current) {
         Alert.alert(
           'Error',
           `Failed to load ad: ${errorMessage}\n\nPlease try again later.`,
@@ -136,7 +173,7 @@ export function AccessGate({
         );
       }
     }
-  };
+  }, [cleanupAdListeners]);
 
   // Web: no rewarded ads — grant access immediately (no modal, no spinner).
   useLayoutEffect(() => {
@@ -147,16 +184,38 @@ export function AccessGate({
     }
     if (webAutoGrantedRef.current) return;
     webAutoGrantedRef.current = true;
-    onAccessGranted();
-  }, [visible, onAccessGranted]);
+    const dismissOnly = onDismissModalOnlyRef.current;
+    (dismissOnly ?? onCloseRef.current)?.();
+    runAfterRewardGateTeardown(() => {
+      try {
+        const result = onAccessGrantedRef.current?.();
+        if (result != null && typeof (result as Promise<unknown>).then === 'function') {
+          void (result as Promise<unknown>).catch((e) => console.error('AccessGate web grant', e));
+        }
+      } catch (e) {
+        console.error('AccessGate web grant (sync)', e);
+      }
+    });
+  }, [visible]);
+
+  // When the gate hides, reset ad UI state so the next open is clean (avoids stuck spinners / stale listeners).
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    if (!visible) {
+      cleanupAdListeners();
+      adRef.current = null;
+      setAdLoaded(false);
+      setAdLoading(false);
+    }
+  }, [visible, cleanupAdListeners]);
 
   // When AdMob is ready and the gate is visible, ensure an ad is loaded
   useEffect(() => {
     if (Platform.OS === 'web') return;
     if (visible && isInitialized && !adRef.current && !adLoading) {
-      loadAd();
+      void loadAd();
     }
-  }, [visible, isInitialized, adLoading]);
+  }, [visible, isInitialized, adLoading, loadAd]);
 
   // Show retry / error only when AdMob init fails while gate is visible
   useEffect(() => {
@@ -204,7 +263,7 @@ export function AccessGate({
     } catch (error) {
       console.error('❌ Error showing ad:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
-      
+      rewardPendingRef.current = false;
       // Clean up on error
       cleanupAdListeners();
       setAdLoaded(false);
@@ -222,6 +281,7 @@ export function AccessGate({
   };
 
   const handleClose = () => {
+    rewardPendingRef.current = false;
     cleanupAdListeners();
     setAdLoaded(false);
     adRef.current = null;
@@ -237,6 +297,8 @@ export function AccessGate({
       visible={visible}
       transparent
       animationType="fade"
+      {...(Platform.OS === 'ios' ? { presentationStyle: 'overFullScreen' as const } : {})}
+      {...(Platform.OS === 'android' ? { statusBarTranslucent: true } : {})}
       onRequestClose={handleClose}
     >
       <View style={styles.overlay}>

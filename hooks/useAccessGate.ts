@@ -1,91 +1,76 @@
-import { useState, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useState, useCallback, useRef } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const ACCESS_STORAGE_KEY = '@access_granted';
-const ACCESS_EXPIRY_HOURS = 24; // Access expires after 24 hours
+/** Legacy key from when a single ad unlocked premium for 24h — cleared once so old installs don’t behave oddly. */
+const LEGACY_ACCESS_STORAGE_KEY = "@access_granted";
 
-interface AccessState {
-  hasAccess: boolean;
-  showGate: (onGranted?: () => void) => void;
-  checkAccess: () => Promise<boolean>;
-  grantAccess: () => Promise<void>;
-  revokeAccess: () => Promise<void>;
-}
-
-export function useAccessGate(): AccessState & { gateVisible: boolean; onGateClose: () => void; onGateGranted: () => void } {
+export function useAccessGate() {
   const [gateVisible, setGateVisible] = useState(false);
-  const [onAccessGrantedCallback, setOnAccessGrantedCallback] = useState<(() => void) | null>(null);
+  /** Optional callback after a successful reward (e.g. navigate). Kept in a ref so `onGateGranted` stays stable. */
+  const onGrantedRef = useRef<(() => void) | null>(null);
+  const legacyClearedRef = useRef(false);
 
+  /**
+   * Access is never “cached” — each protected tap shows the ad gate.
+   * We still clear any legacy 24h token once per JS session so it cannot affect behavior.
+   */
   const checkAccess = useCallback(async (): Promise<boolean> => {
-    try {
-      const accessData = await AsyncStorage.getItem(ACCESS_STORAGE_KEY);
-      if (!accessData) {
-        return false;
+    if (!legacyClearedRef.current) {
+      legacyClearedRef.current = true;
+      try {
+        await AsyncStorage.removeItem(LEGACY_ACCESS_STORAGE_KEY);
+      } catch {
+        /* non-fatal */
       }
-
-      const { timestamp } = JSON.parse(accessData);
-      const now = Date.now();
-      const expiryTime = timestamp + ACCESS_EXPIRY_HOURS * 60 * 60 * 1000;
-
-      if (now > expiryTime) {
-        // Access expired, remove it
-        await AsyncStorage.removeItem(ACCESS_STORAGE_KEY);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error checking access:', error);
-      return false;
     }
+    return false;
   }, []);
 
-  const grantAccess = useCallback(async (): Promise<void> => {
-    try {
-      const accessData = {
-        timestamp: Date.now(),
-      };
-      await AsyncStorage.setItem(ACCESS_STORAGE_KEY, JSON.stringify(accessData));
-    } catch (error) {
-      console.error('Error granting access:', error);
-    }
-  }, []);
+  /** No-op: we do not store a global unlock anymore. */
+  const grantAccess = useCallback(async (): Promise<void> => {}, []);
 
   const revokeAccess = useCallback(async (): Promise<void> => {
     try {
-      await AsyncStorage.removeItem(ACCESS_STORAGE_KEY);
-    } catch (error) {
-      console.error('Error revoking access:', error);
+      await AsyncStorage.removeItem(LEGACY_ACCESS_STORAGE_KEY);
+    } catch {
+      /* non-fatal */
     }
   }, []);
 
   const showGate = useCallback((onGranted?: () => void) => {
-    setOnAccessGrantedCallback(() => onGranted || null);
+    onGrantedRef.current = onGranted ?? null;
     setGateVisible(true);
   }, []);
 
   const onGateClose = useCallback(() => {
     setGateVisible(false);
-    setOnAccessGrantedCallback(null);
+    onGrantedRef.current = null;
+  }, []);
+
+  /** Hide the gate modal without clearing the pending `showGate` callback (used after EARNED_REWARD). */
+  const onGateDismissOnly = useCallback(() => {
+    setGateVisible(false);
   }, []);
 
   const onGateGranted = useCallback(async () => {
-    await grantAccess();
-    if (onAccessGrantedCallback) {
-      onAccessGrantedCallback();
+    try {
+      await grantAccess();
+      onGrantedRef.current?.();
+    } finally {
+      setGateVisible(false);
+      onGrantedRef.current = null;
     }
-    setGateVisible(false);
-    setOnAccessGrantedCallback(null);
-  }, [grantAccess, onAccessGrantedCallback]);
+  }, [grantAccess]);
 
   return {
-    hasAccess: false, // Will be checked dynamically
+    hasAccess: false,
     showGate,
     checkAccess,
     grantAccess,
     revokeAccess,
     gateVisible,
     onGateClose,
+    onGateDismissOnly,
     onGateGranted,
   };
 }

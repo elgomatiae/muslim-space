@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" dark light />
+  <title>Muslim-Space — Email confirmed</title>
+  <!--
+    DEPLOY: Upload this folder (or only index.html) to any static host (Netlify, Vercel, Cloudflare Pages, GitHub Pages).
+    In Supabase → Authentication → URL Configuration → Redirect URLs, add your deployed URL exactly, e.g.:
+      https://YOUR-SUBDOMAIN.netlify.app/email-confirmation/
+      or https://confirm.yourdomain.com/
+    Set EXPO_PUBLIC_AUTH_REDIRECT_URL in your Expo app to that same URL (see utils/authEmailRedirectTo.ts).
+
+    Optional: change APP_SCHEME below if you changed expo.scheme in app.json.
+  -->
+  <style>
+    :root {
+      --bg0: #070b14;
+      --bg1: #121c33;
+      --accent: #5eead4;
+      --violet: #a78bfa;
+      --text: #f8fafc;
+      --muted: rgba(248, 250, 252, 0.62);
+      --card: rgba(15, 23, 42, 0.72);
+      --border: rgba(255, 255, 255, 0.1);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(120% 80% at 80% -20%, rgba(20, 184, 166, 0.18), transparent),
+                  radial-gradient(100% 70% at -10% 100%, rgba(139, 92, 246, 0.2), transparent),
+                  linear-gradient(165deg, var(--bg0), var(--bg1) 45%, #1a0f2e);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .wrap {
+      width: 100%;
+      max-width: 420px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      padding: 32px 28px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      text-align: center;
+    }
+    .eyebrow {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(94, 234, 212, 0.9);
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0 0 12px;
+      line-height: 1.25;
+    }
+    p {
+      margin: 0 0 20px;
+      font-size: 0.95rem;
+      line-height: 1.55;
+      color: var(--muted);
+    }
+    .ring {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 24px;
+      border-radius: 50%;
+      border: 3px solid rgba(167, 139, 250, 0.35);
+      border-top-color: var(--accent);
+      animation: spin 0.9s linear infinite;
+    }
+    .ring.done {
+      animation: none;
+      border: none;
+      background: linear-gradient(135deg, rgba(94, 234, 212, 0.25), rgba(167, 139, 250, 0.35));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      margin-top: 8px;
+      padding: 14px 20px;
+      border-radius: 16px;
+      border: none;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: #0f172a;
+      background: linear-gradient(135deg, #e2e8f0, #f8fafc);
+      text-decoration: none;
+    }
+    .btn.secondary {
+      margin-top: 12px;
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid rgba(94, 234, 212, 0.45);
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .hint {
+      margin-top: 20px;
+      font-size: 0.8rem;
+      color: rgba(148, 163, 184, 0.85);
+      line-height: 1.45;
+    }
+    code {
+      font-size: 0.72rem;
+      word-break: break-all;
+      display: block;
+      margin-top: 8px;
+      padding: 10px;
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.25);
+      text-align: left;
+      color: rgba(226, 232, 240, 0.9);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="eyebrow">Muslim-Space</div>
+    <div id="spinner" class="ring" aria-hidden="true"></div>
+    <div id="check" class="ring done" style="display: none;">✓</div>
+    <h1 id="title">Confirming your email…</h1>
+    <p id="msg">Hang on while we finish signing you in.</p>
+    <a id="openApp" class="btn" href="#" style="display: none;">Open Muslim-Space</a>
+    <button type="button" id="retry" class="btn secondary" style="display: none;">Try opening the app again</button>
+    <p class="hint" id="hint"></p>
+  </div>
+
+  <script>
+    (function () {
+      /** Must match expo.scheme in app.json */
+      var APP_SCHEME = "natively";
+      var APP_PATH = "email-confirmed";
+
+      var spinner = document.getElementById("spinner");
+      var check = document.getElementById("check");
+      var titleEl = document.getElementById("title");
+      var msgEl = document.getElementById("msg");
+      var openBtn = document.getElementById("openApp");
+      var retryBtn = document.getElementById("retry");
+      var hintEl = document.getElementById("hint");
+
+      function parseParams() {
+        var hash = window.location.hash && window.location.hash.length > 1
+          ? window.location.hash.slice(1)
+          : "";
+        var q = window.location.search && window.location.search.length > 1
+          ? window.location.search.slice(1)
+          : "";
+        var out = {};
+        function apply(str) {
+          if (!str) return;
+          str.split("&").forEach(function (pair) {
+            var i = pair.indexOf("=");
+            if (i === -1) return;
+            var k = decodeURIComponent(pair.slice(0, i));
+            var v = decodeURIComponent(pair.slice(i + 1));
+            out[k] = v;
+          });
+        }
+        apply(hash);
+        apply(q);
+        return out;
+      }
+
+      function buildDeepLink() {
+        var qs = window.location.search || "";
+        var h = window.location.hash || "";
+        return APP_SCHEME + "://" + APP_PATH + qs + h;
+      }
+
+      function showDone(title, msg) {
+        spinner.style.display = "none";
+        check.style.display = "flex";
+        titleEl.textContent = title;
+        msgEl.textContent = msg;
+      }
+
+      function showError(title, msg) {
+        spinner.style.display = "none";
+        check.style.display = "flex";
+        check.textContent = "!";
+        titleEl.textContent = title;
+        msgEl.textContent = msg;
+      }
+
+      var params = parseParams();
+      var hasTokens =
+        !!(params.access_token && params.refresh_token) || !!params.code;
+
+      if (!hasTokens) {
+        showError(
+          "Link not valid",
+          "This page is opened after you tap the link in your email. If you came here directly, open the link from your inbox instead."
+        );
+        hintEl.textContent =
+          "If email confirmation is disabled in Supabase, you may not need this page — sign in inside the app.";
+        return;
+      }
+
+      var isPkce = !!params.code && !params.access_token;
+      showDone(
+        isPkce ? "Almost done" : "You're verified",
+        isPkce
+          ? "Opening Muslim-Space to finish sign-in…"
+          : "Opening Muslim-Space so you can continue…"
+      );
+      var deepLink = buildDeepLink();
+      openBtn.href = deepLink;
+      openBtn.style.display = "inline-flex";
+      retryBtn.style.display = "inline-block";
+      retryBtn.onclick = function () {
+        window.location.href = deepLink;
+      };
+      hintEl.innerHTML =
+        "If the app does not open, tap <strong>Open Muslim-Space</strong>. Install the app from the store if you have not yet.";
+
+      window.location.href = deepLink;
+    })();
+  </script>
+</body>
+</html>

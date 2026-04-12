@@ -1,10 +1,13 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
+import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/integrations/supabase/client';
 import { router } from 'expo-router';
 import { initializeUserProfile } from '@/utils/profileSupabaseSync';
 import { clearUserSpecificData } from '@/utils/userSpecificStorage';
+import { clearAllLearningSectionUnlocks } from '@/utils/learningSectionUnlock';
+import { applySupabaseSessionFromUrl } from '@/utils/supabaseAuthDeepLink';
 
 interface AuthContextType {
   session: Session | null;
@@ -34,44 +37,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session with proper error handling
-    supabase.auth.getSession()
-      .then(async ({ data: { session }, error }) => {
+    const linkingSubscription = Linking.addEventListener('url', ({ url }) => {
+      void (async () => {
+        try {
+          const { error } = await applySupabaseSessionFromUrl(url);
+          if (error) {
+            console.warn('Supabase session from deep link:', error.message);
+          }
+        } catch (e) {
+          console.warn('Failed to apply auth deep link:', e);
+        }
+      })();
+    });
+
+    void (async () => {
+      try {
+        const initialUrl = await Linking.getInitialURL();
+        if (initialUrl) {
+          const { error } = await applySupabaseSessionFromUrl(initialUrl);
+          if (error) {
+            console.warn('Supabase session from initial URL:', error.message);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to read initial auth URL:', e);
+      }
+
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
           console.error('Error getting session:', error);
           setLoading(false);
           return;
         }
-        
+
         console.log('Initial session check:', session?.user?.id || 'No session');
         setSession(session);
         setUser(session?.user ?? null);
-        
-        // Initialize user profile if logged in
+
         if (session?.user) {
           try {
             console.log('🔐 Initial session found, initializing profile...');
-            const username = session.user.user_metadata?.username || session.user.email?.split('@')[0];
-            await initializeUserProfile(
-              session.user.id,
-              username,
-              session.user.email
-            );
+            const username =
+              session.user.user_metadata?.username || session.user.email?.split('@')[0];
+            await initializeUserProfile(session.user.id, username, session.user.email);
           } catch (error) {
             console.error('❌ Error initializing user profile:', error);
-            // Continue even if profile initialization fails
           }
         }
-        
+
         setLoading(false);
-      })
-      .catch((error) => {
+      } catch (error) {
         console.error('Critical error getting session:', error);
         setLoading(false);
-        // Don't crash - show login screen instead
         setSession(null);
         setUser(null);
-      });
+      }
+    })();
 
     // Listen for auth changes with proper error handling
     let subscription: { unsubscribe: () => void } | null = null;
@@ -118,6 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         // Clear user-specific data and redirect to login on sign out
         if (_event === 'SIGNED_OUT') {
+          clearAllLearningSectionUnlocks();
           // Clear Iman tracker data for the previous user
           const previousUserId = user?.id;
           if (previousUserId) {
@@ -144,6 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     return () => {
+      linkingSubscription.remove();
       if (subscription) {
         try {
           subscription.unsubscribe();
@@ -157,6 +181,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     try {
       console.log('Signing out...');
+      clearAllLearningSectionUnlocks();
       const currentUserId = user?.id;
       await supabase.auth.signOut();
       // Clear user-specific data

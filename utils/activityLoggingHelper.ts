@@ -89,21 +89,6 @@ export async function logIbadahActivity(
       });
     }
 
-    // Check for Quran verses
-    if (newGoals.quranDailyVersesCompleted > (oldGoals.quranDailyVersesCompleted || 0)) {
-      const increase = newGoals.quranDailyVersesCompleted - (oldGoals.quranDailyVersesCompleted || 0);
-      await logActivity({
-        userId,
-        activityType: 'quran_reading',
-        activityCategory: 'ibadah',
-        activityTitle: `Quran Verses Read`,
-        activityDescription: `Read ${increase} verse(s)`,
-        activityValue: increase,
-        activityUnit: 'verses',
-        pointsEarned: increase * 1,
-      });
-    }
-
     // Check for Quran memorization
     if (newGoals.quranWeeklyMemorizationCompleted > (oldGoals.quranWeeklyMemorizationCompleted || 0)) {
       const increase = newGoals.quranWeeklyMemorizationCompleted - (oldGoals.quranWeeklyMemorizationCompleted || 0);
@@ -202,7 +187,16 @@ export async function logIbadahActivity(
         newGoals.quranDailyPagesCompleted,
         newGoals.quranDailyPagesGoal,
         oldGoals.quranDailyPagesCompleted || 0,
-        'Daily Quran Pages',
+        'Quran Reading',
+        'ibadah'
+      );
+    }
+    if (newGoals.quranWeeklyMemorizationGoal > 0) {
+      await checkGoalCompletion(
+        newGoals.quranWeeklyMemorizationCompleted,
+        newGoals.quranWeeklyMemorizationGoal,
+        oldGoals.quranWeeklyMemorizationCompleted || 0,
+        'Quran Memorization',
         'ibadah'
       );
     }

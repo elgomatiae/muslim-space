@@ -9,6 +9,7 @@ import {
   RefreshControl,
   useWindowDimensions,
   Pressable,
+  Platform,
 } from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -30,6 +31,7 @@ import { checkAndUnlockAchievements } from "@/utils/achievementService";
 import AllStreaksDisplay from "@/components/iman/AllStreaksDisplay";
 import { TabHubHeader, TabHubHeaderIconDecoration } from "@/components/navigation/TabHubHeader";
 import * as Haptics from "expo-haptics";
+import { promptNotificationPermissionAfterSignIn } from "@/utils/notificationService";
 
 const CONTENT_MAX = 600;
 
@@ -171,6 +173,27 @@ export default function HomeScreen() {
       checkAchievementsAndCelebrate();
       checkForUncelebratedAchievements(user.id);
     }
+  }, [user?.id]);
+
+  /** Ask for notification permission once per user after sign-in (delayed so prayer/location prompt can go first). */
+  useEffect(() => {
+    if (!user?.id || Platform.OS === "web") {
+      return;
+    }
+
+    let cancelled = false;
+    const delayMs = 2200;
+    const t = setTimeout(() => {
+      (async () => {
+        if (cancelled) return;
+        await promptNotificationPermissionAfterSignIn(user.id);
+      })();
+    }, delayMs);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, [user?.id]);
 
   const checkAchievementsAndCelebrate = async () => {

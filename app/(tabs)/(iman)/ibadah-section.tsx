@@ -7,11 +7,15 @@ import { colors, typography, spacing, borderRadius, shadows } from '@/styles/com
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useImanTracker } from '@/contexts/ImanTrackerContext';
+import { getQuranMemorizationPeriod, getQuranPagesPeriod } from '@/utils/imanScoreCalculator';
 
 export default function IbadahSection() {
   const { ibadahGoals, updateIbadahGoals } = useImanTracker();
 
   if (!ibadahGoals) return null;
+
+  const quranPagesPeriod = getQuranPagesPeriod(ibadahGoals);
+  const quranMemPeriod = getQuranMemorizationPeriod(ibadahGoals);
 
   // Ensure fardPrayers exists with default values
   const fardPrayersData = ibadahGoals.fardPrayers || {
@@ -254,7 +258,7 @@ export default function IbadahSection() {
       </View>
 
       {/* Quran Section */}
-      {((ibadahGoals.quranDailyPagesGoal || 0) > 0 || (ibadahGoals.quranDailyVersesGoal || 0) > 0 || (ibadahGoals.quranWeeklyMemorizationGoal || 0) > 0) && (
+      {((ibadahGoals.quranDailyPagesGoal || 0) > 0 || (ibadahGoals.quranWeeklyMemorizationGoal || 0) > 0) && (
         <View style={styles.subsection}>
           <View style={styles.subsectionHeader}>
             <IconSymbol
@@ -270,7 +274,9 @@ export default function IbadahSection() {
             {(ibadahGoals.quranDailyPagesGoal || 0) > 0 && (
               <View style={styles.goalItem}>
                 <View style={styles.goalLabelRow}>
-                  <Text style={styles.goalLabel}>Daily Pages </Text>
+                  <Text style={styles.goalLabel}>
+                    {quranPagesPeriod === 'weekly' ? 'Weekly Pages ' : 'Daily Pages '}
+                  </Text>
                   <TextInput
                     style={styles.goalCountInput}
                     value={String(ibadahGoals.quranDailyPagesCompleted || 0)}
@@ -324,81 +330,12 @@ export default function IbadahSection() {
               </View>
             )}
 
-            {(ibadahGoals.quranDailyVersesGoal || 0) > 0 && (
-              <View style={styles.goalItem}>
-                <View style={styles.goalLabelRow}>
-                  <Text style={styles.goalLabel}>Daily Verses </Text>
-                  <TextInput
-                    style={styles.goalCountInput}
-                    value={String(ibadahGoals.quranDailyVersesCompleted || 0)}
-                    onChangeText={(t) => setCounter('quranDailyVersesCompleted', parseInt(t.replace(/\D/g, ''), 10) || 0, 'quranDailyVersesGoal')}
-                    keyboardType="number-pad"
-                    maxLength={5}
-                  />
-                  <Text style={styles.goalLabel}> / {ibadahGoals.quranDailyVersesGoal || 0}</Text>
-                </View>
-                <View style={styles.progressBar}>
-                  <View 
-                    style={[
-                      styles.progressFill,
-                      { 
-                        width: `${(ibadahGoals.quranDailyVersesGoal || 0) > 0 ? ((ibadahGoals.quranDailyVersesCompleted || 0) / (ibadahGoals.quranDailyVersesGoal || 1)) * 100 : 0}%`,
-                        backgroundColor: '#10B981',
-                      }
-                    ]} 
-                  />
-                </View>
-                <View style={styles.counterButtons}>
-                  <TouchableOpacity
-                    style={styles.counterButton}
-                    onPress={() => incrementCounter('quranDailyVersesCompleted', 1, 'quranDailyVersesGoal')}
-                    activeOpacity={0.7}
-                  >
-                    <LinearGradient
-                      colors={['#10B981', '#059669']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.counterGradient}
-                    >
-                      <Text style={styles.counterText}>+1</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.counterButton}
-                    onPress={() => incrementCounter('quranDailyVersesCompleted', 5, 'quranDailyVersesGoal')}
-                    activeOpacity={0.7}
-                  >
-                    <LinearGradient
-                      colors={['#10B981', '#059669']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.counterGradient}
-                    >
-                      <Text style={styles.counterText}>+5</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.counterButton}
-                    onPress={() => incrementCounter('quranDailyVersesCompleted', 10, 'quranDailyVersesGoal')}
-                    activeOpacity={0.7}
-                  >
-                    <LinearGradient
-                      colors={['#10B981', '#059669']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.counterGradient}
-                    >
-                      <Text style={styles.counterText}>+10</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-
             {(ibadahGoals.quranWeeklyMemorizationGoal || 0) > 0 && (
               <View style={styles.goalItem}>
                 <View style={styles.goalLabelRow}>
-                  <Text style={styles.goalLabel}>Weekly Memorization </Text>
+                  <Text style={styles.goalLabel}>
+                    {quranMemPeriod === 'weekly' ? 'Weekly Memorization ' : 'Daily Memorization '}
+                  </Text>
                   <TextInput
                     style={styles.goalCountInput}
                     value={String(ibadahGoals.quranWeeklyMemorizationCompleted || 0)}

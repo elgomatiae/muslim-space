@@ -21,6 +21,39 @@ import { useAuth } from './AuthContext';
 import { clearUserSpecificData } from '@/utils/userSpecificStorage';
 import { logIbadahActivity, logIlmActivity, logAmanahActivity } from '@/utils/activityLoggingHelper';
 
+/** Achievements check + notification reschedule (does not block goal saves). */
+function runDeferredGoalSideEffects(userId: string) {
+  void (async () => {
+    try {
+      const { checkAndUnlockAchievements } = await import('@/utils/achievementService');
+      await checkAndUnlockAchievements(userId).catch(() => {});
+    } catch {
+      /* ignore */
+    }
+    try {
+      const {
+        scheduleDailyGoalReminders,
+        scheduleWeeklyGoalReminders,
+        cancelDailyGoalNotifications,
+        cancelWeeklyGoalNotifications,
+      } = await import('@/utils/notificationService');
+      await Promise.all([
+        cancelDailyGoalNotifications().catch(() => {}),
+        cancelWeeklyGoalNotifications().catch(() => {}),
+      ]);
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      await Promise.all([
+        AsyncStorage.removeItem('@last_daily_goal_check_date').catch(() => {}),
+        AsyncStorage.removeItem('@last_weekly_goal_check_date').catch(() => {}),
+      ]);
+      scheduleDailyGoalReminders(userId).catch(() => {});
+      scheduleWeeklyGoalReminders(userId).catch(() => {});
+    } catch {
+      /* ignore */
+    }
+  })();
+}
+
 interface ImanTrackerContextType {
   ibadahGoals: IbadahGoals;
   ilmGoals: IlmGoals;
@@ -275,19 +308,20 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       console.log(`🔄 Updating Ibadah goals for user: ${user.id}...`, goals);
-      
-      const oldGoals = { ...ibadahGoals };
-      const updated = { ...ibadahGoals, ...goals };
-      
-      // Optimistically update UI
-      setIbadahGoals(updated);
-      
-      // Save to storage with user-specific key
+
+      let oldGoals: IbadahGoals | undefined;
+      let updated: IbadahGoals | undefined;
+      setIbadahGoals((prev) => {
+        oldGoals = prev;
+        updated = { ...prev, ...goals };
+        return updated;
+      });
+
+      if (!updated || !oldGoals) return;
+
       await saveIbadahGoals(updated, user.id);
-      
-      // Calculate scores immediately with updated goals (don't wait for storage reload)
+
       try {
-        const { calculateAllSectionScores, calculateOverallImanScore } = await import('@/utils/imanScoreCalculator');
         const sections = await calculateAllSectionScores(updated, ilmGoals, amanahGoals, user.id);
         const overall = calculateOverallImanScore(sections, updated, ilmGoals, amanahGoals);
         setImanScore(overall);
@@ -295,56 +329,27 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
         console.log(`✅ Scores updated immediately: Ibadah=${sections.ibadah}%, Ilm=${sections.ilm}%, Amanah=${sections.amanah}%, Overall=${overall}%`);
       } catch (scoreErr) {
         console.error('Error calculating scores immediately:', scoreErr);
-        // Fallback to refreshScores
-        refreshScores().catch(err => {
+        refreshScores().catch((err) => {
           console.error('Error refreshing scores after Ibadah update:', err);
         });
       }
-      
-      // Log activities in background (non-blocking)
-      logIbadahActivity(user.id, oldGoals, updated).catch(err => {
+
+      logIbadahActivity(user.id, oldGoals, updated).catch((err) => {
         if (__DEV__) {
           console.log('Error logging Ibadah activity:', err);
         }
       });
-      
-      // Check achievements after updating goals (non-blocking)
-      const { checkAndUnlockAchievements } = await import('@/utils/achievementService');
-      checkAndUnlockAchievements(user.id).catch(err => {
-        if (__DEV__) {
-          console.log('Error checking achievements after Ibadah update:', err);
-        }
-      });
-      
-      // Reschedule daily and weekly goal reminders after goal update (non-blocking)
-      // Cancel existing notifications first to force rescheduling
-      const { scheduleDailyGoalReminders, scheduleWeeklyGoalReminders, cancelDailyGoalNotifications, cancelWeeklyGoalNotifications } = await import('@/utils/notificationService');
-      await cancelDailyGoalNotifications().catch(() => {});
-      await cancelWeeklyGoalNotifications().catch(() => {});
-      // Clear the check keys to allow rescheduling
-      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-      await AsyncStorage.removeItem('@last_daily_goal_check_date').catch(() => {});
-      await AsyncStorage.removeItem('@last_weekly_goal_check_date').catch(() => {});
-      scheduleDailyGoalReminders(user.id).catch(err => {
-        if (__DEV__) {
-          console.log('Error rescheduling daily goal reminders after Ibadah update:', err);
-        }
-      });
-      scheduleWeeklyGoalReminders(user.id).catch(err => {
-        if (__DEV__) {
-          console.log('Error rescheduling weekly goal reminders after Ibadah update:', err);
-        }
-      });
-      
+
+      runDeferredGoalSideEffects(user.id);
+
       console.log('✅ Ibadah goals updated successfully');
     } catch (err) {
       console.error('❌ Error updating Ibadah goals:', err);
       setError('Failed to update Ibadah goals. Please try again.');
-      
-      // Reload goals to ensure consistency
+
       loadAllGoals();
     }
-  }, [ibadahGoals, ilmGoals, amanahGoals, user?.id, loadAllGoals, refreshScores]);
+  }, [ilmGoals, amanahGoals, user?.id, loadAllGoals, refreshScores]);
 
   const updateIlmGoals = useCallback(async (goals: Partial<IlmGoals>) => {
     if (!user?.id) {
@@ -354,19 +359,20 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       console.log(`🔄 Updating Ilm goals for user: ${user.id}...`, goals);
-      
-      const oldGoals = { ...ilmGoals };
-      const updated = { ...ilmGoals, ...goals };
-      
-      // Optimistically update UI
-      setIlmGoals(updated);
-      
-      // Save to storage with user-specific key
+
+      let oldGoals: IlmGoals | undefined;
+      let updated: IlmGoals | undefined;
+      setIlmGoals((prev) => {
+        oldGoals = prev;
+        updated = { ...prev, ...goals };
+        return updated;
+      });
+
+      if (!updated || !oldGoals) return;
+
       await saveIlmGoals(updated, user.id);
-      
-      // Calculate scores immediately with updated goals (don't wait for storage reload)
+
       try {
-        const { calculateAllSectionScores, calculateOverallImanScore } = await import('@/utils/imanScoreCalculator');
         const sections = await calculateAllSectionScores(ibadahGoals, updated, amanahGoals, user.id);
         const overall = calculateOverallImanScore(sections, ibadahGoals, updated, amanahGoals);
         setImanScore(overall);
@@ -374,56 +380,27 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
         console.log(`✅ Scores updated immediately: Ibadah=${sections.ibadah}%, Ilm=${sections.ilm}%, Amanah=${sections.amanah}%, Overall=${overall}%`);
       } catch (scoreErr) {
         console.error('Error calculating scores immediately:', scoreErr);
-        // Fallback to refreshScores
-        refreshScores().catch(err => {
+        refreshScores().catch((err) => {
           console.error('Error refreshing scores after Ilm update:', err);
         });
       }
-      
-      // Log activities in background (non-blocking)
-      logIlmActivity(user.id, oldGoals, updated).catch(err => {
+
+      logIlmActivity(user.id, oldGoals, updated).catch((err) => {
         if (__DEV__) {
           console.log('Error logging Ilm activity:', err);
         }
       });
-      
-      // Check achievements after updating goals (non-blocking)
-      const { checkAndUnlockAchievements } = await import('@/utils/achievementService');
-      checkAndUnlockAchievements(user.id).catch(err => {
-        if (__DEV__) {
-          console.log('Error checking achievements after Ilm update:', err);
-        }
-      });
-      
-      // Reschedule daily and weekly goal reminders after goal update (non-blocking)
-      // Cancel existing notifications first to force rescheduling
-      const { scheduleDailyGoalReminders, scheduleWeeklyGoalReminders, cancelDailyGoalNotifications, cancelWeeklyGoalNotifications } = await import('@/utils/notificationService');
-      await cancelDailyGoalNotifications().catch(() => {});
-      await cancelWeeklyGoalNotifications().catch(() => {});
-      // Clear the check keys to allow rescheduling
-      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-      await AsyncStorage.removeItem('@last_daily_goal_check_date').catch(() => {});
-      await AsyncStorage.removeItem('@last_weekly_goal_check_date').catch(() => {});
-      scheduleDailyGoalReminders(user.id).catch(err => {
-        if (__DEV__) {
-          console.log('Error rescheduling daily goal reminders after Ilm update:', err);
-        }
-      });
-      scheduleWeeklyGoalReminders(user.id).catch(err => {
-        if (__DEV__) {
-          console.log('Error rescheduling weekly goal reminders after Ilm update:', err);
-        }
-      });
-      
+
+      runDeferredGoalSideEffects(user.id);
+
       console.log('✅ Ilm goals updated successfully');
     } catch (err) {
       console.error('❌ Error updating Ilm goals:', err);
       setError('Failed to update Ilm goals. Please try again.');
-      
-      // Reload goals to ensure consistency
+
       loadAllGoals();
     }
-  }, [ilmGoals, ibadahGoals, amanahGoals, user?.id, loadAllGoals, refreshScores]);
+  }, [ibadahGoals, amanahGoals, user?.id, loadAllGoals, refreshScores]);
 
   const updateAmanahGoals = useCallback(async (goals: Partial<AmanahGoals>) => {
     if (!user?.id) {
@@ -433,19 +410,20 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       console.log(`🔄 Updating Amanah goals for user: ${user.id}...`, goals);
-      
-      const oldGoals = { ...amanahGoals };
-      const updated = { ...amanahGoals, ...goals };
-      
-      // Optimistically update UI
-      setAmanahGoals(updated);
-      
-      // Save to storage with user-specific key
+
+      let oldGoals: AmanahGoals | undefined;
+      let updated: AmanahGoals | undefined;
+      setAmanahGoals((prev) => {
+        oldGoals = prev;
+        updated = { ...prev, ...goals };
+        return updated;
+      });
+
+      if (!updated || !oldGoals) return;
+
       await saveAmanahGoals(updated, user.id);
-      
-      // Calculate scores immediately with updated goals (don't wait for storage reload)
+
       try {
-        const { calculateAllSectionScores, calculateOverallImanScore } = await import('@/utils/imanScoreCalculator');
         const sections = await calculateAllSectionScores(ibadahGoals, ilmGoals, updated, user.id);
         const overall = calculateOverallImanScore(sections, ibadahGoals, ilmGoals, updated);
         setImanScore(overall);
@@ -453,56 +431,27 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
         console.log(`✅ Scores updated immediately: Ibadah=${sections.ibadah}%, Ilm=${sections.ilm}%, Amanah=${sections.amanah}%, Overall=${overall}%`);
       } catch (scoreErr) {
         console.error('Error calculating scores immediately:', scoreErr);
-        // Fallback to refreshScores
-        refreshScores().catch(err => {
+        refreshScores().catch((err) => {
           console.error('Error refreshing scores after Amanah update:', err);
         });
       }
-      
-      // Log activities in background (non-blocking)
-      logAmanahActivity(user.id, oldGoals, updated).catch(err => {
+
+      logAmanahActivity(user.id, oldGoals, updated).catch((err) => {
         if (__DEV__) {
           console.log('Error logging Amanah activity:', err);
         }
       });
-      
-      // Check achievements after updating goals (non-blocking)
-      const { checkAndUnlockAchievements } = await import('@/utils/achievementService');
-      checkAndUnlockAchievements(user.id).catch(err => {
-        if (__DEV__) {
-          console.log('Error checking achievements after Amanah update:', err);
-        }
-      });
-      
-      // Reschedule daily and weekly goal reminders after goal update (non-blocking)
-      // Cancel existing notifications first to force rescheduling
-      const { scheduleDailyGoalReminders, scheduleWeeklyGoalReminders, cancelDailyGoalNotifications, cancelWeeklyGoalNotifications } = await import('@/utils/notificationService');
-      await cancelDailyGoalNotifications().catch(() => {});
-      await cancelWeeklyGoalNotifications().catch(() => {});
-      // Clear the check keys to allow rescheduling
-      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-      await AsyncStorage.removeItem('@last_daily_goal_check_date').catch(() => {});
-      await AsyncStorage.removeItem('@last_weekly_goal_check_date').catch(() => {});
-      scheduleDailyGoalReminders(user.id).catch(err => {
-        if (__DEV__) {
-          console.log('Error rescheduling daily goal reminders after Amanah update:', err);
-        }
-      });
-      scheduleWeeklyGoalReminders(user.id).catch(err => {
-        if (__DEV__) {
-          console.log('Error rescheduling weekly goal reminders after Amanah update:', err);
-        }
-      });
-      
+
+      runDeferredGoalSideEffects(user.id);
+
       console.log('✅ Amanah goals updated successfully');
     } catch (err) {
       console.error('❌ Error updating Amanah goals:', err);
       setError('Failed to update Amanah goals. Please try again.');
-      
-      // Reload goals to ensure consistency
+
       loadAllGoals();
     }
-  }, [amanahGoals, ibadahGoals, ilmGoals, user?.id, loadAllGoals, refreshScores]);
+  }, [ibadahGoals, ilmGoals, user?.id, loadAllGoals, refreshScores]);
 
   const value: ImanTrackerContextType = {
     ibadahGoals,

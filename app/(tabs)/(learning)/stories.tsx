@@ -12,7 +12,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
-import { useRouter, type Href } from "expo-router";
+import { useRouter, useFocusEffect, type Href } from "expo-router";
+import {
+  isLearningSectionUnlocked,
+  markLearningSectionUnlocked,
+} from "@/utils/learningSectionUnlock";
 import * as Haptics from "expo-haptics";
 import { useTranslation } from "@/contexts/I18nContext";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -56,7 +60,7 @@ export default function StoriesListScreen() {
   const isRTL = I18nManager.isRTL || locale === "ar" || locale === "ur";
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
-  const { checkAccess, showGate, gateVisible, onGateClose, onGateGranted } = useAccessGate();
+  const { showGate, gateVisible, onGateClose, onGateDismissOnly, onGateGranted } = useAccessGate();
 
   const stories = useMemo(() => getAllIslamicStories(), []);
 
@@ -79,26 +83,24 @@ export default function StoriesListScreen() {
 
   const categories: StoryCategory[] = ["prophet_muhammad", "prophets", "sahaba"];
 
-  const onOpen = useCallback(
-    async (id: string) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-      const hasAccess = await checkAccess();
-      if (!hasAccess) {
-        showGate(() => {
-          router.push({
-            pathname: "/(tabs)/(learning)/islamic-story",
-            params: { id },
-          } as Href);
-        });
-        return;
-      }
+  useFocusEffect(
+    useCallback(() => {
+      if (isLearningSectionUnlocked("stories")) return;
+      showGate(() => {
+        markLearningSectionUnlocked("stories");
+      });
+    }, [showGate])
+  );
 
+  const onOpen = useCallback(
+    (id: string) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       router.push({
         pathname: "/(tabs)/(learning)/islamic-story",
         params: { id },
       } as Href);
     },
-    [router, checkAccess, showGate]
+    [router]
   );
 
   const onSurprise = useCallback(async () => {
@@ -106,7 +108,7 @@ export default function StoriesListScreen() {
     if (pool.length === 0) return;
     const i = Math.floor(Math.random() * pool.length);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    await onOpen(pool[i].id);
+    onOpen(pool[i].id);
   }, [filtered, stories, onOpen]);
 
   const bottomPad = Math.max(120, insets.bottom + 100);
@@ -344,9 +346,10 @@ export default function StoriesListScreen() {
       <AccessGate
         visible={gateVisible}
         onClose={onGateClose}
+        onDismissModalOnly={onGateDismissOnly}
         onAccessGranted={onGateGranted}
         title="Unlock Islamic Stories"
-        description="Watch a short ad to access Islamic stories for 24 hours"
+        description="Watch a short ad to browse stories."
       />
     </SafeAreaView>
   );

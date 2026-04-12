@@ -1,11 +1,15 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import {
+  isLearningSectionUnlocked,
+  markLearningSectionUnlocked,
+} from '@/utils/learningSectionUnlock';
 import { supabase } from '@/lib/supabase';
 import { useAccessGate } from '@/hooks/useAccessGate';
 import { AccessGate } from '@/components/access/AccessGate';
@@ -40,16 +44,23 @@ function gradient3(c: readonly string[]): readonly [string, string, string] {
 
 export default function QuizzesScreen() {
   const router = useRouter();
-  const { checkAccess, showGate, gateVisible, onGateClose, onGateGranted } = useAccessGate();
+  const { showGate, gateVisible, onGateClose, onGateDismissOnly, onGateGranted } = useAccessGate();
   const [categories, setCategories] = useState<QuizCategory[]>([]);
   const [stats, setStats] = useState<Record<string, QuizStats>>({});
   const [loading, setLoading] = useState(true);
-  const [pendingCategory, setPendingCategory] = useState<QuizCategory | null>(null);
-
   useEffect(() => {
     loadCategories();
     loadStats();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isLearningSectionUnlocked('quizzes')) return;
+      showGate(() => {
+        markLearningSectionUnlocked('quizzes');
+      });
+    }, [showGate])
+  );
 
   const loadCategories = async () => {
     try {
@@ -147,32 +158,11 @@ export default function QuizzesScreen() {
     }
   };
 
-  const handleCategoryPress = async (category: QuizCategory) => {
-    // Check if user has access
-    if (await checkAccess()) {
-      // User has access, navigate directly
-      router.push({
-        pathname: '/(tabs)/(learning)/quiz-take',
-        params: { quizId: category.quiz_id, categoryName: category.title },
-      });
-    } else {
-      // No access, show gate and store the category
-      setPendingCategory(category);
-      showGate();
-    }
-  };
-
-  // Handle access granted - navigate to pending quiz
-  const handleGateGranted = () => {
-    onGateGranted();
-    if (pendingCategory) {
-      const category = pendingCategory;
-      setPendingCategory(null);
-      router.push({
-        pathname: '/(tabs)/(learning)/quiz-take',
-        params: { quizId: category.quiz_id, categoryName: category.title },
-      });
-    }
+  const handleCategoryPress = (category: QuizCategory) => {
+    router.push({
+      pathname: '/(tabs)/(learning)/quiz-take',
+      params: { quizId: category.quiz_id, categoryName: category.title },
+    });
   };
 
   const getGradientForIndex = (index: number): string[] => {
@@ -213,6 +203,8 @@ export default function QuizzesScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        nestedScrollEnabled
+        removeClippedSubviews={false}
       >
         <Text style={styles.header}>Islamic Quizzes</Text>
         <Text style={styles.subtitle}>Test your Islamic knowledge</Text>
@@ -338,9 +330,10 @@ export default function QuizzesScreen() {
       <AccessGate
         visible={gateVisible}
         onClose={onGateClose}
-        onAccessGranted={handleGateGranted}
+        onDismissModalOnly={onGateDismissOnly}
+        onAccessGranted={onGateGranted}
         title="Unlock Quizzes"
-        description="Watch a short ad to unlock access to Islamic quizzes"
+        description="Watch a short ad to browse knowledge quizzes."
       />
     </View>
   );

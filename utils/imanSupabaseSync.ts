@@ -71,8 +71,8 @@ export async function syncLocalToSupabase(userId: string): Promise<void> {
       tahajjud_completed: prayerGoals.tahajjudCompleted,
       quran_daily_pages_goal: quranGoals.dailyPagesGoal,
       quran_daily_pages_completed: quranGoals.dailyPagesCompleted,
-      quran_daily_verses_goal: quranGoals.dailyVersesGoal,
-      quran_daily_verses_completed: quranGoals.dailyVersesCompleted,
+      quran_daily_verses_goal: 0,
+      quran_daily_verses_completed: 0,
       quran_weekly_memorization_goal: quranGoals.weeklyMemorizationGoal,
       quran_weekly_memorization_completed: quranGoals.weeklyMemorizationCompleted,
       dhikr_daily_goal: dhikrGoals.dailyGoal,
@@ -152,8 +152,6 @@ export async function syncSupabaseToLocal(userId: string): Promise<void> {
     const quranGoals: QuranGoals = {
       dailyPagesGoal: data.quran_daily_pages_goal,
       dailyPagesCompleted: data.quran_daily_pages_completed,
-      dailyVersesGoal: data.quran_daily_verses_goal,
-      dailyVersesCompleted: data.quran_daily_verses_completed,
       weeklyMemorizationGoal: data.quran_weekly_memorization_goal,
       weeklyMemorizationCompleted: data.quran_weekly_memorization_completed,
     };
@@ -216,7 +214,7 @@ export async function initializeImanTrackerForUser(userId: string): Promise<void
       tahajjud_completed: 0,
       quran_daily_pages_goal: 2,
       quran_daily_pages_completed: 0,
-      quran_daily_verses_goal: 10,
+      quran_daily_verses_goal: 0,
       quran_daily_verses_completed: 0,
       quran_weekly_memorization_goal: 5,
       quran_weekly_memorization_completed: 0,

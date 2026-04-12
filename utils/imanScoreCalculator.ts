@@ -18,6 +18,8 @@ import { getTodayPrayerTimes } from '@/services/PrayerTimeService';
 // INTERFACES
 // ============================================================================
 
+export type QuranGoalPeriod = 'daily' | 'weekly';
+
 export interface IbadahGoals {
   // Salah (Prayer) - Daily
   fardPrayers: {
@@ -34,15 +36,15 @@ export interface IbadahGoals {
   tahajjudWeeklyGoal: number;
   tahajjudCompleted: number;
   
-  // Quran - Daily
+  // Quran reading — pages (goal applies per day or per week; see quranPagesFrequency)
   quranDailyPagesGoal: number;
   quranDailyPagesCompleted: number;
-  quranDailyVersesGoal: number;
-  quranDailyVersesCompleted: number;
-  
-  // Quran - Weekly
+  quranPagesFrequency?: QuranGoalPeriod;
+
+  // Quran memorization — verses (same storage fields; period via quranMemorizationFrequency)
   quranWeeklyMemorizationGoal: number;
   quranWeeklyMemorizationCompleted: number;
+  quranMemorizationFrequency?: QuranGoalPeriod;
   
   // Dhikr & Dua - Daily
   dhikrDailyGoal: number;
@@ -206,6 +208,30 @@ export function hasAmanahGoalsEnabled(goals: AmanahGoals): boolean {
  */
 export function hasIbadahSectionActive(_goals: IbadahGoals): boolean {
   return true;
+}
+
+/** True when the user has enabled at least one optional worship goal. Fard is tracked in Iman, not as a configurable goal. Used by welcome tour. */
+export function hasWorshipGoalsChosen(goals: IbadahGoals): boolean {
+  return (
+    goals.sunnahDailyGoal > 0 ||
+    goals.tahajjudWeeklyGoal > 0 ||
+    goals.quranDailyPagesGoal > 0 ||
+    goals.quranWeeklyMemorizationGoal > 0 ||
+    goals.dhikrDailyGoal > 0 ||
+    goals.duaDailyGoal > 0 ||
+    goals.fastingWeeklyGoal > 0 ||
+    goals.dhikrWeeklyGoal > 0
+  );
+}
+
+export function getQuranPagesPeriod(goalsPick: Pick<IbadahGoals, 'quranPagesFrequency'>): QuranGoalPeriod {
+  return goalsPick.quranPagesFrequency === 'weekly' ? 'weekly' : 'daily';
+}
+
+export function getQuranMemorizationPeriod(
+  goalsPick: Pick<IbadahGoals, 'quranMemorizationFrequency'>
+): QuranGoalPeriod {
+  return goalsPick.quranMemorizationFrequency === 'daily' ? 'daily' : 'weekly';
 }
 
 /**
@@ -436,24 +462,22 @@ export async function calculateIbadahScore(
 
   if (goals.quranDailyPagesGoal > 0) {
     const current = calculateProgress(goals.quranDailyPagesCompleted, goals.quranDailyPagesGoal);
+    const period = getQuranPagesPeriod(goals);
+    const decayKey =
+      period === 'daily' ? 'ibadah.quranDailyPages' : 'ibadah.quranPagesWeekly';
     items.push({
-      progress: applyProgressDecay('ibadah.quranDailyPages', current, 'daily', carryover),
-      weight: IBADAH_WEIGHTS.normal,
-    });
-  }
-
-  if (goals.quranDailyVersesGoal > 0) {
-    const current = calculateProgress(goals.quranDailyVersesCompleted, goals.quranDailyVersesGoal);
-    items.push({
-      progress: applyProgressDecay('ibadah.quranDailyVerses', current, 'daily', carryover),
+      progress: applyProgressDecay(decayKey, current, period, carryover),
       weight: IBADAH_WEIGHTS.normal,
     });
   }
 
   if (goals.quranWeeklyMemorizationGoal > 0) {
     const current = calculateProgress(goals.quranWeeklyMemorizationCompleted, goals.quranWeeklyMemorizationGoal);
+    const period = getQuranMemorizationPeriod(goals);
+    const decayKey =
+      period === 'daily' ? 'ibadah.quranMemorizationDaily' : 'ibadah.quranWeeklyMemorization';
     items.push({
-      progress: applyProgressDecay('ibadah.quranWeeklyMemorization', current, 'weekly', carryover),
+      progress: applyProgressDecay(decayKey, current, period, carryover),
       weight: IBADAH_WEIGHTS.normal,
     });
   }
@@ -750,8 +774,18 @@ export async function resetDailyGoals(userId?: string | null): Promise<void> {
     nextDailyCarryover['ibadah.fard'] = fardCompletedCount / 5;
 
     nextDailyCarryover['ibadah.sunnah'] = calculateProgress(ibadahGoals.sunnahCompleted, ibadahGoals.sunnahDailyGoal);
-    nextDailyCarryover['ibadah.quranDailyPages'] = calculateProgress(ibadahGoals.quranDailyPagesCompleted, ibadahGoals.quranDailyPagesGoal);
-    nextDailyCarryover['ibadah.quranDailyVerses'] = calculateProgress(ibadahGoals.quranDailyVersesCompleted, ibadahGoals.quranDailyVersesGoal);
+    if (getQuranPagesPeriod(ibadahGoals) === 'daily' && ibadahGoals.quranDailyPagesGoal > 0) {
+      nextDailyCarryover['ibadah.quranDailyPages'] = calculateProgress(
+        ibadahGoals.quranDailyPagesCompleted,
+        ibadahGoals.quranDailyPagesGoal
+      );
+    }
+    if (getQuranMemorizationPeriod(ibadahGoals) === 'daily' && ibadahGoals.quranWeeklyMemorizationGoal > 0) {
+      nextDailyCarryover['ibadah.quranMemorizationDaily'] = calculateProgress(
+        ibadahGoals.quranWeeklyMemorizationCompleted,
+        ibadahGoals.quranWeeklyMemorizationGoal
+      );
+    }
     nextDailyCarryover['ibadah.dhikrDaily'] = calculateProgress(ibadahGoals.dhikrDailyCompleted, ibadahGoals.dhikrDailyGoal);
     nextDailyCarryover['ibadah.duaDaily'] = calculateProgress(ibadahGoals.duaDailyCompleted || 0, ibadahGoals.duaDailyGoal);
     nextDailyCarryover['amanah.dailyExercise'] = calculateProgress(amanahGoals.dailyExerciseCompleted, amanahGoals.dailyExerciseGoal);
@@ -779,8 +813,12 @@ export async function resetDailyGoals(userId?: string | null): Promise<void> {
       isha: false,
     };
     ibadahGoals.sunnahCompleted = 0;
-    ibadahGoals.quranDailyPagesCompleted = 0;
-    ibadahGoals.quranDailyVersesCompleted = 0;
+    if (getQuranPagesPeriod(ibadahGoals) === 'daily') {
+      ibadahGoals.quranDailyPagesCompleted = 0;
+    }
+    if (getQuranMemorizationPeriod(ibadahGoals) === 'daily') {
+      ibadahGoals.quranWeeklyMemorizationCompleted = 0;
+    }
     ibadahGoals.dhikrDailyCompleted = 0;
     ibadahGoals.duaDailyCompleted = 0;
     
@@ -818,10 +856,18 @@ export async function resetWeeklyGoals(userId?: string | null): Promise<void> {
     const nextWeeklyCarryover: Record<string, number> = {};
     nextWeeklyCarryover['ibadah.tahajjud'] = calculateProgress(ibadahGoals.tahajjudCompleted, ibadahGoals.tahajjudWeeklyGoal);
     nextWeeklyCarryover['ibadah.dhikrWeekly'] = calculateProgress(ibadahGoals.dhikrWeeklyCompleted, ibadahGoals.dhikrWeeklyGoal);
-    nextWeeklyCarryover['ibadah.quranWeeklyMemorization'] = calculateProgress(
-      ibadahGoals.quranWeeklyMemorizationCompleted,
-      ibadahGoals.quranWeeklyMemorizationGoal
-    );
+    if (getQuranPagesPeriod(ibadahGoals) === 'weekly' && ibadahGoals.quranDailyPagesGoal > 0) {
+      nextWeeklyCarryover['ibadah.quranPagesWeekly'] = calculateProgress(
+        ibadahGoals.quranDailyPagesCompleted,
+        ibadahGoals.quranDailyPagesGoal
+      );
+    }
+    if (getQuranMemorizationPeriod(ibadahGoals) === 'weekly' && ibadahGoals.quranWeeklyMemorizationGoal > 0) {
+      nextWeeklyCarryover['ibadah.quranWeeklyMemorization'] = calculateProgress(
+        ibadahGoals.quranWeeklyMemorizationCompleted,
+        ibadahGoals.quranWeeklyMemorizationGoal
+      );
+    }
     nextWeeklyCarryover['ibadah.fastingWeekly'] = calculateProgress(ibadahGoals.fastingWeeklyCompleted, ibadahGoals.fastingWeeklyGoal);
     nextWeeklyCarryover['ilm.weeklyLectures'] = calculateProgress(ilmGoals.weeklyLecturesCompleted, ilmGoals.weeklyLecturesGoal);
     nextWeeklyCarryover['ilm.weeklyQuizzes'] = calculateProgress(ilmGoals.weeklyQuizzesCompleted, ilmGoals.weeklyQuizzesGoal);
@@ -850,7 +896,12 @@ export async function resetWeeklyGoals(userId?: string | null): Promise<void> {
     // Reset weekly counters
     ibadahGoals.tahajjudCompleted = 0;
     ibadahGoals.dhikrWeeklyCompleted = 0;
-    ibadahGoals.quranWeeklyMemorizationCompleted = 0;
+    if (getQuranPagesPeriod(ibadahGoals) === 'weekly') {
+      ibadahGoals.quranDailyPagesCompleted = 0;
+    }
+    if (getQuranMemorizationPeriod(ibadahGoals) === 'weekly') {
+      ibadahGoals.quranWeeklyMemorizationCompleted = 0;
+    }
     ibadahGoals.fastingWeeklyCompleted = 0;
     
     ilmGoals.weeklyLecturesCompleted = 0;
@@ -950,12 +1001,17 @@ export async function loadIbadahGoals(userId?: string | null): Promise<IbadahGoa
     const storageKey = userId ? `ibadahGoals_${userId}` : 'ibadahGoals';
     const saved = await AsyncStorage.getItem(storageKey);
     if (saved) {
-      const parsed = JSON.parse(saved);
+      const parsed = JSON.parse(saved) as Record<string, unknown> & Partial<IbadahGoals>;
       // Handle legacy field name
       if (parsed.duaCompleted !== undefined && parsed.duaDailyCompleted === undefined) {
-        parsed.duaDailyCompleted = parsed.duaCompleted;
+        const dc = parsed.duaCompleted;
+        parsed.duaDailyCompleted = typeof dc === 'number' ? dc : Number(dc) || 0;
       }
-      return parsed;
+      delete parsed.quranDailyVersesGoal;
+      delete parsed.quranDailyVersesCompleted;
+      parsed.quranPagesFrequency = parsed.quranPagesFrequency === 'weekly' ? 'weekly' : 'daily';
+      parsed.quranMemorizationFrequency = parsed.quranMemorizationFrequency === 'daily' ? 'daily' : 'weekly';
+      return parsed as IbadahGoals;
     }
   } catch (error) {
     console.error('Error loading ibadah goals:', error);
@@ -975,10 +1031,10 @@ export async function loadIbadahGoals(userId?: string | null): Promise<IbadahGoa
     tahajjudCompleted: 0,
     quranDailyPagesGoal: 0,
     quranDailyPagesCompleted: 0,
-    quranDailyVersesGoal: 0,
-    quranDailyVersesCompleted: 0,
+    quranPagesFrequency: 'daily',
     quranWeeklyMemorizationGoal: 0,
     quranWeeklyMemorizationCompleted: 0,
+    quranMemorizationFrequency: 'weekly',
     dhikrDailyGoal: 0,
     dhikrDailyCompleted: 0,
     dhikrWeeklyGoal: 0,
@@ -1178,10 +1234,10 @@ export interface DhikrGoals {
 export interface QuranGoals {
   dailyPagesGoal: number;
   dailyPagesCompleted: number;
-  dailyVersesGoal: number;
-  dailyVersesCompleted: number;
   weeklyMemorizationGoal: number;
   weeklyMemorizationCompleted: number;
+  pagesFrequency?: QuranGoalPeriod;
+  memorizationFrequency?: QuranGoalPeriod;
   score?: number;
 }
 
@@ -1213,10 +1269,10 @@ export async function loadQuranGoals(): Promise<QuranGoals> {
   return {
     dailyPagesGoal: ibadah.quranDailyPagesGoal,
     dailyPagesCompleted: ibadah.quranDailyPagesCompleted,
-    dailyVersesGoal: ibadah.quranDailyVersesGoal,
-    dailyVersesCompleted: ibadah.quranDailyVersesCompleted,
     weeklyMemorizationGoal: ibadah.quranWeeklyMemorizationGoal,
     weeklyMemorizationCompleted: ibadah.quranWeeklyMemorizationCompleted,
+    pagesFrequency: getQuranPagesPeriod(ibadah),
+    memorizationFrequency: getQuranMemorizationPeriod(ibadah),
     score: ibadah.score,
   };
 }
@@ -1244,9 +1300,13 @@ export async function saveQuranGoals(goals: QuranGoals): Promise<void> {
   const ibadah = await loadIbadahGoals();
   ibadah.quranDailyPagesGoal = goals.dailyPagesGoal;
   ibadah.quranDailyPagesCompleted = goals.dailyPagesCompleted;
-  ibadah.quranDailyVersesGoal = goals.dailyVersesGoal;
-  ibadah.quranDailyVersesCompleted = goals.dailyVersesCompleted;
   ibadah.quranWeeklyMemorizationGoal = goals.weeklyMemorizationGoal;
   ibadah.quranWeeklyMemorizationCompleted = goals.weeklyMemorizationCompleted;
+  if (goals.pagesFrequency) {
+    ibadah.quranPagesFrequency = goals.pagesFrequency === 'weekly' ? 'weekly' : 'daily';
+  }
+  if (goals.memorizationFrequency) {
+    ibadah.quranMemorizationFrequency = goals.memorizationFrequency === 'daily' ? 'daily' : 'weekly';
+  }
   await saveIbadahGoals(ibadah);
 }

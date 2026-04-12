@@ -8,6 +8,7 @@ export default function ProfileLayout() {
       initialRouteName="index"
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="welcome-muslim-space" options={{ headerShown: false }} />
       <Stack.Screen name="notification-settings" options={{ presentation: 'modal' }} />
       <Stack.Screen name="health-check" options={{ presentation: 'modal' }} />
     </Stack>
