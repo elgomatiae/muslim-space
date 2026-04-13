@@ -6,13 +6,15 @@
   <meta name="color-scheme" dark light />
   <title>Muslim-Space — Email confirmed</title>
   <!--
-    DEPLOY: Upload this folder (or only index.html) to any static host (Netlify, Vercel, Cloudflare Pages, GitHub Pages).
-    In Supabase → Authentication → URL Configuration → Redirect URLs, add your deployed URL exactly, e.g.:
-      https://YOUR-SUBDOMAIN.netlify.app/email-confirmation/
-      or https://confirm.yourdomain.com/
-    Set EXPO_PUBLIC_AUTH_REDIRECT_URL in your Expo app to that same URL (see utils/authEmailRedirectTo.ts).
+    GitHub Pages (this repo): workflow builds
+      https://<user>.github.io/<repo>/email-confirmation/
+    Privacy policy stays at:
+      https://<user>.github.io/<repo>/
 
-    Optional: change APP_SCHEME below if you changed expo.scheme in app.json.
+    Supabase → Redirect URLs: add the /email-confirmation/ URL (with trailing slash).
+    Expo: EXPO_PUBLIC_AUTH_REDIRECT_URL = that same URL.
+
+    Optional: change APP_SCHEME if expo.scheme in app.json is not "natively".
   -->
   <style>
     :root {
