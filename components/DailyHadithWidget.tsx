@@ -2,9 +2,18 @@
  * DailyHadithWidget - Displays a daily Hadith
  */
 
-import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  ScrollView,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useTranslation } from '@/contexts/I18nContext';
@@ -15,9 +24,23 @@ interface DailyHadithWidgetProps {
   loading?: boolean;
 }
 
+const READ_FULL_THRESHOLD = 200;
+
 export default function DailyHadithWidget({ hadith, loading }: DailyHadithWidgetProps) {
   const { t } = useTranslation();
-  
+  const insets = useSafeAreaInsets();
+  const [modalVisible, setModalVisible] = useState(false);
+
+  const showReadFull = useMemo(
+    () =>
+      Boolean(
+        hadith &&
+          (hadith.translation.length >= READ_FULL_THRESHOLD ||
+            (hadith.arabic_text?.length ?? 0) >= READ_FULL_THRESHOLD),
+      ),
+    [hadith],
+  );
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -69,13 +92,34 @@ export default function DailyHadithWidget({ hadith, loading }: DailyHadithWidget
         {/* Arabic Text (if available) */}
         {hadith.arabic_text && (
           <>
-            <Text style={styles.arabicText}>{hadith.arabic_text}</Text>
+            <Text style={styles.arabicText} selectable>
+              {hadith.arabic_text}
+            </Text>
             <View style={styles.divider} />
           </>
         )}
 
-        {/* Translation */}
-        <Text style={styles.translation}>{hadith.translation}</Text>
+        {/* Translation (full text; service picks longest DB field) */}
+        <Text style={styles.translation} selectable>
+          {hadith.translation}
+        </Text>
+
+        {showReadFull ? (
+          <Pressable
+            onPress={() => setModalVisible(true)}
+            style={({ pressed }) => [styles.readFullButton, pressed && { opacity: 0.85 }]}
+            accessibilityRole="button"
+            accessibilityLabel={t('home.hadithReadFull')}
+          >
+            <Text style={styles.readFullLabel}>{t('home.hadithReadFull')}</Text>
+            <IconSymbol
+              ios_icon_name="arrow.up.left.and.arrow.down.right"
+              android_material_icon_name="fullscreen"
+              size={16}
+              color={colors.card}
+            />
+          </Pressable>
+        ) : null}
 
         {/* Source */}
         <View style={styles.sourceContainer}>
@@ -83,6 +127,54 @@ export default function DailyHadithWidget({ hadith, loading }: DailyHadithWidget
           <Text style={styles.source}>{hadith.source}</Text>
         </View>
       </LinearGradient>
+
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View
+          style={[
+            styles.modalRoot,
+            {
+              paddingTop: Math.max(insets.top, spacing.md),
+              paddingBottom: Math.max(insets.bottom, spacing.md),
+            },
+          ]}
+        >
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('home.dailyHadith')}</Text>
+            <Pressable
+              onPress={() => setModalVisible(false)}
+              style={({ pressed }) => [styles.modalCloseButton, pressed && { opacity: 0.75 }]}
+              hitSlop={12}
+            >
+              <Text style={styles.modalCloseText}>{t('home.hadithModalClose')}</Text>
+            </Pressable>
+          </View>
+          <ScrollView
+            style={styles.modalScroll}
+            contentContainerStyle={styles.modalScrollContent}
+            showsVerticalScrollIndicator
+            nestedScrollEnabled
+          >
+            {hadith.arabic_text ? (
+              <Text style={styles.modalArabic} selectable>
+                {hadith.arabic_text}
+              </Text>
+            ) : null}
+            <Text style={styles.modalBody} selectable>
+              {hadith.translation}
+            </Text>
+            {hadith.source ? (
+              <Text style={styles.modalSource} selectable>
+                {hadith.source}
+              </Text>
+            ) : null}
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -135,8 +227,81 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.card,
     lineHeight: 24,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     opacity: 0.95,
+  },
+  readFullButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: spacing.xs,
+    marginBottom: spacing.md,
+    paddingVertical: spacing.xs,
+    paddingRight: spacing.sm,
+  },
+  readFullLabel: {
+    ...typography.bodyBold,
+    fontSize: 14,
+    color: colors.card,
+    textDecorationLine: 'underline',
+    fontWeight: '700',
+  },
+  modalRoot: {
+    flex: 1,
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  modalTitle: {
+    ...typography.h3,
+    fontSize: 18,
+    color: colors.text,
+    fontWeight: '700',
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  modalCloseButton: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+  },
+  modalCloseText: {
+    ...typography.bodyBold,
+    fontSize: 16,
+    color: colors.primaryDark,
+    fontWeight: '700',
+  },
+  modalScroll: {
+    flex: 1,
+  },
+  modalScrollContent: {
+    paddingBottom: spacing.xxl,
+    gap: spacing.md,
+  },
+  modalArabic: {
+    ...typography.h3,
+    fontSize: 20,
+    color: colors.text,
+    textAlign: 'right',
+    lineHeight: 32,
+    fontWeight: '600',
+  },
+  modalBody: {
+    ...typography.body,
+    fontSize: 16,
+    color: colors.text,
+    lineHeight: 26,
+  },
+  modalSource: {
+    ...typography.caption,
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+    marginTop: spacing.sm,
   },
   sourceContainer: {
     marginTop: spacing.sm,

@@ -7,9 +7,11 @@ import {
   ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { spacing, typography } from '@/styles/commonStyles';
+import { colors, spacing, typography, borderRadius } from '@/styles/commonStyles';
 
-const GRAD = ['#a78bfa', '#8b5cf6', '#14b8a6'] as const;
+/** Matches `colors.gradientPrimary` + teal handoff like rest of app CTAs */
+const GRAD = colors.gradientOcean as unknown as readonly [string, string, string];
+const DISABLED = [colors.borderDark, colors.textSecondary] as const;
 
 type Props = {
   label: string;
@@ -29,13 +31,13 @@ export function AuthPrimaryButton({ label, onPress, loading, disabled, style }: 
       style={[styles.touch, style]}
     >
       <LinearGradient
-        colors={off ? (['#475569', '#475569'] as const) : GRAD}
+        colors={off ? DISABLED : GRAD}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.grad}
       >
         {loading ? (
-          <ActivityIndicator color="#f8fafc" />
+          <ActivityIndicator color={colors.card} />
         ) : (
           <Text style={styles.text}>{label}</Text>
         )}
@@ -46,7 +48,7 @@ export function AuthPrimaryButton({ label, onPress, loading, disabled, style }: 
 
 const styles = StyleSheet.create({
   touch: {
-    borderRadius: 16,
+    borderRadius: borderRadius.lg,
     overflow: 'hidden',
     marginTop: spacing.sm,
   },
@@ -57,8 +59,8 @@ const styles = StyleSheet.create({
   },
   text: {
     ...typography.bodyBold,
-    color: '#f8fafc',
+    color: colors.card,
     fontSize: 17,
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
 });

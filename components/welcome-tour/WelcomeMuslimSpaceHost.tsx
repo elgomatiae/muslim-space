@@ -7,12 +7,25 @@ import { getWelcomeTourAcknowledged } from "@/utils/welcomeTourStorage";
 export function WelcomeMuslimSpaceHost() {
   const { user } = useAuth();
   const firedRef = useRef(false);
+  const lastUserIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    if (!user?.id || firedRef.current) return;
+    if (!user?.id) {
+      lastUserIdRef.current = undefined;
+      firedRef.current = false;
+      return;
+    }
+
+    if (lastUserIdRef.current !== user.id) {
+      lastUserIdRef.current = user.id;
+      firedRef.current = false;
+    }
+
+    if (firedRef.current) return;
+
     let alive = true;
 
-    (async () => {
+    void (async () => {
       const acknowledged = await getWelcomeTourAcknowledged(user.id);
       if (!alive || acknowledged) return;
       firedRef.current = true;

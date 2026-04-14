@@ -125,13 +125,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               username, // Use username from metadata or email prefix
               session.user.email
             );
-            // Redirect to home after successful sign in
-            try {
-              router.replace('/(tabs)/(home)/');
-            } catch (navError) {
-              console.error('Navigation error after sign in:', navError);
-              // Continue - user is still signed in
-            }
+            // Do not router.replace here: (auth)/_layout and ProtectedRoute already
+            // send the user to tabs; a late replace would run after WelcomeMuslimSpaceHost
+            // and skip the first-time welcome tour.
           } catch (error) {
             console.error('❌ Error initializing user profile:', error);
             // Continue even if profile initialization fails

@@ -22,6 +22,58 @@ export interface DailyHadith {
   source: string;
 }
 
+/** Prefer the longest non-empty string so we surface full text when the row has both a short label and a longer column. */
+function pickLongestText(...candidates: unknown[]): string {
+  let best = '';
+  for (const c of candidates) {
+    if (typeof c !== 'string') continue;
+    const s = c.trim();
+    if (s.length > best.length) best = s;
+  }
+  return best;
+}
+
+/** Map a Supabase row (any column names) into DailyHadith. Uses select('*') so extra columns (e.g. full_translation) are not dropped. */
+function normalizeHadithRow(row: Record<string, unknown>): DailyHadith {
+  const translation = pickLongestText(
+    row.full_translation,
+    row.translation_full,
+    row.translation_en,
+    row.translation,
+    row.english_text,
+    row.text,
+    row.content,
+    row.meaning,
+    row.description,
+    row.body,
+    row.english_narrator,
+    row.narrator_en,
+  );
+
+  const arabic = pickLongestText(
+    row.arabic_text,
+    row.arabic,
+    row.arabic_matn,
+    row.matn_arabic,
+    row.arabic_full,
+  );
+
+  const source = pickLongestText(
+    row.source,
+    row.reference,
+    row.book_reference,
+    row.hadith_reference,
+    row.ref,
+  );
+
+  return {
+    id: String(row.id ?? ''),
+    arabic_text: arabic || undefined,
+    translation,
+    source,
+  };
+}
+
 // ============================================================================
 // DAILY VERSE FUNCTIONS
 // ============================================================================
@@ -150,10 +202,7 @@ export async function getDailyHadith(locale?: string): Promise<DailyHadith | nul
     let error: any = null;
 
     // Build query - try with language filter if locale is provided
-    let query1 = supabase
-      .from('daily_hadiths')
-      .select('id, arabic_text, translation, source')
-      .eq('is_active', true);
+    let query1 = supabase.from('daily_hadiths').select('*').eq('is_active', true);
     
     // Try to filter by language if locale is provided
     if (locale) {
@@ -167,7 +216,7 @@ export async function getDailyHadith(locale?: string): Promise<DailyHadith | nul
       console.log('Language column not found, fetching all languages');
       const retryResult = await supabase
         .from('daily_hadiths')
-        .select('id, arabic_text, translation, source')
+        .select('*')
         .eq('is_active', true)
         .order('created_at', { ascending: false });
       
@@ -178,9 +227,7 @@ export async function getDailyHadith(locale?: string): Promise<DailyHadith | nul
       data = result1.data;
     } else {
       // Fallback to hadiths table
-      let query2 = supabase
-        .from('hadiths')
-        .select('id, arabic, translation, reference');
+      let query2 = supabase.from('hadiths').select('*');
       
       if (locale) {
         query2 = query2.eq('language', locale);
@@ -191,10 +238,7 @@ export async function getDailyHadith(locale?: string): Promise<DailyHadith | nul
       // If error suggests language column doesn't exist, retry without language filter
       if (result2.error && locale && result2.error.message?.includes('column') && result2.error.message?.includes('language')) {
         console.log('Language column not found in hadiths, fetching all languages');
-        const retryResult2 = await supabase
-          .from('hadiths')
-          .select('id, arabic, translation, reference')
-          .order('created_at', { ascending: false });
+        const retryResult2 = await supabase.from('hadiths').select('*').order('created_at', { ascending: false });
         
         data = retryResult2.data;
         error = retryResult2.error;
@@ -217,16 +261,11 @@ export async function getDailyHadith(locale?: string): Promise<DailyHadith | nul
     // Select hadith based on date - different formula from verse to get different content
     // Use prime multiplier to ensure good distribution
     const index = (dateSeed * 31 + 17) % data.length;
-    const hadith = data[index];
+    const hadith = data[index] as Record<string, unknown>;
 
     console.log(`📿 Daily Hadith: date seed ${dateSeed}, index ${index}/${data.length}`);
 
-    return {
-      id: hadith.id,
-      arabic_text: hadith.arabic_text || hadith.arabic || undefined,
-      translation: hadith.translation || '',
-      source: hadith.source || hadith.reference || '',
-    };
+    return normalizeHadithRow(hadith);
   } catch (error) {
     console.error('Error in getDailyHadith:', error);
     return null;

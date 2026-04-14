@@ -9,7 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { IconSymbol } from '@/components/IconSymbol';
-import { spacing, typography } from '@/styles/commonStyles';
+import { colors, spacing, typography, borderRadius } from '@/styles/commonStyles';
 
 type Props = {
   label: string;
@@ -46,16 +46,18 @@ export function AuthField({
     <View style={styles.wrap}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.row}>
-        <IconSymbol
-          ios_icon_name={iconIos}
-          android_material_icon_name={iconAndroid}
-          size={20}
-          color="rgba(167, 139, 250, 0.95)"
-        />
+        <View style={styles.iconCol}>
+          <IconSymbol
+            ios_icon_name={iconIos}
+            android_material_icon_name={iconAndroid}
+            size={20}
+            color={colors.primary}
+          />
+        </View>
         <TextInput
           style={styles.input}
           placeholder={placeholder}
-          placeholderTextColor="rgba(148, 163, 184, 0.75)"
+          placeholderTextColor={colors.textSecondary}
           value={value}
           onChangeText={onChangeText}
           secureTextEntry={secureTextEntry}
@@ -63,16 +65,19 @@ export function AuthField({
           autoCapitalize={autoCapitalize}
           autoComplete={autoComplete}
           editable={editable}
+          underlineColorAndroid="transparent"
         />
         {showSecureToggle ? (
-          <TouchableOpacity onPress={onToggleSecure} hitSlop={12} disabled={!editable}>
-            <IconSymbol
-              ios_icon_name={secureTextEntry ? 'eye.fill' : 'eye.slash.fill'}
-              android_material_icon_name={secureTextEntry ? 'visibility' : 'visibility-off'}
-              size={20}
-              color="rgba(148, 163, 184, 0.9)"
-            />
-          </TouchableOpacity>
+          <View style={styles.iconCol}>
+            <TouchableOpacity onPress={onToggleSecure} hitSlop={12} disabled={!editable}>
+              <IconSymbol
+                ios_icon_name={secureTextEntry ? 'eye.fill' : 'eye.slash.fill'}
+                android_material_icon_name={secureTextEntry ? 'visibility' : 'visibility-off'}
+                size={20}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+          </View>
         ) : null}
       </View>
     </View>
@@ -85,26 +90,37 @@ const styles = StyleSheet.create({
   },
   label: {
     ...typography.smallBold,
-    color: 'rgba(226, 232, 240, 0.85)',
+    color: colors.textSecondary,
     marginBottom: spacing.sm,
     letterSpacing: 0.2,
   },
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
     gap: spacing.md,
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
-    borderRadius: 16,
+    backgroundColor: colors.highlight,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.18)',
+    borderColor: colors.border,
     paddingHorizontal: spacing.lg,
-    paddingVertical: Platform.OS === 'ios' ? 14 : 10,
-    minHeight: 52,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 10,
+    minHeight: Platform.OS === 'ios' ? 58 : 60,
+    overflow: 'visible',
+  },
+  iconCol: {
+    justifyContent: 'center',
+    minWidth: 24,
   },
   input: {
     flex: 1,
-    ...typography.body,
-    color: '#f1f5f9',
-    paddingVertical: Platform.OS === 'android' ? 4 : 0,
+    fontSize: 16,
+    fontWeight: '400',
+    /* Omit lineHeight: fixed lineHeight on single-line TextInput often clips descenders (g, y, p). */
+    color: colors.text,
+    paddingTop: Platform.OS === 'ios' ? 2 : 2,
+    paddingBottom: Platform.OS === 'ios' ? 6 : 8,
+    marginTop: 0,
+    marginBottom: 0,
+    minHeight: Platform.OS === 'ios' ? 36 : 40,
   },
 });

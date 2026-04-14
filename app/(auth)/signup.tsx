@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native';
 import { router } from 'expo-router';
-import { spacing, typography } from '@/styles/commonStyles';
+import { colors, spacing, typography } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
 import { getAuthEmailRedirectTo } from '@/utils/authEmailRedirectTo';
+import {
+  resendSignupConfirmationEmail,
+  shouldAttemptSignupConfirmationResend,
+} from '@/utils/authSignupResend';
 import * as Haptics from 'expo-haptics';
 import { initializeUserProfile } from '@/utils/profileSupabaseSync';
 import { useTranslation } from '@/contexts/I18nContext';
@@ -11,8 +15,6 @@ import { getErrorMessage } from '@/utils/errorHandler';
 import { AuthMarketingShell } from '@/components/auth/AuthMarketingShell';
 import { AuthField } from '@/components/auth/AuthField';
 import { AuthPrimaryButton } from '@/components/auth/AuthPrimaryButton';
-import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton';
-import { signInWithGoogle } from '@/utils/googleSignIn';
 
 export default function SignupScreen() {
   const { t } = useTranslation();
@@ -21,7 +23,6 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -63,6 +64,20 @@ export default function SignupScreen() {
       });
 
       if (error) {
+        if (shouldAttemptSignupConfirmationResend(error)) {
+          const { error: resendError } = await resendSignupConfirmationEmail(email);
+          if (!resendError) {
+            if (Platform.OS !== 'web') {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
+            setErrorMessage('');
+            Alert.alert(t('auth.confirmYourEmail'), undefined, [
+              { text: t('common.ok'), onPress: () => router.replace('/(auth)/login') },
+            ]);
+            setLoading(false);
+            return;
+          }
+        }
         const msg = getErrorMessage(error);
         setErrorMessage(msg);
         Alert.alert(t('auth.signupFailed'), msg);
@@ -71,10 +86,35 @@ export default function SignupScreen() {
       }
 
       if (data.user) {
+        setErrorMessage('');
+
+        // With "Confirm email" on, duplicate signup returns no error but an obfuscated user
+        // with identities: []. No confirmation email is sent again unless we resend explicitly.
+        const identities = data.user.identities;
+        const looksLikeDuplicateEmail =
+          !data.session &&
+          (!identities || identities.length === 0);
+
+        if (looksLikeDuplicateEmail) {
+          const { error: resendError } = await resendSignupConfirmationEmail(email);
+          if (!resendError) {
+            if (Platform.OS !== 'web') {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
+            Alert.alert(t('auth.confirmYourEmail'), undefined, [
+              { text: t('common.ok'), onPress: () => router.replace('/(auth)/login') },
+            ]);
+            setLoading(false);
+            return;
+          }
+          Alert.alert(t('auth.signupFailed'), getErrorMessage(resendError) || t('auth.unexpectedError'));
+          setLoading(false);
+          return;
+        }
+
         if (Platform.OS !== 'web') {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
-        setErrorMessage('');
 
         if (data.session) {
           try {
@@ -88,7 +128,7 @@ export default function SignupScreen() {
             console.error('Navigation after signup:', navError);
           }
         } else {
-          Alert.alert(t('auth.signupAlmostThere'), t('auth.signupEnableAutoConfirm'), [
+          Alert.alert(t('auth.confirmYourEmail'), undefined, [
             { text: t('common.ok'), onPress: () => router.replace('/(auth)/login') },
           ]);
         }
@@ -102,36 +142,6 @@ export default function SignupScreen() {
     }
   };
 
-  const handleGoogle = async () => {
-    setErrorMessage('');
-    setGoogleLoading(true);
-    try {
-      if (Platform.OS !== 'web') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-      const result = await signInWithGoogle();
-      if (!result.ok) {
-        setErrorMessage(result.error.message);
-        Alert.alert(t('common.error'), result.error.message);
-        return;
-      }
-      if (result.cancelled) {
-        return;
-      }
-      if (Platform.OS !== 'web') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-    } catch (e: unknown) {
-      const msg = getErrorMessage(e);
-      setErrorMessage(msg);
-      Alert.alert(t('common.error'), msg);
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
-
-  const busy = loading || googleLoading;
-
   return (
     <AuthMarketingShell
       eyebrow={t('auth.brandEyebrow')}
@@ -144,19 +154,6 @@ export default function SignupScreen() {
         </View>
       ) : null}
 
-      <GoogleAuthButton
-        label={t('auth.signUpWithGoogle')}
-        onPress={handleGoogle}
-        loading={googleLoading}
-        disabled={loading}
-      />
-
-      <View style={styles.divider}>
-        <View style={styles.dividerLine} />
-        <Text style={styles.dividerLabel}>{t('auth.orUseEmail')}</Text>
-        <View style={styles.dividerLine} />
-      </View>
-
       <AuthField
         label={t('auth.username')}
         value={username}
@@ -167,7 +164,7 @@ export default function SignupScreen() {
         placeholder={t('auth.usernamePlaceholder')}
         iconIos="person.fill"
         iconAndroid="person"
-        editable={!busy}
+        editable={!loading}
       />
 
       <AuthField
@@ -182,7 +179,7 @@ export default function SignupScreen() {
         autoComplete="email"
         iconIos="envelope.fill"
         iconAndroid="email"
-        editable={!busy}
+        editable={!loading}
       />
 
       <AuthField
@@ -198,7 +195,7 @@ export default function SignupScreen() {
         onToggleSecure={() => setShowPassword((s) => !s)}
         iconIos="lock.fill"
         iconAndroid="lock"
-        editable={!busy}
+        editable={!loading}
       />
 
       <AuthField
@@ -214,14 +211,13 @@ export default function SignupScreen() {
         onToggleSecure={() => setShowConfirmPassword((s) => !s)}
         iconIos="lock.fill"
         iconAndroid="lock"
-        editable={!busy}
+        editable={!loading}
       />
 
       <AuthPrimaryButton
         label={t('auth.createAccountCta')}
         onPress={handleSignup}
         loading={loading}
-        disabled={googleLoading}
       />
 
       <TouchableOpacity
@@ -232,7 +228,7 @@ export default function SignupScreen() {
           }
           router.back();
         }}
-        disabled={busy}
+        disabled={loading}
       >
         <Text style={styles.switchMuted}>{t('auth.alreadyHaveAccount')} </Text>
         <Text style={styles.switchAccent}>{t('auth.signInLink')}</Text>
@@ -243,33 +239,16 @@ export default function SignupScreen() {
 
 const styles = StyleSheet.create({
   errorBanner: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: colors.errorBackground,
     borderWidth: 1,
-    borderColor: 'rgba(248, 113, 113, 0.45)',
+    borderColor: colors.error,
     borderRadius: 14,
     padding: spacing.md,
     marginBottom: spacing.lg,
   },
   errorText: {
     ...typography.caption,
-    color: '#fecaca',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: spacing.xl,
-    gap: spacing.md,
-  },
-  dividerLine: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(148, 163, 184, 0.35)',
-  },
-  dividerLabel: {
-    ...typography.small,
-    color: 'rgba(148, 163, 184, 0.9)',
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    color: colors.error,
   },
   switchRow: {
     flexDirection: 'row',
@@ -279,10 +258,10 @@ const styles = StyleSheet.create({
   },
   switchMuted: {
     ...typography.body,
-    color: 'rgba(148, 163, 184, 0.95)',
+    color: colors.textSecondary,
   },
   switchAccent: {
     ...typography.bodyBold,
-    color: 'rgba(94, 234, 212, 0.95)',
+    color: colors.secondaryDark,
   },
 });

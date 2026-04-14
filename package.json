@@ -1,6 +1,6 @@
 {
   "name": "Natively",
-  "version": "1.05",
+  "version": "1.06",
   "main": "index.ts",
   "scripts": {
     "dev": "cross-env EXPO_NO_TELEMETRY=1 expo start --tunnel",

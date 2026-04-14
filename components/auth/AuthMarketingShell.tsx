@@ -9,10 +9,9 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { spacing, typography } from '@/styles/commonStyles';
+import { colors, spacing, typography, borderRadius, shadows } from '@/styles/commonStyles';
 
 const { width: W } = Dimensions.get('window');
 
@@ -23,25 +22,24 @@ type Props = {
   children: React.ReactNode;
 };
 
+/**
+ * Auth layout aligned with app theme (commonStyles): light surface, purple/teal accents.
+ */
 export function AuthMarketingShell({ eyebrow, title, subtitle, children }: Props) {
   const insets = useSafeAreaInsets();
 
   return (
     <View style={styles.root}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <LinearGradient
-        colors={['#070b14', '#121c33', '#1a0f2e']}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 0.9, y: 1 }}
+        colors={[colors.background, colors.highlightPurple, colors.backgroundAlt]}
+        locations={[0, 0.45, 1]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
+      <View style={[styles.orb, styles.orbPurple]} pointerEvents="none" />
       <View style={[styles.orb, styles.orbTeal]} pointerEvents="none" />
-      <View style={[styles.orb, styles.orbViolet]} pointerEvents="none" />
-      <LinearGradient
-        colors={['rgba(20,184,166,0.12)', 'transparent']}
-        style={styles.vignetteTop}
-        pointerEvents="none"
-      />
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -60,13 +58,19 @@ export function AuthMarketingShell({ eyebrow, title, subtitle, children }: Props
         >
           <View style={styles.header}>
             <Text style={styles.eyebrow}>{eyebrow}</Text>
+            <LinearGradient
+              colors={colors.gradientPrimary as unknown as [string, string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.accentRule}
+            />
             <Text style={styles.title}>{title}</Text>
             {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
           </View>
 
-          <BlurView intensity={50} tint="dark" style={styles.cardBlur}>
-            <View style={styles.cardInner}>{children}</View>
-          </BlurView>
+          <View style={styles.card}>
+            {children}
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -76,69 +80,65 @@ export function AuthMarketingShell({ eyebrow, title, subtitle, children }: Props
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#070b14',
+    backgroundColor: colors.background,
   },
   flex: { flex: 1 },
   orb: {
     position: 'absolute',
-    width: W * 0.85,
-    height: W * 0.85,
+    width: W * 0.75,
+    height: W * 0.75,
     borderRadius: W * 0.5,
   },
+  orbPurple: {
+    top: -W * 0.28,
+    right: -W * 0.2,
+    backgroundColor: 'rgba(139, 92, 246, 0.09)',
+  },
   orbTeal: {
-    top: -W * 0.35,
-    right: -W * 0.25,
-    backgroundColor: 'rgba(20, 184, 166, 0.22)',
-  },
-  orbViolet: {
-    bottom: -W * 0.4,
-    left: -W * 0.35,
-    backgroundColor: 'rgba(139, 92, 246, 0.2)',
-  },
-  vignetteTop: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    height: 220,
+    bottom: -W * 0.32,
+    left: -W * 0.25,
+    backgroundColor: 'rgba(20, 184, 166, 0.08)',
   },
   scroll: {
     flexGrow: 1,
     paddingHorizontal: spacing.xl,
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
   },
   header: {
     marginBottom: spacing.xl,
   },
   eyebrow: {
     ...typography.smallBold,
-    letterSpacing: 3,
+    letterSpacing: 2,
     textTransform: 'uppercase',
-    color: 'rgba(94, 234, 212, 0.85)',
+    color: colors.primary,
     marginBottom: spacing.sm,
   },
+  accentRule: {
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    marginBottom: spacing.md,
+  },
   title: {
-    fontSize: 34,
-    fontWeight: '700',
-    lineHeight: 40,
-    color: '#f8fafc',
+    ...typography.h1,
+    color: colors.text,
     letterSpacing: -0.5,
+    marginBottom: spacing.xs,
   },
   subtitle: {
     ...typography.body,
-    marginTop: spacing.md,
-    color: 'rgba(248, 250, 252, 0.62)',
+    marginTop: spacing.sm,
+    color: colors.textSecondary,
     lineHeight: 24,
-    maxWidth: 340,
+    maxWidth: 360,
   },
-  cardBlur: {
-    borderRadius: 28,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  cardInner: {
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xxl,
     padding: spacing.xl,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.medium,
   },
 });

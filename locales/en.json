@@ -63,8 +63,7 @@
     "continueWithGoogle": "Continue with Google",
     "signUpWithGoogle": "Sign up with Google",
     "orUseEmail": "or email",
-    "signupAlmostThere": "Almost there",
-    "signupEnableAutoConfirm": "Your account was created, but this project still requires email confirmation before sign-in. In Supabase Dashboard go to Authentication → Providers → Email and turn off “Confirm email”, then sign up again (or sign in after confirming from your inbox)."
+    "confirmYourEmail": "Confirm your email"
   },
   "profile": {
     "title": "Profile",
@@ -165,6 +164,8 @@
     "loadingHadith": "Loading hadith...",
     "noHadithAvailable": "No hadith available",
     "dailyHadith": "Daily Hadith",
+    "hadithReadFull": "Read full hadith",
+    "hadithModalClose": "Close",
     "achievements": "Achievements",
     "achievementsSubtitle": "{{unlocked}} unlocked • {{shown}} shown",
     "achievementsProgressShort": "{{unlocked}} of {{total}} unlocked",

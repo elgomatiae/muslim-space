@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, Platform, Pressable } from 'react-native';
 import { router } from 'expo-router';
-import { spacing, typography } from '@/styles/commonStyles';
+import { colors, spacing, typography } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
 import { getAuthEmailRedirectTo } from '@/utils/authEmailRedirectTo';
 import * as Haptics from 'expo-haptics';
@@ -11,15 +11,12 @@ import { getErrorMessage } from '@/utils/errorHandler';
 import { AuthMarketingShell } from '@/components/auth/AuthMarketingShell';
 import { AuthField } from '@/components/auth/AuthField';
 import { AuthPrimaryButton } from '@/components/auth/AuthPrimaryButton';
-import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton';
-import { signInWithGoogle } from '@/utils/googleSignIn';
 
 export default function LoginScreen() {
   const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -98,36 +95,6 @@ export default function LoginScreen() {
     }
   };
 
-  const handleGoogle = async () => {
-    setErrorMessage('');
-    setGoogleLoading(true);
-    try {
-      if (Platform.OS !== 'web') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-      const result = await signInWithGoogle();
-      if (!result.ok) {
-        setErrorMessage(result.error.message);
-        Alert.alert(t('common.error'), result.error.message);
-        return;
-      }
-      if (result.cancelled) {
-        return;
-      }
-      if (Platform.OS !== 'web') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-    } catch (e: unknown) {
-      const msg = getErrorMessage(e);
-      setErrorMessage(msg);
-      Alert.alert(t('common.error'), msg);
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
-
-  const busy = loading || googleLoading;
-
   return (
     <AuthMarketingShell
       eyebrow={t('auth.brandEyebrow')}
@@ -139,19 +106,6 @@ export default function LoginScreen() {
           <Text style={styles.errorText}>{errorMessage}</Text>
         </View>
       ) : null}
-
-      <GoogleAuthButton
-        label={t('auth.continueWithGoogle')}
-        onPress={handleGoogle}
-        loading={googleLoading}
-        disabled={loading}
-      />
-
-      <View style={styles.divider}>
-        <View style={styles.dividerLine} />
-        <Text style={styles.dividerLabel}>{t('auth.orUseEmail')}</Text>
-        <View style={styles.dividerLine} />
-      </View>
 
       <AuthField
         label={t('auth.email')}
@@ -165,7 +119,7 @@ export default function LoginScreen() {
         autoComplete="email"
         iconIos="envelope.fill"
         iconAndroid="email"
-        editable={!busy}
+        editable={!loading}
       />
 
       <AuthField
@@ -182,14 +136,14 @@ export default function LoginScreen() {
         autoComplete="password"
         iconIos="lock.fill"
         iconAndroid="lock"
-        editable={!busy}
+        editable={!loading}
       />
 
-      <Pressable onPress={handleForgotPassword} disabled={busy} style={styles.forgotWrap}>
+      <Pressable onPress={handleForgotPassword} disabled={loading} style={styles.forgotWrap}>
         <Text style={styles.forgot}>{t('auth.forgotPassword')}</Text>
       </Pressable>
 
-      <AuthPrimaryButton label={t('auth.signIn')} onPress={handleLogin} loading={loading} disabled={googleLoading} />
+      <AuthPrimaryButton label={t('auth.signIn')} onPress={handleLogin} loading={loading} />
 
       <TouchableOpacity
         style={styles.switchRow}
@@ -199,7 +153,7 @@ export default function LoginScreen() {
           }
           router.push('/(auth)/signup');
         }}
-        disabled={busy}
+        disabled={loading}
       >
         <Text style={styles.switchMuted}>{t('auth.dontHaveAccount')} </Text>
         <Text style={styles.switchAccent}>{t('auth.signUp')}</Text>
@@ -210,33 +164,16 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   errorBanner: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: colors.errorBackground,
     borderWidth: 1,
-    borderColor: 'rgba(248, 113, 113, 0.45)',
+    borderColor: colors.error,
     borderRadius: 14,
     padding: spacing.md,
     marginBottom: spacing.lg,
   },
   errorText: {
     ...typography.caption,
-    color: '#fecaca',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: spacing.xl,
-    gap: spacing.md,
-  },
-  dividerLine: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(148, 163, 184, 0.35)',
-  },
-  dividerLabel: {
-    ...typography.small,
-    color: 'rgba(148, 163, 184, 0.9)',
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    color: colors.error,
   },
   forgotWrap: {
     alignSelf: 'flex-end',
@@ -245,7 +182,7 @@ const styles = StyleSheet.create({
   },
   forgot: {
     ...typography.captionBold,
-    color: 'rgba(167, 139, 250, 0.95)',
+    color: colors.primary,
   },
   switchRow: {
     flexDirection: 'row',
@@ -255,10 +192,10 @@ const styles = StyleSheet.create({
   },
   switchMuted: {
     ...typography.body,
-    color: 'rgba(148, 163, 184, 0.95)',
+    color: colors.textSecondary,
   },
   switchAccent: {
     ...typography.bodyBold,
-    color: 'rgba(94, 234, 212, 0.95)',
+    color: colors.secondaryDark,
   },
 });
