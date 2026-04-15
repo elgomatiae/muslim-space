@@ -1,8 +1,8 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
-import { router, useSegments } from 'expo-router';
+import { router, useSegments, type Href } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 
 interface ProtectedRouteProps {
@@ -10,9 +10,13 @@ interface ProtectedRouteProps {
   redirectTo?: string;
 }
 
+const REDIRECT_DEBOUNCE_MS = 600;
+
 export function ProtectedRoute({ children, redirectTo = '/(auth)/login' }: ProtectedRouteProps) {
   const { user, loading } = useAuth();
   const segments = useSegments();
+  const lastRedirectToAuthAt = useRef(0);
+  const lastRedirectToHomeAt = useRef(0);
 
   useEffect(() => {
     if (loading) return;
@@ -21,13 +25,17 @@ export function ProtectedRoute({ children, redirectTo = '/(auth)/login' }: Prote
       const inAuthGroup = segments[0] === '(auth)';
 
       if (!user && !inAuthGroup) {
-        // User is not signed in and trying to access protected route
+        const now = Date.now();
+        if (now - lastRedirectToAuthAt.current < REDIRECT_DEBOUNCE_MS) return;
+        lastRedirectToAuthAt.current = now;
         console.log('Redirecting to auth - user not authenticated');
-        router.replace(redirectTo);
+        router.replace(redirectTo as Href);
       } else if (user && inAuthGroup) {
-        // User is signed in but on auth screen, redirect to home
+        const now = Date.now();
+        if (now - lastRedirectToHomeAt.current < REDIRECT_DEBOUNCE_MS) return;
+        lastRedirectToHomeAt.current = now;
         console.log('Redirecting to home - user already authenticated');
-        router.replace('/(tabs)/(home)/');
+        router.replace('/(tabs)/(home)/' as Href);
       }
     } catch (error) {
       console.error('Navigation error in ProtectedRoute:', error);

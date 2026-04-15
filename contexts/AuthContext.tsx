@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/integrations/supabase/client';
@@ -35,6 +35,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  /** Avoid re-rendering the whole app on silent token refresh (same user). */
+  const lastAuthUserIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     const linkingSubscription = Linking.addEventListener('url', ({ url }) => {
@@ -74,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('Initial session check:', session?.user?.id || 'No session');
         setSession(session);
         setUser(session?.user ?? null);
+        lastAuthUserIdRef.current = session?.user?.id;
 
         if (session?.user) {
           try {
@@ -99,13 +102,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let subscription: { unsubscribe: () => void } | null = null;
     
     try {
-      const { data, error } = supabase.auth.onAuthStateChange(async (_event, session) => {
-        if (error) {
-          console.error('Auth state change error:', error);
-          setLoading(false);
+      const { data } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        if (
+          _event === 'TOKEN_REFRESHED' &&
+          session?.user &&
+          session.user.id === lastAuthUserIdRef.current
+        ) {
           return;
         }
-        
+        lastAuthUserIdRef.current = session?.user?.id;
+
         console.log('Auth state changed:', _event, session?.user?.id || 'No session');
         setSession(session);
         setUser(session?.user ?? null);

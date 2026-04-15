@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, InteractionManager } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { 
   loadIbadahGoals, 
@@ -80,6 +80,7 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [previousUserId, setPreviousUserId] = useState<string | null>(null);
+  const lastFocusSideEffectsAt = useRef(0);
 
   // Track app state to check for resets when app comes to foreground
   const appState = useRef(AppState.currentState);
@@ -211,28 +212,39 @@ export const ImanTrackerProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [user?.id, loadAllGoals]);
 
-  // Check for resets when screen is focused (user navigates to app)
+  // Tab / stack focus fires often — defer and throttle so navigation never janks.
   useFocusEffect(
     useCallback(() => {
-      if (user?.id) {
+      if (!user?.id) return;
+
+      const now = Date.now();
+      if (now - lastFocusSideEffectsAt.current < 60_000) {
+        return;
+      }
+      lastFocusSideEffectsAt.current = now;
+
+      const handle = InteractionManager.runAfterInteractions(() => {
         checkAndHandleResets(user.id)
           .then(async () => {
-            // Schedule daily and weekly goal reminders after checking resets
             try {
-              const { scheduleDailyGoalReminders, scheduleWeeklyGoalReminders } = await import('@/utils/notificationService');
-              await scheduleDailyGoalReminders(user.id);
-              await scheduleWeeklyGoalReminders(user.id);
+              const { scheduleDailyGoalReminders, scheduleWeeklyGoalReminders } =
+                await import('@/utils/notificationService');
+              scheduleDailyGoalReminders(user.id).catch(() => {});
+              scheduleWeeklyGoalReminders(user.id).catch(() => {});
             } catch (err) {
-              // Silent failure - notifications are non-critical
               if (__DEV__) {
                 console.log('Error scheduling goal reminders:', err);
               }
             }
           })
-          .catch(err => {
+          .catch((err) => {
             console.error('Error checking resets on focus:', err);
           });
-      }
+      });
+
+      return () => {
+        handle.cancel?.();
+      };
     }, [user?.id])
   );
 

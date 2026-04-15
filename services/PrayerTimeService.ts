@@ -136,21 +136,11 @@ export async function calculatePrayerTimes(
   }
 }
 
-/**
- * Get prayer times for today using user's current location
- */
-export async function getTodayPrayerTimes(userId?: string): Promise<DailyPrayerTimes> {
-  try {
-    // Get user's exact location
-    const location = await getCurrentLocation();
-    
-    // Calculate prayer times
-    const prayerTimes = await calculatePrayerTimes(location);
-
-    // Save to database if userId provided
-    if (userId) {
-      try {
-        await supabase.from('prayer_times').upsert({
+function persistTodayPrayerTimesRow(userId: string, prayerTimes: DailyPrayerTimes, location: UserLocation): void {
+  void (async () => {
+    try {
+      const { error } = await supabase.from('prayer_times').upsert(
+        {
           user_id: userId,
           date: prayerTimes.date,
           city: prayerTimes.city,
@@ -162,20 +152,76 @@ export async function getTodayPrayerTimes(userId?: string): Promise<DailyPrayerT
           maghrib_time: prayerTimes.maghrib.time,
           isha_time: prayerTimes.isha.time,
           created_at: new Date().toISOString(),
-        }, {
-          onConflict: 'user_id,date',
-        });
-        console.log('✅ Prayer times saved to database');
-      } catch (dbError: any) {
-        // Non-critical - continue even if database save fails
-        if (dbError.code !== 'PGRST205') {
-          console.error('Could not save prayer times to database:', dbError);
-        }
+        },
+        { onConflict: 'user_id,date' }
+      );
+      if (error && error.code !== 'PGRST205') {
+        console.error('Could not save prayer times to database:', error);
+        return;
       }
+      if (!error) {
+        console.log('✅ Prayer times saved to database');
+      }
+    } catch (dbError: unknown) {
+      const err = dbError as { code?: string };
+      if (err?.code !== 'PGRST205') {
+        console.error('Could not save prayer times to database:', dbError);
+      }
+    }
+  })();
+}
+
+function startOfTomorrow(): Date {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  return tomorrow;
+}
+
+/**
+ * One GPS/cache read, then today + tomorrow calculations (for widgets / notifications).
+ * DB persist for today only — non-blocking so UI never waits on Supabase.
+ */
+export async function getTodayAndTomorrowPrayerTimes(userId?: string): Promise<{
+  today: DailyPrayerTimes;
+  tomorrow: DailyPrayerTimes;
+}> {
+  try {
+    const location = await getCurrentLocation();
+    const [today, tomorrow] = await Promise.all([
+      calculatePrayerTimes(location),
+      calculatePrayerTimes(location, startOfTomorrow()),
+    ]);
+
+    if (userId) {
+      persistTodayPrayerTimesRow(userId, today, location);
+    }
+
+    return { today, tomorrow };
+  } catch (error: unknown) {
+    console.error('❌ Error getting prayer times:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get prayer times for today using user's current location
+ */
+export async function getTodayPrayerTimes(userId?: string): Promise<DailyPrayerTimes> {
+  try {
+    // Get user's exact location
+    const location = await getCurrentLocation();
+
+    // Calculate prayer times
+    const prayerTimes = await calculatePrayerTimes(location);
+
+    // Never block the caller on network — saving is best-effort
+    if (userId) {
+      persistTodayPrayerTimesRow(userId, prayerTimes, location);
     }
 
     return prayerTimes;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error getting prayer times:', error);
     throw error;
   }
@@ -184,20 +230,11 @@ export async function getTodayPrayerTimes(userId?: string): Promise<DailyPrayerT
 /**
  * Get prayer times for tomorrow using user's current location
  */
-export async function getTomorrowPrayerTimes(userId?: string): Promise<DailyPrayerTimes> {
+export async function getTomorrowPrayerTimes(_userId?: string): Promise<DailyPrayerTimes> {
   try {
-    // Get user's exact location
     const location = await getCurrentLocation();
-    
-    // Calculate prayer times for tomorrow
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-    
-    const prayerTimes = await calculatePrayerTimes(location, tomorrow);
-
-    return prayerTimes;
-  } catch (error: any) {
+    return await calculatePrayerTimes(location, startOfTomorrow());
+  } catch (error: unknown) {
     console.error('❌ Error getting tomorrow prayer times:', error);
     throw error;
   }

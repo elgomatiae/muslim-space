@@ -25,68 +25,13 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider } from "@/contexts/AuthContext";
-// NotificationProvider is lazy-loaded - don't import at top level
+import { NotificationProvider } from "@/contexts/NotificationContext";
 import { ImanTrackerProvider } from "@/contexts/ImanTrackerContext";
 import { AchievementCelebrationProvider } from "@/contexts/AchievementCelebrationContext";
 import { I18nProvider } from "@/contexts/I18nContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AdMobProvider } from "@/contexts/AdMobContext";
 import { BannerAdBar } from "@/components/ads/BannerAdBar";
-
-// Lazy NotificationProvider - only loads after React Native is fully initialized
-// This prevents native module crashes by delaying NotificationProvider initialization
-function LazyNotificationProvider({ children }: { children: React.ReactNode }) {
-  const [NotificationProviderComponent, setNotificationProviderComponent] = React.useState<React.ComponentType<{ children: React.ReactNode }> | null>(null);
-  const [shouldLoad, setShouldLoad] = React.useState(false);
-
-  React.useEffect(() => {
-    // Wait 5 seconds to ensure React Native and all native modules are fully ready
-    const timer = setTimeout(() => {
-      // Double-check that React Native bridge is ready
-      const isReady = 
-        (typeof global !== 'undefined' && (global as any).__fbBatchedBridge) ||
-        (typeof window !== 'undefined');
-      
-      if (isReady) {
-        setShouldLoad(true);
-      } else {
-        // If not ready, wait another 2 seconds
-        setTimeout(() => setShouldLoad(true), 2000);
-      }
-    }, 5000); // Wait 5 seconds before attempting to load
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Dynamically import NotificationProvider only when ready
-  React.useEffect(() => {
-    if (!shouldLoad) return;
-
-    // Use dynamic import to load NotificationProvider only when needed
-    import('@/contexts/NotificationContext')
-      .then((module) => {
-        setNotificationProviderComponent(() => module.NotificationProvider);
-      })
-      .catch((error) => {
-        console.error('Error dynamically loading NotificationProvider:', error);
-        // Continue without NotificationProvider - app will work without notifications
-      });
-  }, [shouldLoad]);
-
-  // Don't render NotificationProvider until it's loaded
-  if (!NotificationProviderComponent) {
-    return <>{children}</>;
-  }
-
-  // Now safe to render NotificationProvider
-  return (
-    <ErrorBoundary fallback={null}>
-      <NotificationProviderComponent>
-        {children}
-      </NotificationProviderComponent>
-    </ErrorBoundary>
-  );
-}
 
 /** Await this before calling hideAsync so iOS always has a registered splash controller. */
 const splashPreventPromise = SplashScreen.preventAutoHideAsync().catch(() => null);
@@ -207,16 +152,21 @@ export default function RootLayout() {
     };
   }, [loaded, fontError]);
 
+  const offlineAlertShown = React.useRef(false);
+
   React.useEffect(() => {
-    if (
-      !networkState.isConnected &&
-      networkState.isInternetReachable === false
-    ) {
+    const offline =
+      !networkState.isConnected && networkState.isInternetReachable === false;
+    if (offline) {
+      if (offlineAlertShown.current) return;
+      offlineAlertShown.current = true;
       Alert.alert(
         "🔌 You are offline",
         "You can keep using the app! Your changes will be saved locally and synced when you are back online."
       );
+      return;
     }
+    offlineAlertShown.current = false;
   }, [networkState.isConnected, networkState.isInternetReachable]);
 
   // Don't block app if font fails - continue with system fonts
@@ -259,14 +209,14 @@ export default function RootLayout() {
             <I18nProvider>
               <AuthProvider>
               <AchievementCelebrationProvider>
-                {/* Lazy load NotificationProvider to prevent immediate native module crashes */}
-                <LazyNotificationProvider>
-                  <ImanTrackerProvider>
-                    <WidgetProvider>
-                      <GestureHandlerRootView>
-                        <View style={{ flex: 1 }}>
+                <ErrorBoundary fallback={null}>
+                  <NotificationProvider>
+                    <ImanTrackerProvider>
+                      <WidgetProvider>
+                        <GestureHandlerRootView>
                           <View style={{ flex: 1 }}>
-                            <Stack>
+                            <View style={{ flex: 1 }}>
+                              <Stack>
                               {/* Root index - handles auth routing */}
                               <Stack.Screen
                                 name="index"
@@ -289,17 +239,18 @@ export default function RootLayout() {
                                 name="(tabs)"
                                 options={{ headerShown: false }}
                               />
-                            </Stack>
+                              </Stack>
+                            </View>
+
+                            <GlobalBannerAdHost />
                           </View>
 
-                          <GlobalBannerAdHost />
-                        </View>
-
-                        <SystemBars style={"auto"} />
-                      </GestureHandlerRootView>
-                    </WidgetProvider>
-                  </ImanTrackerProvider>
-                </LazyNotificationProvider>
+                          <SystemBars style={"auto"} />
+                        </GestureHandlerRootView>
+                      </WidgetProvider>
+                    </ImanTrackerProvider>
+                  </NotificationProvider>
+                </ErrorBoundary>
               </AchievementCelebrationProvider>
               </AuthProvider>
             </I18nProvider>

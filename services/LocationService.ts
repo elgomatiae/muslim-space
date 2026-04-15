@@ -130,6 +130,51 @@ export async function getCurrentLocation(useCache: boolean = true): Promise<User
       throw new Error('Location services are disabled. Please enable location services in your device settings.');
     }
 
+    // OS last-known fix (no GPS wait) — good enough for prayer times when recent
+    try {
+      if (typeof Location.getLastKnownPositionAsync === 'function') {
+        const lastKnown = await Promise.race([
+          Location.getLastKnownPositionAsync({ maxAge: 5 * 60 * 1000 }),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500)),
+        ]);
+        if (lastKnown?.coords?.latitude != null && lastKnown.coords.longitude != null) {
+          let city = 'Unknown';
+          let country: string | undefined;
+          try {
+            const addresses = await Promise.race([
+              Location.reverseGeocodeAsync({
+                latitude: lastKnown.coords.latitude,
+                longitude: lastKnown.coords.longitude,
+              }),
+              new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('reverse geocode timeout')), 4000)
+              ),
+            ]);
+            if (addresses && addresses.length > 0) {
+              const address = addresses[0];
+              city = address.city || address.subregion || address.region || 'Unknown';
+              country = address.country ?? undefined;
+            }
+          } catch {
+            // city stays Unknown
+          }
+          const quick: UserLocation = {
+            latitude: lastKnown.coords.latitude,
+            longitude: lastKnown.coords.longitude,
+            city,
+            country,
+            accuracy: lastKnown.coords.accuracy ?? undefined,
+            timestamp: lastKnown.timestamp ?? Date.now(),
+          };
+          await cacheLocation(quick);
+          console.log(`✅ Using recent last-known location: ${city}`);
+          return quick;
+        }
+      }
+    } catch {
+      // fall through to GPS
+    }
+
     // Get GPS coordinates with high accuracy, with timeout
     console.log('📍 Getting GPS location...');
     let position;
@@ -184,15 +229,20 @@ export async function getCurrentLocation(useCache: boolean = true): Promise<User
     let country: string | undefined;
 
     try {
-      const addresses = await Location.reverseGeocodeAsync({
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-      });
+      const addresses = await Promise.race([
+        Location.reverseGeocodeAsync({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('reverse geocode timeout')), 5000)
+        ),
+      ]);
 
       if (addresses && addresses.length > 0) {
         const address = addresses[0];
         city = address.city || address.subregion || address.region || 'Unknown';
-        country = address.country;
+        country = address.country ?? undefined;
       }
     } catch (geocodeError) {
       console.warn('Could not get city name from coordinates');

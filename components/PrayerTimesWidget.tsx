@@ -7,14 +7,13 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } fr
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
-import { 
-  getTodayPrayerTimes,
-  getTomorrowPrayerTimes,
-  getNextPrayer, 
+import {
+  getTodayAndTomorrowPrayerTimes,
+  getNextPrayer,
   getTimeUntilNextPrayer,
   markPrayerCompleted,
   type PrayerTime,
-  type DailyPrayerTimes 
+  type DailyPrayerTimes,
 } from '@/services/PrayerTimeService';
 import { getCurrentLocation, requestLocationPermission, hasLocationPermission } from '@/services/LocationService';
 import { useAuth } from '@/contexts/AuthContext';
@@ -74,27 +73,20 @@ export default function PrayerTimesWidget() {
 
       setLocationPermissionGranted(true);
 
-      // Get prayer times using exact location
-      const times = await getTodayPrayerTimes(user?.id);
+      // One location read + parallel today/tomorrow math; DB save is non-blocking in service
+      const { today: times, tomorrow: tomorrowTimes } = await getTodayAndTomorrowPrayerTimes(user?.id);
       setPrayerTimes(times);
 
-      // Get next prayer
       const next = getNextPrayer(times);
       setNextPrayer(next);
       if (next) {
         setTimeUntilNext(getTimeUntilNextPrayer(next));
       }
 
-      // Get tomorrow's prayer times for notification scheduling
-      let tomorrowTimes: DailyPrayerTimes | null = null;
-      try {
-        tomorrowTimes = await getTomorrowPrayerTimes(user?.id);
-      } catch (error) {
-        console.log('Could not get tomorrow prayer times for notifications:', error);
-      }
+      console.log('✅ Prayer times loaded for:', times.city);
 
-      // Schedule prayer notifications at exact prayer times
-      await schedulePrayerNotifications(
+      // Never block the widget on notifications / Supabase / cancel-all-scheduled
+      void schedulePrayerNotifications(
         {
           fajr: times.fajr,
           dhuhr: times.dhuhr,
@@ -103,16 +95,14 @@ export default function PrayerTimesWidget() {
           isha: times.isha,
         },
         user?.id,
-        tomorrowTimes ? {
+        {
           fajr: tomorrowTimes.fajr,
           dhuhr: tomorrowTimes.dhuhr,
           asr: tomorrowTimes.asr,
           maghrib: tomorrowTimes.maghrib,
           isha: tomorrowTimes.isha,
-        } : undefined
-      );
-
-      console.log('✅ Prayer times loaded for:', times.city);
+        }
+      ).catch((err) => console.warn('Prayer notification scheduling:', err));
     } catch (error: any) {
       console.error('Error loading prayer times:', error);
       const { getErrorMessage } = require('@/utils/errorHandler');
@@ -120,7 +110,7 @@ export default function PrayerTimesWidget() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, t]);
 
   useEffect(() => {
     loadPrayerTimes();
@@ -272,7 +262,7 @@ export default function PrayerTimesWidget() {
       {nextPrayer && (
         <View style={styles.nextPrayerCard}>
           <LinearGradient
-            colors={colors.gradientPrimary}
+            colors={colors.gradientPrimary as unknown as readonly [string, string, string]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.nextPrayerGradient}

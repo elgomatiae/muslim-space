@@ -12,7 +12,7 @@ import {
   schedulePrayerNotifications,
   cancelPrayerNotifications,
 } from '@/utils/notificationService';
-import { getTodayPrayerTimes, getTomorrowPrayerTimes } from '@/services/PrayerTimeService';
+import { getTodayAndTomorrowPrayerTimes } from '@/services/PrayerTimeService';
 
 export interface NotificationSettings {
   prayerNotifications: boolean;
@@ -359,11 +359,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Get today's and tomorrow's prayer times - wrap in try-catch
-      let todayPrayerTimes, tomorrowPrayerTimes;
+      // Single location fetch + parallel calculations (avoids duplicate GPS / cache reads)
+      let todayPrayerTimes;
+      let tomorrowPrayerTimes;
       try {
-        todayPrayerTimes = await getTodayPrayerTimes(user.id);
-        tomorrowPrayerTimes = await getTomorrowPrayerTimes(user.id);
+        const pair = await getTodayAndTomorrowPrayerTimes(user.id);
+        todayPrayerTimes = pair.today;
+        tomorrowPrayerTimes = pair.tomorrow;
       } catch (error) {
         console.error('Error getting prayer times:', error);
         return; // Can't schedule notifications without prayer times

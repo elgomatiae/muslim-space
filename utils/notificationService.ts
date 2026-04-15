@@ -329,14 +329,40 @@ export async function updateNotificationPreferences(
   }
 }
 
+const NOTIFICATION_PREFS_FETCH_MS = 6000;
+
 // Load notification preferences
 export async function loadNotificationPreferences(userId: string): Promise<any> {
+  const defaultPrefs = () => ({
+    prayer_notifications: true,
+    daily_content_notifications: true,
+    iman_score_notifications: true,
+    iman_tracker_notifications: true,
+    goal_reminder_notifications: true,
+    achievement_notifications: true,
+  });
+
   try {
-    const { data, error } = await supabase
-      .from('notification_preferences')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
+    const row = await Promise.race([
+      supabase.from('notification_preferences').select('*').eq('user_id', userId).single(),
+      new Promise<'__timeout__'>((resolve) =>
+        setTimeout(() => resolve('__timeout__'), NOTIFICATION_PREFS_FETCH_MS)
+      ),
+    ]);
+
+    if (row === '__timeout__') {
+      try {
+        const localPrefs = await AsyncStorage.getItem('notificationPreferences');
+        if (localPrefs) {
+          return JSON.parse(localPrefs);
+        }
+      } catch {
+        // ignore
+      }
+      return defaultPrefs();
+    }
+
+    const { data, error } = row;
 
     if (error) {
       // Handle table not found error gracefully
@@ -357,14 +383,7 @@ export async function loadNotificationPreferences(userId: string): Promise<any> 
       }
       
       // Return defaults if no data
-      return {
-        prayer_notifications: true,
-        daily_content_notifications: true,
-        iman_score_notifications: true,
-        iman_tracker_notifications: true,
-        goal_reminder_notifications: true,
-        achievement_notifications: true,
-      };
+      return defaultPrefs();
     }
 
     if (!data) {
@@ -379,14 +398,7 @@ export async function loadNotificationPreferences(userId: string): Promise<any> 
       }
       
       // Return defaults
-      return {
-        prayer_notifications: true,
-        daily_content_notifications: true,
-        iman_score_notifications: true,
-        iman_tracker_notifications: true,
-        goal_reminder_notifications: true,
-        achievement_notifications: true,
-      };
+      return defaultPrefs();
     }
 
     // Save locally for offline access
@@ -407,14 +419,7 @@ export async function loadNotificationPreferences(userId: string): Promise<any> 
     }
     
     // Return defaults
-    return {
-      prayer_notifications: true,
-      daily_content_notifications: true,
-      iman_score_notifications: true,
-      iman_tracker_notifications: true,
-      goal_reminder_notifications: true,
-      achievement_notifications: true,
-    };
+    return defaultPrefs();
   }
 }
 
